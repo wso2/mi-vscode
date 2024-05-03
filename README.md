@@ -1,4 +1,4 @@
-# The Micro Integrator extension for Visual Studio Code
+# Micro Integrator for VSCode
 
 WSO2 Micro Integrator Visual Studio Code extension (MI for VSCode) is a comprehensive integration solution that simplifies your digital transformation journey. It streamlines connectivity among applications, services, data, and the cloud using a user-friendly low-code graphical designing experience and revolutionizes your integration development workflow. As an integration developer, you can execute all the development lifecycle phases using this tool. When your integration solutions are production-ready, you can easily push the artifacts to your continuous integration/continuous deployment pipeline.
 
