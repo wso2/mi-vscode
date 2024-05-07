@@ -11,11 +11,6 @@ This extension is currently in the developer preview state.
 - Set the `JAVA_HOME` environment variable in the system settings.
 - Download and install Apache Maven (version 3.6.0 onwards).
 
-- You need an active MI Copilot account to utilize the AI capabilities of the MI extension in the VSCode editor. Follow the steps below to create an account if you don't already have one:
-
-    1. Go to https://accounts.asgardeo.io/t/wso2midev.
-    2. Create an account by filling out the necessary details.
-
 To learn more on installing the Micro Integrator extension for Visual Studio Code, go to the <a href="https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/install-wso2-mi-for-vscode/">Micro Integrator for VSCode documentation</a>.
 
 ## Overview
