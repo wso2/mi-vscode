@@ -9,6 +9,7 @@ This extension is currently in the developer preview state.
 - Download and install Java SE Development Kit (JDK) version 11 or 17.
 
 - Set the `JAVA_HOME` environment variable in the system settings.
+- Download and install Apache Maven (version 3.6.0 onwards).
 
 - You need an active MI Copilot account to utilize the AI capabilities of the MI extension in the VSCode editor. Follow the steps below to create an account if you don't already have one:
 
