@@ -50,7 +50,7 @@ These project directories will be saved to your workspace and can be accessed la
 
 The Design View lists a set of sample projects and integration artifacts that represent common integration scenarios. You can use these to explore WSO2 Micro Integrator and to try out common integration use cases.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/samples.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/samples.png?raw=true" width="100%" />
 
 Once you create an integration project, you will see the Add Artifact panel where you can start the integration with one of the following options:
 
