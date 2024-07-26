@@ -16,11 +16,11 @@ After completing the steps above, follow the instructions below to set up the wo
 
 2. Click on the Micro Integrator icon on the Activity Bar of the VS Code editor.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/mi-vscode-extension.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/mi-vscode-extension.png?raw=true" width="100%" />
 
 3. Click on the **Command Palette** on the top of the VS Code.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/qsg/command-palette.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/qsg/command-palette.png?raw=true" width="100%" />
 
 4. Type `>` to show the available commands. Alternatively, you can open the command palette in VS Code by entering `Command`+`Shift`+`P` on macOS and `Ctrl`+`Shift`+`P` on Windows.
 
@@ -30,19 +30,19 @@ After completing the steps above, follow the instructions below to set up the wo
 
 7. Select the folder where `<MI_HOME>` is located. This wll be set as the **current server path**.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/qsg/current-server-path.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/qsg/current-server-path.png?raw=true" width="100%" />
 
 ## Overview
 
 When you open the extension for the first time, you'll see the Design View panel on the right side and the Micro Integrator: Project Explorer view on the left.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/getting-started.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/getting-started.png?raw=true" width="100%" />
 
 To get started, you need to first create the required project directories. You can either open a folder containing a MI project or create a new project. Alternatively, you can use an integration sample provided under Explore Samples, which will generate the required projects and files for a specific use case.
 
 To create a new project you can use the links on the MI Project Explorer or Design View.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/create-new-project.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/create-new-project.png?raw=true" width="100%" />
 
 These project directories will be saved to your workspace and can be accessed later from Project Explorer.
 
@@ -50,7 +50,7 @@ These project directories will be saved to your workspace and can be accessed la
 
 The Design View lists a set of sample projects and integration artifacts that represent common integration scenarios. You can use these to explore WSO2 Micro Integrator and to try out common integration use cases.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/samples.gif?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/samples.png?raw=true" width="100%" />
 
 Once you create an integration project, you will see the Add Artifact panel where you can start the integration with one of the following options:
 
@@ -63,7 +63,7 @@ To start an integration, you need either API, Proxy, Task, or Inbound Endpoint a
 
 The Micro Integrator Project Explorer provides a view of all the project directories created for your integration solution. Shown below is the project explorer of a sample project.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/project-explorer.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/project-explorer.png?raw=true" width="100%" />
 
 You can add the artifacts required for your integration using Project Explorer.
 
@@ -73,11 +73,11 @@ WSO2 MI Copilot, a trained language model (LLM), demonstrates the capability to 
 
 Clicking on the Open AI Panel icon located in the top right corner of VSCode will open the WSO2 MI Copilot interface.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/open-ai-panel.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/open-ai-panel.png?raw=true" width="100%" />
 
 You can create any integration project by entering your integration scenario in natural language into the provided text box, allowing AI to generate the necessary artifacts.
 
-<img src="https://github.com/wso2/docs-mi/blob/4.2.0/en/docs/assets/img/develop/mi-for-vscode/mi-copilot.png?raw=true" width="100%" />
+<img src="https://github.com/wso2/docs-mi/blob/4.3.0/en/docs/assets/img/develop/mi-for-vscode/mi-copilot.png?raw=true" width="100%" />
 
 ## Reach Out
 
