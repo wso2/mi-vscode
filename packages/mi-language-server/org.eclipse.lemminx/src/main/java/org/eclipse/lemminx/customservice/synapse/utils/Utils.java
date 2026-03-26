@@ -22,7 +22,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
+
 import com.google.gson.JsonSyntaxException;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -49,6 +49,7 @@ import org.eclipse.lemminx.dom.DOMParser;
 import org.eclipse.lemminx.uriresolver.URIResolverExtensionManager;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.Position;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -1186,6 +1187,18 @@ public class Utils {
                     }
                 }
             }
+        } else if ("file".equals(resourceURL.getProtocol())) {
+            // Resource is on the regular filesystem (e.g., during Maven test or IDE debug)
+            Path sourceDirectory = Paths.get(resourceURL.toURI());
+            Files.walkFileTree(sourceDirectory, new java.nio.file.SimpleFileVisitor<Path>() {
+                @Override
+                public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
+                    Path targetFile = targetDirectory.resolve(sourceDirectory.relativize(file));
+                    Files.createDirectories(targetFile.getParent());
+                    Files.copy(file, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                    return java.nio.file.FileVisitResult.CONTINUE;
+                }
+            });
         }
     }
 
@@ -1195,36 +1208,76 @@ public class Utils {
         return new File(uri).getAbsolutePath();
     }
 
-    public static Path updateSynapseCatalogSettings(InitializeParams params) throws IOException, URISyntaxException {
 
-        String projectUri = params.getRootPath();
-        Object initParams = params.getInitializationOptions();
-        Gson gson = new Gson();
-        JsonElement jsonElement = gson.toJsonTree(initParams);
-        if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has(Constant.SETTINGS)) {
-            JsonObject settings = jsonElement.getAsJsonObject().getAsJsonObject(Constant.SETTINGS);
-            Path schemaPath = copyXSDFiles(projectUri);
-            JsonElement updatedParams = updateSynapseCatalogSettings(settings, schemaPath);
-            JsonObject updatedSettings = new JsonObject();
-            updatedSettings.add(Constant.SETTINGS, updatedParams);
-            params.setInitializationOptions(updatedSettings);
-            return schemaPath;
 
-        }
-        return null;
-    }
-
-    public static JsonElement updateSynapseCatalogSettings(JsonObject settings, Path schemaPath)
+    public static Map<String, Path> updateSynapseFileAssociationSettings(InitializeParams params)
             throws IOException, URISyntaxException {
 
-        if (schemaPath != null) {
-            Path catalogPath = schemaPath.resolve("catalog.xml");
-            JsonArray catalogsArray = new JsonArray();
-            catalogsArray.add(new JsonPrimitive(catalogPath.toString()));
-            if (settings != null && settings.isJsonObject() && settings.has(Constant.XML)) {
-                settings.getAsJsonObject(Constant.XML).add(Constant.CATALOGS, catalogsArray);
+        List<String> folderUris = new ArrayList<>();
+        List<WorkspaceFolder> workspaceFolders = params.getWorkspaceFolders();
+        if (workspaceFolders != null && !workspaceFolders.isEmpty()) {
+            for (WorkspaceFolder folder : workspaceFolders) {
+                folderUris.add(folder.getUri());
+            }
+        } else if (params.getRootPath() != null) {
+            folderUris.add(params.getRootPath());
+        } // for old
+
+        Map<String, Path> workspaceSchemas = new HashMap<>();
+        for (String folderUri : folderUris) {
+            Path schemaDir = copyXSDFiles(folderUri);
+            workspaceSchemas.put(folderUri, schemaDir);
+        }
+
+        Object initOptions = params.getInitializationOptions();
+        Gson gson = new Gson();
+        JsonElement jsonElement = gson.toJsonTree(initOptions);
+        if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has(Constant.SETTINGS)) {
+            JsonObject settings = jsonElement.getAsJsonObject().getAsJsonObject(Constant.SETTINGS);
+            JsonElement updatedParams = updateSynapseFileAssociationSettings(settings, workspaceSchemas);
+            JsonObject updatedRoot = new JsonObject();
+            updatedRoot.add(Constant.SETTINGS, updatedParams);
+            params.setInitializationOptions(updatedRoot);
+        }
+
+        return workspaceSchemas;
+    }
+
+    public static JsonElement updateSynapseFileAssociationSettings(JsonObject settings,
+            Map<String, Path> workspaceSchemas) {
+
+        if (workspaceSchemas == null || workspaceSchemas.isEmpty()) {
+            return settings;
+        }
+
+        JsonArray fileAssociationsArray = new JsonArray();
+        for (Map.Entry<String, Path> entry : workspaceSchemas.entrySet()) {
+            String folderUri = entry.getKey();
+            Path schemaDir = entry.getValue();
+            Path xsdPath = schemaDir.resolve("synapse_config.xsd");
+
+            // Convert the folder URI to a filesystem path for the glob pattern,
+            String patternBase = folderUri;
+            try {
+                patternBase = Paths.get(new URI(folderUri)).toString().replace("\\", "/");
+            } catch (Exception e) {
+                patternBase = folderUri.replace("\\", "/");
+            }
+
+            JsonObject association = new JsonObject();
+            association.addProperty("pattern", patternBase + "/**/*.xml");
+            association.addProperty("systemId", xsdPath.toUri().toString());
+            fileAssociationsArray.add(association);
+        }
+
+        if (settings != null && settings.isJsonObject() && settings.has(Constant.XML)) {
+            JsonObject xmlObj = settings.getAsJsonObject(Constant.XML);
+            xmlObj.add("fileAssociations", fileAssociationsArray);
+            if (xmlObj.has(Constant.CATALOGS)) {
+                xmlObj.remove(Constant.CATALOGS);
             }
         }
+
         return settings;
     }
 

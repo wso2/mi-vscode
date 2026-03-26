@@ -20,6 +20,7 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -103,6 +104,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	private XMLCapabilityManager capabilityManager;
 	private TelemetryManager telemetryManager;
 	private final SynapseLanguageService synapseLanguageService;
+	private Map<String, Path> workspaceSchemas = new HashMap<>();
 
 	public XMLLanguageServer() {
 		xmlTextDocumentService = new XMLTextDocumentService(this);
@@ -121,10 +123,12 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	@Override
 	public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
 		try {
-			Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
-			synapseLanguageService.setSynapseXSDPath(synapseSchemaPath);
+			workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
+			if (!workspaceSchemas.isEmpty()) {
+				synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());
+			}
 		} catch (IOException | URISyntaxException e) {
-			LOGGER.log(Level.SEVERE, "Error while updating synapse catalog settings", e);
+			LOGGER.log(Level.SEVERE, "Error while updating synapse file association settings", e);
 		}
 		Object initOptions = InitializationOptionsSettings.getSettings(params);
 		Object xmlSettings = AllXMLSettings.getAllXMLSettings(initOptions);
@@ -190,12 +194,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		if (initOptions == null) {
 			return;
 		}
-		try {
-			initOptions = Utils.updateSynapseCatalogSettings((JsonObject) initOptions,
-					synapseLanguageService.getSynapseXSDPath());
-		} catch (IOException | URISyntaxException e) {
-			LOGGER.log(Level.SEVERE, "Error while updating synapse catalog settings", e);
-		}
+		initOptions = Utils.updateSynapseFileAssociationSettings((JsonObject) initOptions, workspaceSchemas);
 		// Update client settings
 		Object initSettings = AllXMLSettings.getAllXMLSettings(initOptions);
 		XMLGeneralClientSettings xmlClientSettings = XMLGeneralClientSettings.getGeneralXMLSettings(initSettings);
