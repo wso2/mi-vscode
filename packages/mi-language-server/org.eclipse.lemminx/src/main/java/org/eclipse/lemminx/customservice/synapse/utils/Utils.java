@@ -1144,7 +1144,7 @@ public class Utils {
 
     public static Path copyXSDFiles(String projectUri) throws IOException, URISyntaxException {
 
-        String version = getServerVersion(projectUri, Constant.DEFAULT_MI_VERSION);
+        String version = getServerVersion(getAbsolutePath(projectUri), Constant.DEFAULT_MI_VERSION);
         // Belt-and-suspenders: getServerVersion() guarantees non-null, but guard
         // against future regressions since a null here causes an NPE on replace().
         if (version == null) {
