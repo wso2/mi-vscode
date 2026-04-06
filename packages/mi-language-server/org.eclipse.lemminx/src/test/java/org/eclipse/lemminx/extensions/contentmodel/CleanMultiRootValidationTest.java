@@ -1,210 +1,295 @@
+/**
+ * Copyright (c) 2026 WSO2 LLC. (http://www.wso2.org).
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ */
 package org.eclipse.lemminx.extensions.contentmodel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
+import org.eclipse.lemminx.MockXMLLanguageServer;
+import org.eclipse.lemminx.SynapseLanguageService;
+import org.eclipse.lemminx.XMLLanguageServer;
+import org.eclipse.lemminx.XMLTextDocumentService;
+import org.eclipse.lemminx.customservice.SynapseLanguageClientAPI;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
+import org.eclipse.lemminx.customservice.synapse.connectors.SchemaGenerate;
+import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector;
+import org.eclipse.lemminx.customservice.synapse.connectors.entity.ConnectorAction;
+import org.eclipse.lemminx.customservice.synapse.connectors.entity.OperationParameter;
+import org.eclipse.lsp4j.DidChangeTextDocumentParams;
+import org.eclipse.lsp4j.DidOpenTextDocumentParams;
+import org.eclipse.lsp4j.InitializeParams;
+import org.eclipse.lsp4j.PublishDiagnosticsParams;
+import org.eclipse.lsp4j.TextDocumentContentChangeEvent;
+import org.eclipse.lsp4j.TextDocumentItem;
+import org.eclipse.lsp4j.VersionedTextDocumentIdentifier;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.google.gson.JsonObject;
+
 /**
- * A perfectly clean validation test demonstrating Production-Architecture Multi-Root functionality.
- * One single XMLLanguageService instance validates two isolated URI streams using purely XMLFileAssociations.
+ * Tests for multi-root workspace validation using the XML engine and
+ * file-association mechanism.
+ *
+ * <p>Test 1 ({@link #multiRootIsolation()}) verifies that a single
+ * {@code XMLLanguageService} instance validates two isolated projects
+ * (MI 4.3.0 and MI 4.4.0) using per-project XSD file associations.</p>
+ *
+ * <p>Test 2 ({@link #dynamicConnectorSchemaUpdate()}) verifies that
+ * dynamically generated connector schemas are picked up by the validation
+ * engine without a server restart.</p>
  */
 public class CleanMultiRootValidationTest {
 
-    private Path tempDirA;
-    private Path tempDirB;
+	private Path tempDirA;
+	private Path tempDirB;
 
-    @BeforeEach
-    public void setUp() throws Exception {
-        tempDirA = Files.createTempDirectory("project-a");
-        tempDirB = Files.createTempDirectory("project-b");
-        tempDirA.toFile().deleteOnExit();
-        tempDirB.toFile().deleteOnExit();
+	@BeforeEach
+	public void setUp() throws Exception {
+		tempDirA = Files.createTempDirectory("project-a");
+		tempDirB = Files.createTempDirectory("project-b");
+		tempDirA.toFile().deleteOnExit();
+		tempDirB.toFile().deleteOnExit();
 
-        // Set up Project A as a MI 4.3.0 project
-        String pomA = "<project><properties><project.runtime.version>4.3.0</project.runtime.version></properties></project>";
-        Files.write(tempDirA.resolve("pom.xml"), pomA.getBytes(StandardCharsets.UTF_8));
-        Files.createDirectories(tempDirA.resolve("src"));
+		// Project A — MI 4.3.0
+		String pomA = "<project><properties>"
+				+ "<project.runtime.version>4.3.0</project.runtime.version>"
+				+ "</properties></project>";
+		Files.write(tempDirA.resolve("pom.xml"), pomA.getBytes(StandardCharsets.UTF_8));
+		Files.createDirectories(tempDirA.resolve("src"));
 
-        // Set up Project B as a MI 4.4.0 project
-        String pomB = "<project><properties><project.runtime.version>4.4.0</project.runtime.version></properties></project>";
-        Files.write(tempDirB.resolve("pom.xml"), pomB.getBytes(StandardCharsets.UTF_8));
-        Files.createDirectories(tempDirB.resolve("src"));
-    }
+		// Project B — MI 4.4.0
+		String pomB = "<project><properties>"
+				+ "<project.runtime.version>4.4.0</project.runtime.version>"
+				+ "</properties></project>";
+		Files.write(tempDirB.resolve("pom.xml"), pomB.getBytes(StandardCharsets.UTF_8));
+		Files.createDirectories(tempDirB.resolve("src"));
+	}
 
-    @Test
-    public void testCleanMultiRootIsolation() throws Exception {
-        // --- 1. Start a Full Language Server Replica ---
-        org.eclipse.lemminx.MockXMLLanguageServer server = new org.eclipse.lemminx.MockXMLLanguageServer();
+	// ---------------------------------------------------------------------------
+	// Test 1 — One XMLLanguageService validates multiple projects
+	// ---------------------------------------------------------------------------
 
-        // MOCK the SynapseLanguageService to bypass its currently broken global initialization logic
-        // We use an anonymous subclass instead of Mockito to avoid ByteBuddy compatibility issues on Java 25
-        org.eclipse.lemminx.XMLTextDocumentService textDocumentServiceOuter =
-                (org.eclipse.lemminx.XMLTextDocumentService) server.getTextDocumentService();
-        org.eclipse.lemminx.SynapseLanguageService mockSynapseService = new org.eclipse.lemminx.SynapseLanguageService(textDocumentServiceOuter, server) {
-            @Override
-            public void init(String projectUri, Object settings, org.eclipse.lemminx.customservice.SynapseLanguageClientAPI languageClient) {
-                // Do nothing to simulate a bypassed init (no multi-root crashes during boot)
-            }
-        };
+	@Test
+	public void multiRootIsolation() throws Exception {
+		MockXMLLanguageServer server = createMultiRootServer();
 
-        java.lang.reflect.Field synapseServiceField = org.eclipse.lemminx.XMLLanguageServer.class.getDeclaredField("synapseLanguageService");
-        synapseServiceField.setAccessible(true);
-        synapseServiceField.set(server, mockSynapseService);
+		// The <variable> mediator was introduced in MI 4.4.0 — invalid in MI 4.3.0
+		String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+				+ "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"testSeq\">\n"
+				+ "    <variable name=\"myVar\" type=\"STRING\" value=\"test\"/>\n"
+				+ "</sequence>";
 
-        // --- 2. Build the VS Code InitializeParams envelope ---
-        org.eclipse.lsp4j.InitializeParams params = new org.eclipse.lsp4j.InitializeParams();
+		// Open the same XML content under both project trees
+		String uriA = openDocument(server, tempDirA, "src/sequence.xml", xml, 1);
+		String uriB = openDocument(server, tempDirB, "src/sequence.xml", xml, 1);
 
-        org.eclipse.lsp4j.WorkspaceFolder wfA = new org.eclipse.lsp4j.WorkspaceFolder();
-        wfA.setUri(tempDirA.toUri().toString());
-        wfA.setName("project-a");
+		Thread.sleep(1500);
 
-        org.eclipse.lsp4j.WorkspaceFolder wfB = new org.eclipse.lsp4j.WorkspaceFolder();
-        wfB.setUri(tempDirB.toUri().toString());
-        wfB.setName("project-b");
+		// Retrieve published diagnostics
+		PublishDiagnosticsParams diagA = findDiagnosticsForUri(server.getPublishDiagnostics(), uriA);
+		PublishDiagnosticsParams diagB = findDiagnosticsForUri(server.getPublishDiagnostics(), uriB);
 
-        params.setWorkspaceFolders(java.util.Arrays.asList(wfA, wfB));
+		assertNotNull(diagA, "Diagnostics for Project A missing");
+		assertNotNull(diagB, "Diagnostics for Project B missing");
 
-        com.google.gson.JsonObject initOptions = new com.google.gson.JsonObject();
-        com.google.gson.JsonObject settingsObj = new com.google.gson.JsonObject();
-        com.google.gson.JsonObject xmlObj = new com.google.gson.JsonObject();
-        com.google.gson.JsonObject validationObj = new com.google.gson.JsonObject();
-        validationObj.addProperty("noGrammar", "ignore");
-        xmlObj.add("validation", validationObj);
-        settingsObj.add("xml", xmlObj);
-        initOptions.add("settings", settingsObj);
-        params.setInitializationOptions(initOptions);
+		// Project A (4.3.0) — 'variable' is unknown → at least 1 error
+		assertEquals(1, diagA.getDiagnostics().size(),
+				"Project-A (4.3.0) should report 1 error for unknown 'variable' mediator");
 
-        // --- 3. Let the Server Boot (This natively reads the pom.xml versions and loads 430 and 440 schemas!) ---
-        server.initialize(params).join();
+		// Project B (4.4.0) — 'variable' is valid → 0 errors
+		assertEquals(0, diagB.getDiagnostics().size(),
+				"Project-B (4.4.0) should report 0 errors for valid 'variable' mediator");
+	}
 
-        // Let's print the resolved server versions using Utils.getServerVersion to prove the fix works
-        String versionA = org.eclipse.lemminx.customservice.synapse.utils.Utils.getServerVersion(tempDirA.toUri().toString(), "default-fallback-version");
-        String versionB = org.eclipse.lemminx.customservice.synapse.utils.Utils.getServerVersion(tempDirB.toUri().toString(), "default-fallback-version");
-        System.out.println("====== POM VERSION EXTRACTION CONFIRMATION ======");
-        System.out.println("Project A (Expected 4.3.0) Version Found: " + versionA);
-        System.out.println("Project B (Expected 4.4.0) Version Found: " + versionB);
-        System.out.println("=================================================");
+	// ---------------------------------------------------------------------------
+	// Test 2 — Dynamically changed content (connector schema) is also validated
+	// ---------------------------------------------------------------------------
 
-        // --- 4. The Test XML ---
-        // The <variable> mediator was introduced in MI 4.4.0. It is invalid in MI 4.3.0.
-        String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-                "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"testSeq\">\n" +
-                "    <variable name=\"myVar\" type=\"STRING\" value=\"test\"/>\n" +
-                "</sequence>";
+	@Test
+	public void dynamicConnectorSchemaUpdate() throws Exception {
+		MockXMLLanguageServer server = createMultiRootServer();
 
-        // --- 5. Validate Project A (Simulate VS Code opening the file in MI 4.3.0) ---
-        String uriA = tempDirA.resolve("src/sequence.xml").toUri().toString();
-        org.eclipse.lsp4j.TextDocumentItem docA = new org.eclipse.lsp4j.TextDocumentItem(uriA, "xml", 1, xml);
-        server.getTextDocumentService().didOpen(new org.eclipse.lsp4j.DidOpenTextDocumentParams(docA));
+		// Open a placeholder document so the server has an active document for Project A
+		String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+				+ "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"testSeq\">\n"
+				+ "    <variable name=\"myVar\" type=\"STRING\" value=\"test\"/>\n"
+				+ "</sequence>";
+		String uriA = openDocument(server, tempDirA, "src/sequence.xml", xml, 1);
 
-        // --- 6. Validate Project B (Simulate VS Code opening the file in MI 4.4.0) ---
-        String uriB = tempDirB.resolve("src/sequence.xml").toUri().toString();
-        org.eclipse.lsp4j.TextDocumentItem docB = new org.eclipse.lsp4j.TextDocumentItem(uriB, "xml", 1, xml);
-        server.getTextDocumentService().didOpen(new org.eclipse.lsp4j.DidOpenTextDocumentParams(docB));
+		Thread.sleep(1500);
 
-        // Wait for asynchronous diagnostic validation to finish
-        Thread.sleep(1500);
+		// Simulate downloading a Salesforce connector
+		ConnectorHolder holder = ConnectorHolder.getInstance();
+		holder.clearConnectors();
+		holder.addConnector(createFakeSalesforceConnector());
 
-        // --- 7. Verify the diagnostics published back to the Client (VS Code) ---
-        List<org.eclipse.lsp4j.PublishDiagnosticsParams> publishedDiagnostics = server.getPublishDiagnostics();
-        assertEquals(2, publishedDiagnostics.size(), "Should have published diagnostics for both files");
+		// Generate the connector schema inside both workspace schema directories
+		@SuppressWarnings("unchecked")
+		Map<String, Path> resolvedSchemas = getWorkspaceSchemas(server);
 
-        org.eclipse.lsp4j.PublishDiagnosticsParams diagA = null;
-        org.eclipse.lsp4j.PublishDiagnosticsParams diagB = null;
+		Path schemaPathA = resolvedSchemas.get(tempDirA.toUri().toString());
+		assertNotNull(schemaPathA, "Schema path for Project A should be resolved");
 
-        for (org.eclipse.lsp4j.PublishDiagnosticsParams pub : publishedDiagnostics) {
-            if (pub.getUri().equals(uriA)) {
-                diagA = pub;
-            } else if (pub.getUri().equals(uriB)) {
-                diagB = pub;
-            }
-        }
+		SchemaGenerate.generate(holder,
+				schemaPathA.resolve("mediators").resolve("connectors.xsd").toString());
 
-        assertNotNull(diagA, "Diagnostics for Project A missing");
-        assertNotNull(diagB, "Diagnostics for Project B missing");
+		// Verify generated schema contains the expected element
+		String schemaContent = Files.readString(
+				schemaPathA.resolve("mediators").resolve("connectors.xsd"));
+		assertTrue(schemaContent.contains("<xs:element name=\"salesforce.create\">"),
+				"Schema must contain salesforce.create element");
 
-        // Project A (4.3.0) should flag 'variable' as an invalid element since it didn't exist in 4.3
-        assertEquals(1, diagA.getDiagnostics().size(), "Project-A (4.3.0) should report 1 error due to unknown 'variable' mediator");
+		// Send a didChange with XML that uses the connector
+		String connectorXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+				+ "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"salesforceSeq\">\n"
+				+ "    <salesforce.create>\n"
+				+ "        <sobjectType>Account</sobjectType>\n"
+				+ "    </salesforce.create>\n"
+				+ "</sequence>";
 
-        // Project B (4.4.0) should accept 'variable' natively because it is valid in 4.4
-        assertEquals(0, diagB.getDiagnostics().size(), "Project-B (4.4.0) should report 0 errors for valid 'variable' mediator");
+		server.getTextDocumentService().didChange(new DidChangeTextDocumentParams(
+				new VersionedTextDocumentIdentifier(uriA, 2),
+				List.of(new TextDocumentContentChangeEvent(connectorXml))));
 
-        System.out.println("============== TEST PASSED - REAL XSD 4.3/4.4 MULTI ROOT ISOLATION ACHIEVED E2E ==============\n");
+		Thread.sleep(1500);
 
-        // --- PHASE 2: DYNAMIC CONNECTOR SCHEMA UPDATE WITH TIMER
-        Thread.sleep(3000);
+		// After schema regeneration the connector element should be recognized
+		PublishDiagnosticsParams newDiagA = findDiagnosticsForUri(
+				server.getPublishDiagnostics(), uriA);
 
-        // Simulate a User Downloading Salesforce Connector in the integration studio
-        System.out.println("Connector Downloaded! Parsing Salesforce connector metadata...");
-        org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder holder = org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder.getInstance();
-        holder.clearConnectors(); // Clean slate
+		assertNotNull(newDiagA, "Diagnostics for Project A missing after connector update");
+		assertEquals(0, newDiagA.getDiagnostics().size(),
+				"'salesforce.create' should be recognized after dynamic schema generation");
+	}
 
-        org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector fakeConnector = new org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector();
-        fakeConnector.setName("salesforce");
-        fakeConnector.setDisplayName("Salesforce Connector");
-        org.eclipse.lemminx.customservice.synapse.connectors.entity.ConnectorAction action = new org.eclipse.lemminx.customservice.synapse.connectors.entity.ConnectorAction();
-        action.setTag("salesforce.create");
-        action.setHidden(false);
-        org.eclipse.lemminx.customservice.synapse.connectors.entity.OperationParameter param = new org.eclipse.lemminx.customservice.synapse.connectors.entity.OperationParameter("sobjectType", "Type of SObject");
-        action.setParameters(List.of(param));
-        fakeConnector.setActions(List.of(action));
-        holder.addConnector(fakeConnector);
+	// ---------------------------------------------------------------------------
+	// Private helpers
+	// ---------------------------------------------------------------------------
 
-        // Find the resolved schemas for BOTH isolated projects via reflection
-        java.lang.reflect.Field schemasField = org.eclipse.lemminx.XMLLanguageServer.class.getDeclaredField("workspaceSchemas");
-        schemasField.setAccessible(true);
-        @SuppressWarnings("unchecked")
-        java.util.Map<String, Path> resolvedSchemas = (java.util.Map<String, Path>) schemasField.get(server);
+	/**
+	 * Creates a {@link MockXMLLanguageServer} initialized with two workspace
+	 * folders ({@code tempDirA} and {@code tempDirB}) and a mocked
+	 * {@link SynapseLanguageService} whose {@code init()} is a no-op.
+	 */
+	private MockXMLLanguageServer createMultiRootServer() throws Exception {
+		MockXMLLanguageServer server = new MockXMLLanguageServer();
 
-        Path schemaPathA = resolvedSchemas.get(tempDirA.toUri().toString());
-        Path schemaPathB = resolvedSchemas.get(tempDirB.toUri().toString());
+		// Stub SynapseLanguageService to bypass its global init logic
+		XMLTextDocumentService tds =
+				(XMLTextDocumentService) server.getTextDocumentService();
+		SynapseLanguageService stubSynapseService = new SynapseLanguageService(tds, server) {
+			@Override
+			public void init(String projectUri, Object settings,
+					SynapseLanguageClientAPI languageClient) {
+				// no-op
+			}
+		};
 
-        // Generate the Schema inside BOTH project environments exactly as `updateConnectors` should!
-        String connectorPathA = schemaPathA.resolve("mediators").resolve("connectors.xsd").toString();
-        String connectorPathB = schemaPathB.resolve("mediators").resolve("connectors.xsd").toString();
+		java.lang.reflect.Field synapseField =
+				XMLLanguageServer.class.getDeclaredField("synapseLanguageService");
+		synapseField.setAccessible(true);
+		synapseField.set(server, stubSynapseService);
 
-        org.eclipse.lemminx.customservice.synapse.connectors.SchemaGenerate.generate(holder, connectorPathA);
-        org.eclipse.lemminx.customservice.synapse.connectors.SchemaGenerate.generate(holder, connectorPathB);
+		// Build InitializeParams with both workspace folders
+		InitializeParams params = new InitializeParams();
 
+		WorkspaceFolder wfA = new WorkspaceFolder();
+		wfA.setUri(tempDirA.toUri().toString());
+		wfA.setName("project-a");
 
-        String updatedContent = Files.readString(schemaPathA.resolve("mediators").resolve("connectors.xsd"));
-        org.junit.jupiter.api.Assertions.assertTrue(updatedContent.contains("<xs:element name=\"salesforce.create\">"), "Schema MUST contain salesforce.create");
+		WorkspaceFolder wfB = new WorkspaceFolder();
+		wfB.setUri(tempDirB.toUri().toString());
+		wfB.setName("project-b");
 
-        // Now, we simulate an open of a file that uses the Salesforce mediator
-        String connectorXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
-                "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"salesforceSeq\">\n" +
-                "    <salesforce.create>\n" +
-                "        <sobjectType>Account</sobjectType>\n" +
-                "    </salesforce.create>\n" +
-                "</sequence>";
+		params.setWorkspaceFolders(Arrays.asList(wfA, wfB));
 
-        // Send a DID_CHANGE to force LemMinX to revalidate
-        System.out.println("Revalidating connector XML on Project A...");
-        server.getTextDocumentService().didChange(new org.eclipse.lsp4j.DidChangeTextDocumentParams(
-                new org.eclipse.lsp4j.VersionedTextDocumentIdentifier(uriA, 2),
-                List.of(new org.eclipse.lsp4j.TextDocumentContentChangeEvent(connectorXml))
-        ));
+		JsonObject initOptions = new JsonObject();
+		JsonObject settingsObj = new JsonObject();
+		JsonObject xmlObj = new JsonObject();
+		JsonObject validationObj = new JsonObject();
+		validationObj.addProperty("noGrammar", "ignore");
+		xmlObj.add("validation", validationObj);
+		settingsObj.add("xml", xmlObj);
+		initOptions.add("settings", settingsObj);
+		params.setInitializationOptions(initOptions);
 
-        Thread.sleep(1500);
+		server.initialize(params).join();
+		return server;
+	}
 
-        List<org.eclipse.lsp4j.PublishDiagnosticsParams> newDiagnostics = server.getPublishDiagnostics();
-        org.eclipse.lsp4j.PublishDiagnosticsParams newDiagA = null;
-        for (org.eclipse.lsp4j.PublishDiagnosticsParams pub : newDiagnostics) {
-            if (pub.getUri().equals(uriA)) {
-                newDiagA = pub;
-            }
-        }
+	/**
+	 * Opens a document under the given project directory and returns the
+	 * document URI.
+	 */
+	private static String openDocument(MockXMLLanguageServer server,
+			Path projectDir, String relativePath, String content, int version) {
+		String uri = projectDir.resolve(relativePath).toUri().toString();
+		TextDocumentItem doc = new TextDocumentItem(uri, "xml", version, content);
+		server.getTextDocumentService().didOpen(new DidOpenTextDocumentParams(doc));
+		return uri;
+	}
 
-        assertNotNull(newDiagA, "New diagnostics for Project A missing");
-        assertEquals(0, newDiagA.getDiagnostics().size(), "Dynamic Connector generation FAILED! 'salesforce.create' was not recognized!");
+	/**
+	 * Finds the <em>last</em> published diagnostics for the given URI.
+	 */
+	private static PublishDiagnosticsParams findDiagnosticsForUri(
+			List<PublishDiagnosticsParams> allDiagnostics, String uri) {
+		PublishDiagnosticsParams result = null;
+		for (PublishDiagnosticsParams p : allDiagnostics) {
+			if (p.getUri().equals(uri)) {
+				result = p;
+			}
+		}
+		return result;
+	}
 
-        System.out.println("============== PHASE 2 PASSED - DYNAMIC CONNECTOR VALIDATION SUCCESSFUL ==============\n");
-    }
+	/**
+	 * Creates a minimal fake Salesforce connector with a single
+	 * {@code salesforce.create} action for testing purposes.
+	 */
+	private static Connector createFakeSalesforceConnector() {
+		Connector connector = new Connector();
+		connector.setName("salesforce");
+		connector.setDisplayName("Salesforce Connector");
+
+		ConnectorAction action = new ConnectorAction();
+		action.setTag("salesforce.create");
+		action.setHidden(false);
+
+		OperationParameter param = new OperationParameter("sobjectType", "Type of SObject");
+		action.setParameters(List.of(param));
+		connector.setActions(List.of(action));
+
+		return connector;
+	}
+
+	/**
+	 * Reflectively accesses the {@code workspaceSchemas} field to obtain the
+	 * per-project schema directories resolved during initialization.
+	 */
+	@SuppressWarnings("unchecked")
+	private static Map<String, Path> getWorkspaceSchemas(
+			MockXMLLanguageServer server) throws Exception {
+		java.lang.reflect.Field field =
+				XMLLanguageServer.class.getDeclaredField("workspaceSchemas");
+		field.setAccessible(true);
+		return (Map<String, Path>) field.get(server);
+	}
 }
