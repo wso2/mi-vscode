@@ -132,57 +132,54 @@ public class CleanMultiRootValidationTest {
 	public void dynamicConnectorSchemaUpdate() throws Exception {
 		MockXMLLanguageServer server = createMultiRootServer();
 
-		// Open a placeholder document so the server has an active document for Project A
-		String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-				+ "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"testSeq\">\n"
-				+ "    <variable name=\"myVar\" type=\"STRING\" value=\"test\"/>\n"
-				+ "</sequence>";
-		String uriA = openDocument(server, tempDirA, "src/sequence.xml", xml, 1);
-
-		Thread.sleep(1500);
-
-		// Simulate downloading a Salesforce connector
-		ConnectorHolder holder = ConnectorHolder.getInstance();
-		holder.clearConnectors();
-		holder.addConnector(createFakeSalesforceConnector());
-
-		// Generate the connector schema inside both workspace schema directories
-		@SuppressWarnings("unchecked")
-		Map<String, Path> resolvedSchemas = getWorkspaceSchemas(server);
-
-		Path schemaPathA = resolvedSchemas.get(tempDirA.toUri().toString());
-		assertNotNull(schemaPathA, "Schema path for Project A should be resolved");
-
-		SchemaGenerate.generate(holder,
-				schemaPathA.resolve("mediators").resolve("connectors.xsd").toString());
-
-		// Verify generated schema contains the expected element
-		String schemaContent = Files.readString(
-				schemaPathA.resolve("mediators").resolve("connectors.xsd"));
-		assertTrue(schemaContent.contains("<xs:element name=\"salesforce.create\">"),
-				"Schema must contain salesforce.create element");
-
-		// Send a didChange with XML that uses the connector
+		// 1. Open a document that uses the Salesforce connector BEFORE downloading the connector
 		String connectorXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 				+ "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"salesforceSeq\">\n"
 				+ "    <salesforce.create>\n"
 				+ "        <sobjectType>Account</sobjectType>\n"
 				+ "    </salesforce.create>\n"
 				+ "</sequence>";
+		String uriA = openDocument(server, tempDirA, "src/sequence.xml", connectorXml, 1);
 
+		Thread.sleep(1500);
+
+		// 2. Verify it currently fails validation (because salesforce schema doesn't exist yet)
+		PublishDiagnosticsParams initialDiag = findDiagnosticsForUri(server.getPublishDiagnostics(), uriA);
+		assertNotNull(initialDiag, "Initial diagnostics should be present");
+		assertTrue(initialDiag.getDiagnostics().size() > 0, 
+				"Should report an error for unknown 'salesforce.create' mediator before connector is added");
+
+		// 3. Simulate downloading a Salesforce connector
+		ConnectorHolder holder = ConnectorHolder.getInstance();
+		holder.clearConnectors();
+		holder.addConnector(createFakeSalesforceConnector());
+
+		// 4. Generate the connector schema inside the workspace schema directory
+		@SuppressWarnings("unchecked")
+		Map<String, Path> resolvedSchemas = getWorkspaceSchemas(server);
+		Path schemaPathA = resolvedSchemas.get(tempDirA.toUri().toString());
+		assertNotNull(schemaPathA, "Schema path for Project A should be resolved");
+
+		SchemaGenerate.generate(holder,
+				schemaPathA.resolve("mediators").resolve("connectors.xsd").toString());
+
+		// Verify generated schema physically contains the expected element
+		String schemaContent = Files.readString(schemaPathA.resolve("mediators").resolve("connectors.xsd"));
+		assertTrue(schemaContent.contains("<xs:element name=\"salesforce.create\">"),
+				"Schema must contain salesforce.create element");
+
+		// 5. Send a didChange with the EXACT same XML content to forcefully trigger re-validation
 		server.getTextDocumentService().didChange(new DidChangeTextDocumentParams(
 				new VersionedTextDocumentIdentifier(uriA, 2),
 				List.of(new TextDocumentContentChangeEvent(connectorXml))));
 
 		Thread.sleep(1500);
 
-		// After schema regeneration the connector element should be recognized
-		PublishDiagnosticsParams newDiagA = findDiagnosticsForUri(
-				server.getPublishDiagnostics(), uriA);
-
+		// 6. Verify that it now passes successfully with ZERO errors!
+		PublishDiagnosticsParams newDiagA = findDiagnosticsForUri(server.getPublishDiagnostics(), uriA);
 		assertNotNull(newDiagA, "Diagnostics for Project A missing after connector update");
 		assertEquals(0, newDiagA.getDiagnostics().size(),
-				"'salesforce.create' should be recognized after dynamic schema generation");
+				"'salesforce.create' should be perfectly recognized and pass after dynamic schema generation");
 	}
 
 	// ---------------------------------------------------------------------------
