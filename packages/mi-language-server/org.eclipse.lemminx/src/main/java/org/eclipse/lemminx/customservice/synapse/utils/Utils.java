@@ -1219,9 +1219,7 @@ public class Utils {
             for (WorkspaceFolder folder : workspaceFolders) {
                 folderUris.add(folder.getUri());
             }
-        } else if (params.getRootPath() != null) {
-            folderUris.add(params.getRootPath());
-        } // for old
+        }
 
         Map<String, Path> workspaceSchemas = new HashMap<>();
         for (String folderUri : folderUris) {

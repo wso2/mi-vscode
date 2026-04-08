@@ -86,7 +86,27 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 		xmlLanguageServer.getXMLLanguageService().getWorkspaceServiceParticipants()
 				.forEach(participant -> participant.didChangeWorkspaceFolders(params));
 
-//		workspaceFolders.didChangeWorkspaceFolders(params);
+		boolean hasSchemaChanges = false;
+		if (params.getEvent().getRemoved() != null) {
+			for (org.eclipse.lsp4j.WorkspaceFolder folder : params.getEvent().getRemoved()) {
+				xmlLanguageServer.removeWorkspaceSchema(folder.getUri());
+				hasSchemaChanges = true;
+			}
+		}
+		if (params.getEvent().getAdded() != null) {
+			for (org.eclipse.lsp4j.WorkspaceFolder folder : params.getEvent().getAdded()) {
+				try {
+					java.nio.file.Path schemaDir = org.eclipse.lemminx.customservice.synapse.utils.Utils.copyXSDFiles(folder.getUri());
+					xmlLanguageServer.addWorkspaceSchema(folder.getUri(), schemaDir);
+					hasSchemaChanges = true;
+				} catch (Exception e) {
+					// Ignore safely
+				}
+			}
+		}
+		if (hasSchemaChanges) {
+			xmlLanguageServer.triggerSettingsRefresh();
+		}
 	}
 
 	@Override

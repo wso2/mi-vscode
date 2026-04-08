@@ -105,7 +105,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	private TelemetryManager telemetryManager;
 	private final SynapseLanguageService synapseLanguageService;
 	private Map<String, Path> workspaceSchemas = new HashMap<>();
-
+	private Object lastKnownInitOptions = null;
 	public XMLLanguageServer() {
 		xmlTextDocumentService = new XMLTextDocumentService(this);
 		xmlWorkspaceService = new XMLWorkspaceService(this);
@@ -131,6 +131,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 			LOGGER.log(Level.SEVERE, "Error while updating synapse file association settings", e);
 		}
 		Object initOptions = InitializationOptionsSettings.getSettings(params);
+		this.lastKnownInitOptions = initOptions;
 		Object xmlSettings = AllXMLSettings.getAllXMLSettings(initOptions);
 		XMLGeneralClientSettings settings = XMLGeneralClientSettings.getGeneralXMLSettings(xmlSettings);
 
@@ -194,6 +195,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		if (initOptions == null) {
 			return;
 		}
+		this.lastKnownInitOptions = initOptions;
 		initOptions = Utils.updateSynapseFileAssociationSettings((JsonObject) initOptions, workspaceSchemas);
 		// Update client settings
 		Object initSettings = AllXMLSettings.getAllXMLSettings(initOptions);
@@ -255,6 +257,20 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		}
 		// Update XML language service extensions
 		xmlTextDocumentService.updateSettings(initSettings);
+	}
+
+	public void addWorkspaceSchema(String folderUri, Path schemaDir) {
+		workspaceSchemas.put(folderUri, schemaDir);
+	}
+
+	public void removeWorkspaceSchema(String folderUri) {
+		workspaceSchemas.remove(folderUri);
+	}
+
+	public void triggerSettingsRefresh() {
+		if (lastKnownInitOptions != null) {
+			updateSettings(lastKnownInitOptions, false);
+		}
 	}
 
 	@Override
