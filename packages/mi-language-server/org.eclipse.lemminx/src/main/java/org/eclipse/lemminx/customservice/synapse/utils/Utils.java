@@ -1187,18 +1187,6 @@ public class Utils {
                     }
                 }
             }
-        } else if ("file".equals(resourceURL.getProtocol())) {
-            // Resource is on the regular filesystem (e.g., during Maven test or IDE debug)
-            Path sourceDirectory = Paths.get(resourceURL.toURI());
-            Files.walkFileTree(sourceDirectory, new java.nio.file.SimpleFileVisitor<Path>() {
-                @Override
-                public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) throws IOException {
-                    Path targetFile = targetDirectory.resolve(sourceDirectory.relativize(file));
-                    Files.createDirectories(targetFile.getParent());
-                    Files.copy(file, targetFile, StandardCopyOption.REPLACE_EXISTING);
-                    return java.nio.file.FileVisitResult.CONTINUE;
-                }
-            });
         }
     }
 
