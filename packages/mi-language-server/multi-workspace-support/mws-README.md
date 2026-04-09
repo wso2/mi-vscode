@@ -8,15 +8,18 @@ The current WSO2 Micro Integrator (MI) Language Server typically serves each MI 
 ### Stage 1: Core XML Validation & Schema Isolation **(Completed)**
 Enable independent XML validation for multiple projects within a single Language Server instance using dynamic File Associations.
 
-### Stage 2: Eliminating Global State & Singletons
-*   **Goal:** Transition legacy singletons (e.g., `ConnectorHolder`, `SynapseLanguageService`, Mediator Handlers) to be resolved per project context instead of a global state.
-*   **Action Plan:** Introduce `ProjectContext` and `WorkspaceManager` classes to manage memory scoped to individual projects.
+### Stage 2: Eliminating Global State, Singletons & Context-Aware
+**Goal:** Transition legacy singletons (e.g., `ConnectorHolder`, `SynapseLanguageService`, Mediator Handlers) to be resolved per project context instead of a global state.
+
+**Action Plan:** 
+
+* Introduce `ProjectContext` and `WorkspaceManager` classes to manage memory scoped to individual projects.
     *   *Reference Files:* `multi-workspace-support/resources/ProjectContext.java`, `multi-workspace-support/resources/WorkspaceManager.java`
 
-### Stage 3: Context-Aware Resource Finders & Auto-Completions
-Isolate Language Server features (Auto-Complete, Go-To-Definition) per workspace. Update `ResourceFinder` and properties handlers to filter sequences, endpoints, and registry resources based strictly on the active document's specific project URI, preventing invalid auto-complete suggestions from unrelated projects.
+* Isolate Language Server features (Auto-Complete, Go-To-Definition) per workspace.
 
-### Stage 4: Language Client (VS Code Extension) Integration
+
+### Stage 3: Language Client (VS Code Extension) Integration
 Update the frontend VS Code Extension to natively support the multi-project backend API configurations and event hooks.
 
 ---
