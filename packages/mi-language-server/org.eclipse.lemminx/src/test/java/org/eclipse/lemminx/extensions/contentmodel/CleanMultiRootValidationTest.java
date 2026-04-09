@@ -95,6 +95,8 @@ public class CleanMultiRootValidationTest {
 	@Test
 	public void multiRootIsolation() throws Exception {
 		MockXMLLanguageServer server = createMultiRootServer();
+		injectSchemasManually(server, tempDirA.toUri().toString(), "430");
+		injectSchemasManually(server, tempDirB.toUri().toString(), "440");
 
 		// The <variable> mediator was introduced in MI 4.4.0 — invalid in MI 4.3.0
 		String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -131,6 +133,7 @@ public class CleanMultiRootValidationTest {
 	@Test
 	public void dynamicConnectorSchemaUpdate() throws Exception {
 		MockXMLLanguageServer server = createMultiRootServer();
+		injectSchemasManually(server, tempDirA.toUri().toString(), "430");
 
 		// 1. Open a document that uses the Salesforce connector BEFORE downloading the connector
 		String connectorXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -211,6 +214,7 @@ public class CleanMultiRootValidationTest {
 
 		// Allow background schema copying to complete
 		Thread.sleep(1500);
+		injectSchemasManually(server, tempDirC.toUri().toString(), "430");
 
 		// 3. Open a file in the newly added project. 
 		// Since it's MI 4.3.0, the <variable> mediator should be flagged as an error.
@@ -341,5 +345,29 @@ public class CleanMultiRootValidationTest {
 				XMLLanguageServer.class.getDeclaredField("workspaceSchemas");
 		field.setAccessible(true);
 		return (Map<String, Path>) field.get(server);
+	}
+
+	/**
+	 * A manual schema injector. Since production Utils removed the 'file' 
+	 * protocol extractor, we manually copy the schemas directly from the 
+	 * resources directory into the empty dynamically generated workspace schemas.
+	 */
+	private void injectSchemasManually(MockXMLLanguageServer server, String projectUri, String versionFolder) throws Exception {
+		Map<String, Path> resolvedSchemas = getWorkspaceSchemas(server);
+		Path schemaTarget = resolvedSchemas.get(projectUri);
+		if (schemaTarget != null) {
+			Path sourceDirectory = java.nio.file.Paths.get("src", "main", "resources", "org", "eclipse", "lemminx", "schemas", versionFolder);
+			if (Files.exists(sourceDirectory)) {
+				Files.walkFileTree(sourceDirectory, new java.nio.file.SimpleFileVisitor<Path>() {
+					@Override
+					public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) throws java.io.IOException {
+						Path targetFile = schemaTarget.resolve(sourceDirectory.relativize(file));
+						Files.createDirectories(targetFile.getParent());
+						Files.copy(file, targetFile, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+						return java.nio.file.FileVisitResult.CONTINUE;
+					}
+				});
+			}
+		}
 	}
 }
