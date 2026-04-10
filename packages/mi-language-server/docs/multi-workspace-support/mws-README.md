@@ -24,16 +24,23 @@ rigid catalogs, this approach maps specific file path patterns (e.g., glob match
 ### Changelog & Implementation Details
 
 #### 1. `Utils.java` (`org.eclipse.lemminx/customservice/synapse/utils/Utils.java`)
-*   **Backward Compatibility for Catalogs:** Re-added `updateSynapseCatalogSettings` to support an optional `useAssociationSettings` parameter during language server initialization.
-*   **File Associations Default:** Replaced the legacy namespace-based `catalog` reliance with `updateSynapseFileAssociationSettings` (used by default since `useAssociationSettings` defaults to `true`). The parameters logic drops the `catalogs` array and injects `fileAssociations` instead.
-*   **URI Path Sanitation Patch:** Handled the conversion of workspace folder URIs (`file:///...`) to absolute OS paths within `updateSynapseFileAssociationSettings`. By applying `getAbsolutePath()` at this higher level, we ensure all downstream logic (such as version extraction from `pom.xml` in `getServerVersion` and XSD extraction in `copyXSDFiles`) receives a standardized path format, preventing path resolution errors in a multi-root context.
+*   **Implementation of `updateSynapseFileAssociationSettings` Method:** 
+    *   Previously, the system relied on `updateSynapseCatalogSettings`. 
+    *   Added this new functionality to support File Association within the language server.
 
 #### 2. `XMLLanguageServer.java` (`org.eclipse.lemminx/XMLLanguageServer.java`)
-*   **Backward Compatibility Toggle:** Updated the `initialize` step to dynamically read `useAssociationSettings` from `initializationOptions`. If set to `false`, the server defaults backward to `Utils.updateSynapseCatalogSettings`. If `true` (default), it invokes the new core standard: `Utils.updateSynapseFileAssociationSettings`.
-*   *Temporary Bridge/Hack:* Because `SynapseLanguageService` (Stage 2) is not yet fully isolated for multi-root awareness, a temporary bridge was established by setting its default Path to the first project in the collection: `synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());`
+*   **Initialization Mode Selection:** The language server now dynamically determines the validation method during the `initialize` step by reading the `useAssociationSettings` flag from `initializationOptions`:
+    *   **If `true` (Default):** The server invokes `Utils.updateSynapseFileAssociationSettings`, utilizing the new core standard based on file associations.
+    *   **If `false`:** The server routes to `Utils.updateSynapseCatalogSettings` to process legacy catalog-based configurations.
+    *   **If `null`/Undefined:** The server defaults to the file association method (`true`).
+*   **Temporary Bridge:** 
+    *   Because `SynapseLanguageService` (Stage 2) is not yet fully isolated for multi-root awareness, a temporary bridge was established.
+    *   It sets the default Path to the first project in the collection: `synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());`
 
 #### 3. `XMLWorkspaceService.java` (`org.eclipse.lemminx/XMLWorkspaceService.java`)
-*   Enhanced `didChangeWorkspaceFolders` logic to capture dynamic workspace events correctly. If a user adds a new project to the workspace after server initialization, it accurately intercepts the action and generates/applies XSD schemas for the new folder.
+*   **Enhanced `didChangeWorkspaceFolders` Logic:** 
+    *   Updated to capture dynamic workspace events correctly. 
+    *   If a user adds a new project to the workspace after server initialization, it accurately intercepts the action and generates/applies XSD schemas for the new folder.
 
 #### 4. `CleanMultiRootValidationTest.java` (`.../extensions/contentmodel/CleanMultiRootValidationTest.java`)
 Established three comprehensive multi-root tests demonstrating core functionality:

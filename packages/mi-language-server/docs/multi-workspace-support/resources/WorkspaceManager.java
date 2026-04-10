@@ -100,6 +100,11 @@ public class WorkspaceManager {
      * @return the removed {@link ProjectContext}, or {@code null} if not found
      */
     public ProjectContext removeProject(String projectUri) {
+        
+        if (projectUri == null) {
+            log.log(Level.WARNING, "removeProject called with null projectUri \u2014 ignoring.");
+            return null;
+        }
 
         ProjectContext removed = projects.remove(projectUri);
         if (removed == null) {
@@ -154,6 +159,7 @@ public class WorkspaceManager {
     public ProjectContext getProjectForDocument(String documentUri) {
 
         if (documentUri == null) {
+            log.log(Level.WARNING, "getProjectForDocument called with null documentUri \u2014 returning null.");
             return null;
         }
 

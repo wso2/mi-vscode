@@ -135,12 +135,14 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 
 			if (!useAssociationSettings) {
 				Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
+				LOGGER.info("Synapse schema path set to: " + synapseSchemaPath);
 				if (synapseSchemaPath != null) {
 					synapseLanguageService.setSynapseXSDPath(synapseSchemaPath);
 				}
 			} else {
 				workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
 				if (!workspaceSchemas.isEmpty()) {
+					LOGGER.info("Loaded " + workspaceSchemas.size() + " workspace schemas");
 					synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());
 				}
 			}

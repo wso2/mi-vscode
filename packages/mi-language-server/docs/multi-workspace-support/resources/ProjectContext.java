@@ -223,6 +223,8 @@ public class ProjectContext {
      */
     public void initProject(String miServerPath, SynapseLanguageClientAPI languageClient) throws Exception {
 
+        log.log(Level.INFO, "Initializing ProjectContext for: " + projectUri);
+
         // 1. Initialize inbound connector metadata.
         inboundConnectorHolder.init(projectUri, projectServerVersion);
 
@@ -248,7 +250,11 @@ public class ProjectContext {
 
         // 6. Create and load the resource finder.
         this.resourceFinder = ResourceFinderFactory.getResourceFinder(isLegacyProject);
-        resourceFinder.loadDependentResources(projectUri);
+        try {
+            resourceFinder.loadDependentResources(projectUri);
+        } catch (Exception e) {
+            log.log(Level.SEVERE, "Failed to initialize ProjectContext for: " + projectUri + ". Error: " + e.getMessage());
+        }
 
         // 7. Resolve the synapse XSD path for this project's MI version.
         this.synapseXsdPath = Utils.copyXSDFiles(projectUri);

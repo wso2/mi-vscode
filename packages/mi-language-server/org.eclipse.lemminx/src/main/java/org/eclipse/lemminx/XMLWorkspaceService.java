@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.lemminx.commons.WorkspaceFolders;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
@@ -39,6 +41,8 @@ import org.eclipse.lsp4j.services.WorkspaceService;
  *
  */
 public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService {
+
+	private static final Logger log = Logger.getLogger(XMLWorkspaceService.class.getName());
 
 	private final XMLLanguageServer xmlLanguageServer;
 	private final WorkspaceFolders workspaceFolders;
@@ -89,6 +93,9 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 		boolean hasSchemaChanges = false;
 		if (params.getEvent().getRemoved() != null) {
 			for (org.eclipse.lsp4j.WorkspaceFolder folder : params.getEvent().getRemoved()) {
+				if (log.isLoggable(Level.FINE)) {
+					log.fine("Removing workspace folder: " + folder.getUri());
+				}
 				xmlLanguageServer.removeWorkspaceSchema(folder.getUri());
 				hasSchemaChanges = true;
 			}
@@ -100,7 +107,7 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 					xmlLanguageServer.addWorkspaceSchema(folder.getUri(), schemaDir);
 					hasSchemaChanges = true;
 				} catch (Exception e) {
-					// Ignore safely
+					log.log(Level.SEVERE, "Failed to copy XSD files for workspace folder: " + folder.getUri() + ". Error: " + e.getMessage());
 				}
 			}
 		}
