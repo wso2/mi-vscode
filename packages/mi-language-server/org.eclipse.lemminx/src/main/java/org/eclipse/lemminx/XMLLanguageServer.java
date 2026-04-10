@@ -122,13 +122,30 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 
 	@Override
 	public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
+		boolean useAssociationSettings = true;
 		try {
-			workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
-			if (!workspaceSchemas.isEmpty()) {
-				synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());
+			Object initOptionsForCheck = params.getInitializationOptions();
+			if (initOptionsForCheck != null) {
+				com.google.gson.Gson gson = new com.google.gson.Gson();
+				com.google.gson.JsonElement jsonElement = gson.toJsonTree(initOptionsForCheck);
+				if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has("useAssociationSettings")) {
+					useAssociationSettings = jsonElement.getAsJsonObject().get("useAssociationSettings").getAsBoolean();
+				}
+			}
+
+			if (!useAssociationSettings) {
+				Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
+				if (synapseSchemaPath != null) {
+					synapseLanguageService.setSynapseXSDPath(synapseSchemaPath);
+				}
+			} else {
+				workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
+				if (!workspaceSchemas.isEmpty()) {
+					synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());
+				}
 			}
 		} catch (IOException | URISyntaxException e) {
-			LOGGER.log(Level.SEVERE, "Error while updating synapse file association settings", e);
+			LOGGER.log(Level.SEVERE, "Error while updating synapse settings", e);
 		}
 		Object initOptions = InitializationOptionsSettings.getSettings(params);
 		this.lastKnownInitOptions = initOptions;
@@ -138,6 +155,12 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		LogHelper.initializeRootLogger(languageClient, settings == null ? null : settings.getLogs());
 
 		LOGGER.info("Initializing XML Language server" + System.lineSeparator() + Platform.details());
+		
+		if (!useAssociationSettings) {
+			LOGGER.info("======== WE ARE USING CATALOG SETTINGS ========");
+		} else {
+			LOGGER.info("======== WE ARE USING FILE ASSOCIATION SETTINGS ========");
+		}
 
 		this.parentProcessId = params.getProcessId();
 
@@ -270,6 +293,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	public void triggerSettingsRefresh() {
 		if (lastKnownInitOptions != null) {
 			updateSettings(lastKnownInitOptions, false);
+			LOGGER.log(Level.WARNING, "Updated settings in Language Server with new workspace schemas: " + lastKnownInitOptions);
 		}
 	}
 
