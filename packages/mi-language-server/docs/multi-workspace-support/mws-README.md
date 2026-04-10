@@ -5,11 +5,12 @@ The current WSO2 Micro Integrator (MI) Language Server typically serves each MI 
 
 ## Architecture Roadmap
 
-### Stage 1: Core XML Validation & Schema Isolation **(Completed)**
+### Stage 1: Core XML Validation & Schema Isolation **(Completed ✅)**
 Enable independent XML validation for multiple projects within a single Language Server instance using dynamic File Associations.
 
 ### Stage 2: Eliminating Global State, Singletons & Context-Aware
-**Goal:** Transition legacy singletons (e.g., `ConnectorHolder`, `SynapseLanguageService`, Mediator Handlers) to be resolved per project context instead of a global state.
+**Goal:** Transition legacy singletons (e.g., `ConnectorHolder`, `SynapseLanguageService`, Mediator Handlers ....) to be 
+resolved per project context instead of a global state.
 
 **Action Plan:** 
 
@@ -29,7 +30,8 @@ Update the frontend VS Code Extension to natively support the multi-project back
 ## Stage 1 Completed: LemMinX File Associations for Workspace Schema Validation
 
 ### Technical Overview
-Introduced **File Associations** to replace the legacy namespace-based `.catalog` implementation. Instead of relying on rigid catalogs, this approach maps specific file path patterns (e.g., glob matches for a project folder) to a specific target schema path. This enables different schemas (e.g., MI 4.3.0 and 4.4.0) to be applied to different projects simultaneously without conflict in a single LemMinX instance.
+Introduced `File Associations` to replace the legacy namespace-based `catalog` implementation. Instead of relying on 
+rigid catalogs, this approach maps specific file path patterns (e.g., glob matches for a project folder) to a specific target schema path. This enables different schemas (e.g., MI 4.3.0 and 4.4.0) to be applied to different projects simultaneously without conflict in a single LemMinX instance.
 
 ### Changelog & Implementation Details
 
