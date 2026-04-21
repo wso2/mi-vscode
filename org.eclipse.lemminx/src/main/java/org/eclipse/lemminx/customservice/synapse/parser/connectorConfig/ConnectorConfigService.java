@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -22,17 +22,26 @@ import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -46,6 +55,9 @@ import java.util.logging.Logger;
 public class ConnectorConfigService {
 
     private static final Logger LOGGER = Logger.getLogger(ConnectorConfigService.class.getName());
+
+    private static final Path LOCAL_ENTRIES_RELATIVE_PATH =
+            Path.of("src", "main", "wso2mi", "artifacts", "local-entries");
 
     /** Relative path of the config file within the project root. */
     private static final String CONFIG_RELATIVE_PATH =
@@ -114,7 +126,17 @@ public class ConnectorConfigService {
 
         File configFile = configFile(projectPath);
         configFile.getParentFile().mkdirs();
-        JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValue(configFile, config);
+        // Write to a temp file first, then atomically rename so concurrent readers never see
+        // a partially written file. Falls back to a non-atomic replace on filesystems that do
+        // not support ATOMIC_MOVE (e.g. cross-device mounts).
+        Path target = configFile.toPath();
+        Path tmp = target.resolveSibling(configFile.getName() + ".tmp");
+        JSON_MAPPER.writerWithDefaultPrettyPrinter().writeValue(tmp.toFile(), config);
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
         LOGGER.log(Level.INFO, "connector-config.json written to: " + configFile.getAbsolutePath());
     }
 
@@ -126,15 +148,17 @@ public class ConnectorConfigService {
      */
     public static void initIfAbsent(String projectPath) {
 
-        File configFile = configFile(projectPath);
-        if (!configFile.exists()) {
-            try {
-                ConnectorConfig initial = new ConnectorConfig();
-                initial.version = CONFIG_VERSION;
-                writeConfig(projectPath, initial);
-                LOGGER.log(Level.INFO, "Created initial connector-config.json at: " + configFile.getAbsolutePath());
-            } catch (IOException e) {
-                LOGGER.log(Level.WARNING, "Could not create connector-config.json: " + e.getMessage());
+        synchronized (lockFor(projectPath)) {
+            File configFile = configFile(projectPath);
+            if (!configFile.exists()) {
+                try {
+                    ConnectorConfig initial = new ConnectorConfig();
+                    initial.version = CONFIG_VERSION;
+                    writeConfig(projectPath, initial);
+                    LOGGER.log(Level.INFO, "Created initial connector-config.json at: " + configFile.getAbsolutePath());
+                } catch (IOException e) {
+                    LOGGER.log(Level.WARNING, "Could not create connector-config.json: " + e.getMessage());
+                }
             }
         }
     }
@@ -169,6 +193,7 @@ public class ConnectorConfigService {
             ConnectorConfig config = readConfig(projectPath);
             ConnectorDependencyConfig connectorCfg = config.connectors.computeIfAbsent(
                     request.connectorArtifactId, k -> new ConnectorDependencyConfig());
+            populateQNameIfAbsent(connectorCfg, request.connectorArtifactId);
             if (connectorCfg.dependencies == null) {
                 connectorCfg.dependencies = new ArrayList<>();
             }
@@ -178,30 +203,35 @@ public class ConnectorConfigService {
                     connectorCfg.dependencies, request.connectionType, request.groupId, request.artifactId);
 
             if (existing != null) {
-                // Update in-place
+                // Update in-place; blank strings are normalized to null so they are
+                // omitted from the serialized JSON and don't break matching/merging.
                 if (request.connectionType != null) {
-                    existing.connectionType = request.connectionType;
+                    existing.connectionType = blankToNull(request.connectionType);
                 }
                 if (request.groupId != null) {
-                    existing.groupId = request.groupId;
+                    existing.groupId = blankToNull(request.groupId);
                 }
                 if (request.artifactId != null) {
-                    existing.artifactId = request.artifactId;
+                    existing.artifactId = blankToNull(request.artifactId);
                 }
                 if (request.version != null) {
-                    existing.version = request.version;
+                    existing.version = blankToNull(request.version);
                 }
                 if (request.omit != null) {
                     existing.omit = request.omit;
                 }
+                if (request.localPath != null) {
+                    existing.localPath = blankToNull(request.localPath);
+                }
             } else {
                 // Add new entry
                 DependencyOverride override = new DependencyOverride();
-                override.connectionType = request.connectionType;
-                override.groupId = request.groupId;
-                override.artifactId = request.artifactId;
-                override.version = request.version;
+                override.connectionType = blankToNull(request.connectionType);
+                override.groupId = blankToNull(request.groupId);
+                override.artifactId = blankToNull(request.artifactId);
+                override.version = blankToNull(request.version);
                 override.omit = request.omit;
+                override.localPath = blankToNull(request.localPath);
                 connectorCfg.dependencies.add(override);
             }
 
@@ -281,9 +311,9 @@ public class ConnectorConfigService {
         response.omitAllConnectors = Boolean.TRUE.equals(config.omitAllConnectors);
         if (connectorArtifactId != null) {
             List<Map<String, Object>> descriptorDeps = readDescriptorDependencies(connectorArtifactId);
-            response.dependencies = mergeDependencies(descriptorDeps, config, connectorArtifactId);
+            response.dependencies = mergeDependencies(descriptorDeps, config, connectorArtifactId, projectPath);
         } else {
-            response.allConnectors = getAllEffectiveDependencies(config);
+            response.allConnectors = getAllEffectiveDependencies(config, projectPath);
         }
         return response;
     }
@@ -292,14 +322,16 @@ public class ConnectorConfigService {
      * Returns the effective dependency lists for every connector currently loaded in the
      * {@link ConnectorHolder}, using the supplied pre-read config.
      *
-     * @param config pre-read connector config
+     * @param config      pre-read connector config
+     * @param projectPath absolute path to the project root (used to scan active connectionTypes)
      * @return map of connectorArtifactId → effective data
      */
-    private static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(ConnectorConfig config) {
+    private static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(ConnectorConfig config,
+                                                                                   String projectPath) {
 
         Map<String, ConnectorEffectiveData> result = new HashMap<>();
         ConnectorHolder holder = ConnectorHolder.getInstance();
-        for (Connector connector : holder.getConnectors()) {
+        for (Connector connector : new ArrayList<>(holder.getConnectors())) {
             String artifactId = connectorArtifactId(connector);
             List<Map<String, Object>> descriptorDeps = readDescriptorDependenciesFromPath(
                     connector.getExtractedConnectorPath());
@@ -311,7 +343,7 @@ public class ConnectorConfigService {
                     || Boolean.TRUE.equals(connectorCfg != null ? connectorCfg.omitAllDrivers : null);
             data.dependencies = descriptorDeps.isEmpty()
                     ? new ArrayList<>()
-                    : mergeDependencies(descriptorDeps, config, artifactId);
+                    : mergeDependencies(descriptorDeps, config, artifactId, projectPath);
             result.put(artifactId, data);
         }
         return result;
@@ -326,21 +358,18 @@ public class ConnectorConfigService {
      */
     public static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(String projectPath) {
 
-        return getAllEffectiveDependencies(readConfig(projectPath));
+        return getAllEffectiveDependencies(readConfig(projectPath), projectPath);
     }
 
     /**
      * Returns {@code true} if driver downloads should be skipped for the given connector, based on
      * the root-level or connector-level {@code omitAllDrivers} flag in {@code connector-config.json}.
      *
-     * <p>The connector is matched by short name: a config entry whose key equals {@code connectorName}
-     * or ends with {@code "-" + connectorName} is considered a match.
-     *
-     * @param projectPath   absolute path to the project root
-     * @param connectorName short connector name as used in {@link ConnectorHolder} (e.g. "file")
+     * @param projectPath         absolute path to the project root
+     * @param connectorArtifactId Maven artifact ID of the connector (e.g. "mi-connector-file")
      * @return {@code true} if all drivers for this connector should be omitted
      */
-    public static boolean isOmitAllDrivers(String projectPath, String connectorName) {
+    public static boolean isOmitAllDrivers(String projectPath, String connectorArtifactId) {
 
         ConnectorConfig config = readConfig(projectPath);
         if (Boolean.TRUE.equals(config.omitAllDrivers)) {
@@ -349,53 +378,31 @@ public class ConnectorConfigService {
         if (config.connectors == null) {
             return false;
         }
-        for (Map.Entry<String, ConnectorDependencyConfig> entry : config.connectors.entrySet()) {
-            String key = entry.getKey();
-            if (key.equals(connectorName) || key.endsWith("-" + connectorName)) {
-                ConnectorDependencyConfig cfg = entry.getValue();
-                return cfg != null && Boolean.TRUE.equals(cfg.omitAllDrivers);
-            }
-        }
-        return false;
+        ConnectorDependencyConfig cfg = findConnectorConfig(config, connectorArtifactId);
+        return cfg != null && Boolean.TRUE.equals(cfg.omitAllDrivers);
     }
 
     /**
-     * Looks up a dependency override using the connector's short name (as held in {@link ConnectorHolder})
-     * and a connection type. This is used by {@code ConnectorDownloadManager} which receives the short
-     * connector name (e.g. "file") rather than the Maven artifactId (e.g. "mi-connector-file").
+     * Looks up a dependency override by connector Maven artifact ID and connection type.
      *
-     * <p>The lookup iterates over all connector entries in connector-config.json and returns the first
-     * override whose entry key ends with the given connectorName and whose connectionType matches.
-     *
-     * @param projectPath    absolute path to the project root
-     * @param connectorName  short connector name (e.g. "file", "amazonsqs")
-     * @param connectionType connection type from descriptor.yml (e.g. "MYSQL")
+     * @param projectPath         absolute path to the project root
+     * @param connectorArtifactId Maven artifact ID of the connector (e.g. "mi-connector-file")
+     * @param connectionType      connection type from descriptor.yml (e.g. "MYSQL")
      * @return the matching override, or {@code null} if none found
      */
     public static DependencyOverride findOverrideByConnectorNameAndConnectionType(String projectPath,
-                                                                                  String connectorName,
+                                                                                  String connectorArtifactId,
                                                                                   String connectionType) {
 
         ConnectorConfig config = readConfig(projectPath);
         if (config.connectors == null || config.connectors.isEmpty()) {
             return null;
         }
-        for (Map.Entry<String, ConnectorDependencyConfig> entry : config.connectors.entrySet()) {
-            // Match by suffix: "mi-connector-file" ends with "-file"
-            String key = entry.getKey();
-            if (!key.equals(connectorName) && !key.endsWith("-" + connectorName)) {
-                continue;
-            }
-            ConnectorDependencyConfig cfg = entry.getValue();
-            if (cfg == null || cfg.dependencies == null) {
-                continue;
-            }
-            DependencyOverride match = findMatchingOverride(cfg.dependencies, connectionType, null, null);
-            if (match != null) {
-                return match;
-            }
+        ConnectorDependencyConfig cfg = findConnectorConfig(config, connectorArtifactId);
+        if (cfg == null || cfg.dependencies == null) {
+            return null;
         }
-        return null;
+        return findMatchingOverride(cfg.dependencies, connectionType, null, null);
     }
 
     // -------------------------------------------------------------------------
@@ -413,8 +420,9 @@ public class ConnectorConfigService {
      */
     private static List<Map<String, Object>> readDescriptorDependencies(String connectorArtifactId) {
 
-        Connector connector = ConnectorHolder.getInstance().getConnectors().stream()
-                .filter(c -> connectorArtifactId.equals(connectorArtifactId(c)))
+        Connector connector = new ArrayList<>(ConnectorHolder.getInstance().getConnectors()).stream()
+                .filter(c -> connectorArtifactId.equals(connectorArtifactId(c))
+                        || connectorArtifactId.equals(c.getName()))
                 .findFirst().orElse(null);
         if (connector == null) {
             return Collections.emptyList();
@@ -447,18 +455,23 @@ public class ConnectorConfigService {
 
     /**
      * Merges descriptor.yml dependency entries with connector-config.json overrides.
+     * Also sets {@link EffectiveDependency#isConnectionTypeActive} by scanning the project's
+     * local entries to find which connectionTypes are in use.
      */
     private static List<EffectiveDependency> mergeDependencies(List<Map<String, Object>> descriptorDeps,
                                                                ConnectorConfig config,
-                                                               String connectorArtifactId) {
+                                                               String connectorArtifactId,
+                                                               String projectPath) {
 
-        ConnectorDependencyConfig connectorCfg = config.connectors.get(connectorArtifactId);
+        ConnectorDependencyConfig connectorCfg = findConnectorConfig(config, connectorArtifactId);
         boolean globalOmitAllDrivers = Boolean.TRUE.equals(config.omitAllDrivers)
                 || (connectorCfg != null && Boolean.TRUE.equals(connectorCfg.omitAllDrivers));
         List<DependencyOverride> overrides =
                 (connectorCfg != null && connectorCfg.dependencies != null)
                         ? connectorCfg.dependencies
                         : Collections.emptyList();
+
+        Set<String> activeConnectionTypes = scanActiveConnectionTypes(projectPath);
 
         List<EffectiveDependency> result = new ArrayList<>();
         for (Map<String, Object> dep : descriptorDeps) {
@@ -474,6 +487,9 @@ public class ConnectorConfigService {
             eff.defaultVersion = version;
             eff.groupId = groupId;
             eff.artifactId = artifactId;
+            // Deps without a connectionType are always "active"; those with one are active only
+            // when a local entry uses that connectionType.
+            eff.isConnectionTypeActive = (connectionType == null) || activeConnectionTypes.contains(connectionType);
 
             if (globalOmitAllDrivers) {
                 eff.omit = true;
@@ -490,10 +506,71 @@ public class ConnectorConfigService {
                 if (!StringUtils.isBlank(override.version)) {
                     eff.overriddenVersion = override.version;
                 }
+                if (!StringUtils.isBlank(override.localPath)) {
+                    eff.localPath = override.localPath;
+                }
             }
             result.add(eff);
         }
         return result;
+    }
+
+    /**
+     * Scans the project's local-entries folder and returns the set of connectionType values
+     * that are currently active (each *.init element that has a connectionType child).
+     */
+    private static Set<String> scanActiveConnectionTypes(String projectPath) {
+
+        Set<String> active = new HashSet<>();
+        if (StringUtils.isBlank(projectPath)) {
+            return active;
+        }
+        File localEntriesDir = Path.of(projectPath).resolve(LOCAL_ENTRIES_RELATIVE_PATH).toFile();
+        if (!localEntriesDir.isDirectory()) {
+            return active;
+        }
+        File[] files = localEntriesDir.listFiles(f -> f.isFile() && f.getName().endsWith(".xml"));
+        if (files == null) {
+            return active;
+        }
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            // Harden against XXE attacks
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+            factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setExpandEntityReferences(false);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            for (File file : files) {
+                try {
+                    Document doc = builder.parse(file);
+                    Element root = doc.getDocumentElement();
+                    NodeList allNodes = root.getElementsByTagName("*");
+                    for (int i = 0; i < allNodes.getLength(); i++) {
+                        Element el = (Element) allNodes.item(i);
+                        if (el.getNodeName().endsWith(".init")) {
+                            NodeList ctNodes = el.getElementsByTagName("connectionType");
+                            if (ctNodes.getLength() > 0) {
+                                String ct = ctNodes.item(0).getTextContent().trim();
+                                if (!ct.isEmpty()) {
+                                    active.add(ct);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Failed to parse local entry file " + file.getName()
+                            + ": " + e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to initialize XML parser for local entries: " + e.getMessage());
+        }
+        return active;
     }
 
     /** Finds the best-matching override by connectionType, then by groupId+artifactId. */
@@ -533,10 +610,15 @@ public class ConnectorConfigService {
     public static void updateConnectorFlags(String projectPath, UpdateConnectorFlagsRequest request)
             throws IOException {
 
+        if (StringUtils.isBlank(request.connectorArtifactId)) {
+            throw new IllegalArgumentException("connectorArtifactId must not be blank");
+        }
+
         synchronized (lockFor(projectPath)) {
             ConnectorConfig config = readConfig(projectPath);
             ConnectorDependencyConfig connectorCfg = config.connectors.computeIfAbsent(
                     request.connectorArtifactId, k -> new ConnectorDependencyConfig());
+            populateQNameIfAbsent(connectorCfg, request.connectorArtifactId);
 
             if (request.omit != null) {
                 connectorCfg.omit = request.omit ? Boolean.TRUE : null;
@@ -562,7 +644,7 @@ public class ConnectorConfigService {
      * @param request     the root config update request
      * @throws IOException if the config file cannot be read or written
      */
-    public static void updateRootConfig(String projectPath, UpdateRootConfigRequest request)
+    public static void updateGlobalConnectorFlags(String projectPath, UpdateGlobalConnectorFlagsRequest request)
             throws IOException {
 
         synchronized (lockFor(projectPath)) {
@@ -580,7 +662,52 @@ public class ConnectorConfigService {
     }
 
     /**
-     * Derives the Maven artifactId from a loaded Connector.
+     * Looks up a connector's dependency config by its canonical Maven artifact ID.
+     *
+     * <p>As a backward-compatibility measure, if no exact match is found the method merges all
+     * entries whose key matches by suffix (e.g. both "db" and "mi-connector-db"), so that existing
+     * config files written before the canonical-key convention are still honoured.
+     */
+    private static ConnectorDependencyConfig findConnectorConfig(ConnectorConfig config, String canonicalArtifactId) {
+
+        if (config.connectors == null) {
+            return null;
+        }
+        // Fast path: canonical key present
+        ConnectorDependencyConfig exact = config.connectors.get(canonicalArtifactId);
+        if (exact != null) {
+            return exact;
+        }
+        // Backward-compat: collect all entries that refer to the same connector under old key forms
+        List<ConnectorDependencyConfig> matches = new ArrayList<>();
+        for (Map.Entry<String, ConnectorDependencyConfig> entry : config.connectors.entrySet()) {
+            String key = entry.getKey();
+            if (key.endsWith("-" + canonicalArtifactId) || canonicalArtifactId.endsWith("-" + key)) {
+                matches.add(entry.getValue());
+            }
+        }
+        if (matches.isEmpty()) {
+            return null;
+        }
+        if (matches.size() == 1) {
+            return matches.get(0);
+        }
+        ConnectorDependencyConfig merged = new ConnectorDependencyConfig();
+        merged.dependencies = new ArrayList<>();
+        for (ConnectorDependencyConfig cfg : matches) {
+            if (cfg.omit != null) merged.omit = cfg.omit;
+            if (cfg.omitAllDrivers != null) merged.omitAllDrivers = cfg.omitAllDrivers;
+            if (cfg.dependencies != null) merged.dependencies.addAll(cfg.dependencies);
+        }
+        return merged;
+    }
+
+    /** Returns {@code null} when the value is null or blank; otherwise returns the value as-is. */
+    private static String blankToNull(String value) {
+        return StringUtils.isBlank(value) ? null : value;
+    }
+
+    /**
      * Uses the artifactId already parsed by ConnectorReader from the extracted folder name,
      * falling back to the connector's short name if not set.
      */
@@ -592,4 +719,34 @@ public class ConnectorConfigService {
         }
         return connector.getName();
     }
+
+    /**
+     * Populates the {@code qname} field on a connector config entry if it is not already set.
+     * The QName is derived from the connector's package and name as read by ConnectorReader, and
+     * takes the form {@code {packageName}name} — the same string that the CAR plugin uses as the
+     * lib subdirectory name.
+     *
+     * @param connectorCfg        the config entry to update
+     * @param connectorArtifactId the Maven artifact ID used to locate the connector in the holder
+     */
+    private static void populateQNameIfAbsent(ConnectorDependencyConfig connectorCfg,
+                                              String connectorArtifactId) {
+
+        if (connectorCfg.qname != null) {
+            return; // already set
+        }
+        Connector connector = new ArrayList<>(ConnectorHolder.getInstance().getConnectors()).stream()
+                .filter(c -> connectorArtifactId.equals(connectorArtifactId(c))
+                        || connectorArtifactId.equals(c.getName()))
+                .findFirst().orElse(null);
+        if (connector == null) {
+            return;
+        }
+        String pkg = connector.getPackageName();
+        String name = connector.getName();
+        if (!StringUtils.isBlank(pkg) && !StringUtils.isBlank(name)) {
+            connectorCfg.qname = "{" + pkg + "}" + name;
+        }
+    }
+
 }

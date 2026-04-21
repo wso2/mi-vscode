@@ -107,7 +107,7 @@ import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.Connecto
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ResetConnectorDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorFlagsRequest;
-import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateRootConfigRequest;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateGlobalConnectorFlagsRequest;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.AbstractResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.ArtifactFileScanner;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.RegistryFileScanner;
@@ -989,11 +989,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<Boolean> updateRootConfig(UpdateRootConfigRequest request) {
+    public CompletableFuture<Boolean> updateGlobalConnectorFlags(UpdateGlobalConnectorFlagsRequest request) {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                ConnectorConfigService.updateRootConfig(projectUri, request);
+                ConnectorConfigService.updateGlobalConnectorFlags(projectUri, request);
                 return true;
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Failed to update root connector config: " + e.getMessage(), e);
@@ -1059,9 +1059,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
         return CompletableFuture.supplyAsync(() -> ConnectorDownloadManager.downloadDriverForConnector(
                 projectUri,
-                request.getGroupId(),
-                request.getArtifactId(),
-                request.getVersion()
+                request.getConnectorName(),
+                request.getConnectionType()
                 ));
     }
 

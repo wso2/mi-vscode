@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -25,4 +25,6 @@ public class DependencyOverride {
     public String artifactId;
     public String version;
     public Boolean omit;
+    /** Absolute path to a local JAR. When set, Maven download is skipped and this file is used directly. */
+    public String localPath;
 }

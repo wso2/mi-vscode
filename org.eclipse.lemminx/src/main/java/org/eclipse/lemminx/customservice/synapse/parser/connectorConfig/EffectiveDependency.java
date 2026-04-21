@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -47,4 +47,14 @@ public class EffectiveDependency {
      * default — i.e., when the user has an active override for this dependency.
      */
     public boolean isOverridden;
+
+    /**
+     * True when there is at least one local entry that uses this connectionType.
+     * False for deps without a connectionType (always considered active).
+     * Populated by the language server by scanning project local entries.
+     */
+    public boolean isConnectionTypeActive;
+
+    /** Absolute path to a local JAR override, or null when not set. */
+    public String localPath;
 }

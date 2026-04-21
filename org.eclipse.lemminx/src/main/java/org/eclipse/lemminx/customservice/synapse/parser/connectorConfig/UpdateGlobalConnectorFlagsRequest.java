@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -15,9 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
 /**
- * Request to update root-level flags in connector-config.json.
+ * Request to update global connector flags in connector-config.json.
  */
-public class UpdateRootConfigRequest {
+public class UpdateGlobalConnectorFlagsRequest {
 
     public String projectPath;
 

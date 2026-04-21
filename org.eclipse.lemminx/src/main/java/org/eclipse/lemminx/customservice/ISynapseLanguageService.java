@@ -76,7 +76,7 @@ import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.Connecto
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ResetConnectorDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorFlagsRequest;
-import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateRootConfigRequest;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateGlobalConnectorFlagsRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.DeployPluginDetails;
 import org.eclipse.lemminx.customservice.synapse.parser.OverviewPageDetailsResponse;
 import org.eclipse.lemminx.customservice.synapse.parser.UpdateConfigRequest;
@@ -346,7 +346,7 @@ public interface ISynapseLanguageService {
     CompletableFuture<Boolean> updateConnectorFlags(UpdateConnectorFlagsRequest request);
 
     @JsonRequest
-    CompletableFuture<Boolean> updateRootConfig(UpdateRootConfigRequest request);
+    CompletableFuture<Boolean> updateGlobalConnectorFlags(UpdateGlobalConnectorFlagsRequest request);
 
     @JsonNotification
     void initConnectorConfig(ConnectorDependencyRequest request);

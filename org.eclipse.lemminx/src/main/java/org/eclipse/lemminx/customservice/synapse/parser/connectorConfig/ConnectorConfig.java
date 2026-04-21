@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Root model for {@code src/main/wso2mi/connector-config.json}.
+ * Root model for {@code src/main/wso2mi/resources/connectors/connector-config.json}.
  * Key in {@code connectors} is the connector Maven artifactId (e.g. "mi-connector-file").
  */
 public class ConnectorConfig {

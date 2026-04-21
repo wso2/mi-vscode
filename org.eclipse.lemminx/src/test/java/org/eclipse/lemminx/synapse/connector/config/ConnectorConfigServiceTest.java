@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v2.0
@@ -16,9 +16,12 @@ package org.eclipse.lemminx.synapse.connector.config;
 
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorConfig;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorConfigService;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorDependencyConfig;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.DependencyOverride;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ResetConnectorDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorDependencyRequest;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorFlagsRequest;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateGlobalConnectorFlagsRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -31,6 +34,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConnectorConfigServiceTest {
@@ -188,6 +192,52 @@ public class ConnectorConfigServiceTest {
     }
 
     @Test
+    public void testUpdateDependencyOverride_BlankStringFieldsNormalizedToNullOnAdd() throws IOException {
+        UpdateConnectorDependencyRequest req = new UpdateConnectorDependencyRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.connectionType = "MYSQL";
+        req.version = "  "; // blank — should become null
+        req.groupId = "";   // blank — should become null
+
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        DependencyOverride dep = config.connectors.get("mi-connector-db").dependencies.get(0);
+        assertEquals("MYSQL", dep.connectionType);
+        assertNull(dep.version);
+        assertNull(dep.groupId);
+    }
+
+    @Test
+    public void testUpdateDependencyOverride_BlankStringFieldsNormalizedToNullOnUpdate() throws IOException {
+        writeConfigFile(
+                "{\n" +
+                "  \"version\": \"1.0\",\n" +
+                "  \"connectors\": {\n" +
+                "    \"mi-connector-db\": {\n" +
+                "      \"dependencies\": [\n" +
+                "        { \"connectionType\": \"MYSQL\", \"version\": \"9.0.0\", \"groupId\": \"com.mysql\" }\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  }\n" +
+                "}"
+        );
+
+        UpdateConnectorDependencyRequest req = new UpdateConnectorDependencyRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.connectionType = "MYSQL";
+        req.version = "  "; // blank — should clear the existing version to null
+        req.groupId = "";   // blank — should clear the existing groupId to null
+
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        DependencyOverride dep = config.connectors.get("mi-connector-db").dependencies.get(0);
+        assertNull(dep.version);
+        assertNull(dep.groupId);
+    }
+
+    @Test
     public void testUpdateDependencyOverride_AddsSecondOverrideForDifferentConnectionType() throws IOException {
         writeConfigFile(
                 "{\n" +
@@ -308,6 +358,210 @@ public class ConnectorConfigServiceTest {
 
         // Should not throw
         ConnectorConfigService.resetDependencyOverrides(tempDir.toString(), req);
+    }
+
+    // -------------------------------------------------------------------------
+    // updateConnectorFlags
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testUpdateConnectorFlags_ThrowsWhenArtifactIdIsNull() {
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = null;
+        req.omit = true;
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req));
+    }
+
+    @Test
+    public void testUpdateConnectorFlags_ThrowsWhenArtifactIdIsBlank() {
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = "   ";
+        req.omit = true;
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req));
+    }
+
+    @Test
+    public void testUpdateConnectorFlags_SetsOmitTrue() throws IOException {
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.omit = true;
+
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
+        assertNotNull(cfg);
+        assertEquals(Boolean.TRUE, cfg.omit);
+        assertNull(cfg.omitAllDrivers);
+    }
+
+    @Test
+    public void testUpdateConnectorFlags_SetsOmitAllDriversTrue() throws IOException {
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.omitAllDrivers = true;
+
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
+        assertNotNull(cfg);
+        assertEquals(Boolean.TRUE, cfg.omitAllDrivers);
+        assertNull(cfg.omit);
+    }
+
+    @Test
+    public void testUpdateConnectorFlags_ClearingFlagRemovesConnectorEntryWhenNothingElseSet() throws IOException {
+        // Start with only omit=true — no dependencies
+        writeConfigFile(
+                "{\n" +
+                "  \"version\": \"1.0\",\n" +
+                "  \"connectors\": {\n" +
+                "    \"mi-connector-db\": { \"omit\": true }\n" +
+                "  }\n" +
+                "}"
+        );
+
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.omit = false; // clear it
+
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        // All fields are now null/empty — the connector key must be pruned
+        assertNull(config.connectors.get("mi-connector-db"));
+    }
+
+    @Test
+    public void testUpdateConnectorFlags_ClearingOneFlag_RetainsOtherFlag() throws IOException {
+        writeConfigFile(
+                "{\n" +
+                "  \"version\": \"1.0\",\n" +
+                "  \"connectors\": {\n" +
+                "    \"mi-connector-db\": { \"omit\": true, \"omitAllDrivers\": true }\n" +
+                "  }\n" +
+                "}"
+        );
+
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.omit = false; // clear omit, leave omitAllDrivers
+
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
+        assertNotNull(cfg);
+        assertNull(cfg.omit);
+        assertEquals(Boolean.TRUE, cfg.omitAllDrivers);
+    }
+
+    @Test
+    public void testUpdateConnectorFlags_ConnectorEntryKeptWhenDependenciesRemain() throws IOException {
+        writeConfigFile(
+                "{\n" +
+                "  \"version\": \"1.0\",\n" +
+                "  \"connectors\": {\n" +
+                "    \"mi-connector-db\": {\n" +
+                "      \"omit\": true,\n" +
+                "      \"dependencies\": [ { \"connectionType\": \"MYSQL\", \"version\": \"9.0.0\" } ]\n" +
+                "    }\n" +
+                "  }\n" +
+                "}"
+        );
+
+        UpdateConnectorFlagsRequest req = new UpdateConnectorFlagsRequest();
+        req.connectorArtifactId = "mi-connector-db";
+        req.omit = false; // clear omit — dependencies still present
+
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
+        assertNotNull(cfg);
+        assertNull(cfg.omit);
+        assertNotNull(cfg.dependencies);
+        assertEquals(1, cfg.dependencies.size());
+    }
+
+    // -------------------------------------------------------------------------
+    // updateGlobalConnectorFlags
+    // -------------------------------------------------------------------------
+
+    @Test
+    public void testUpdateGlobalConnectorFlags_SetsOmitAllDrivers() throws IOException {
+        UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
+        req.projectPath = tempDir.toString();
+        req.omitAllDrivers = true;
+
+        ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        assertEquals(Boolean.TRUE, config.omitAllDrivers);
+        assertNull(config.omitAllConnectors);
+    }
+
+    @Test
+    public void testUpdateGlobalConnectorFlags_SetsOmitAllConnectors() throws IOException {
+        UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
+        req.projectPath = tempDir.toString();
+        req.omitAllConnectors = true;
+
+        ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        assertEquals(Boolean.TRUE, config.omitAllConnectors);
+        assertNull(config.omitAllDrivers);
+    }
+
+    @Test
+    public void testUpdateGlobalConnectorFlags_ClearsBothFlags() throws IOException {
+        writeConfigFile(
+                "{\n" +
+                "  \"version\": \"1.0\",\n" +
+                "  \"omitAllDrivers\": true,\n" +
+                "  \"omitAllConnectors\": true,\n" +
+                "  \"connectors\": {}\n" +
+                "}"
+        );
+
+        UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
+        req.projectPath = tempDir.toString();
+        req.omitAllDrivers = false;
+        req.omitAllConnectors = false;
+
+        ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        assertNull(config.omitAllDrivers);
+        assertNull(config.omitAllConnectors);
+    }
+
+    @Test
+    public void testUpdateGlobalConnectorFlags_NullRequestFieldsAreNoOp() throws IOException {
+        writeConfigFile(
+                "{\n" +
+                "  \"version\": \"1.0\",\n" +
+                "  \"omitAllDrivers\": true,\n" +
+                "  \"connectors\": {}\n" +
+                "}"
+        );
+
+        // Only set omitAllConnectors — omitAllDrivers must be left untouched
+        UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
+        req.projectPath = tempDir.toString();
+        req.omitAllConnectors = true;
+
+        ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
+
+        ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
+        assertEquals(Boolean.TRUE, config.omitAllDrivers);
+        assertEquals(Boolean.TRUE, config.omitAllConnectors);
     }
 
     // -------------------------------------------------------------------------

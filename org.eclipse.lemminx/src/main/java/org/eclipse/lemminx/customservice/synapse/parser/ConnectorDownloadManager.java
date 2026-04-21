@@ -172,12 +172,38 @@ public class ConnectorDownloadManager {
     }
 
     /**
+     * Resolves a {@link Connector} by short name, display name, or artifact ID.
+     * {@link ConnectorHolder#getConnector} only matches by name/displayName; this method
+     * adds an artifact-ID fallback so callers that pass the Maven artifact ID still succeed.
+     *
+     * @return the matching connector, or {@code null} if not found
+     */
+    private static Connector resolveConnector(String connectorName, ConnectorHolder holder) {
+
+        Connector connector = holder.getConnector(connectorName);
+        if (connector != null) {
+            return connector;
+        }
+        // Fallback: match by artifactId (e.g. "mi-connector-db")
+        for (Connector c : new ArrayList<>(holder.getConnectors())) {
+            if (connectorName.equalsIgnoreCase(c.getArtifactId())) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Downloads the driver JAR for a specific connector and connection type by parsing the descriptor.yml file.
      */
     public static String downloadDriverForConnector(String projectPath, String connectorName, String connectionType) {
         try {
             ConnectorHolder connectorHolder = ConnectorHolder.getInstance();
-            Connector connector = connectorHolder.getConnector(connectorName);
+            Connector connector = resolveConnector(connectorName, connectorHolder);
+            if (connector == null) {
+                LOGGER.log(Level.SEVERE, "Connector not found in holder: " + connectorName);
+                return null;
+            }
 
             String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
             File connectorsDirectory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
@@ -207,7 +233,7 @@ public class ConnectorDownloadManager {
                 ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
                 descriptorData = yamlMapper.readValue(inputStream, Map.class);
             } catch (IOException e) {
-                LOGGER.log(Level.SEVERE, "Error reading descriptor.yml: " + e.getMessage());
+                LOGGER.log(Level.SEVERE, "Error reading descriptor.yml", e);
                 return null;
             }
 
@@ -217,8 +243,13 @@ public class ConnectorDownloadManager {
                 return null;
             }
 
+            // Derive the canonical Maven artifact ID from the loaded connector object
+            String canonicalArtifactId = connector.getArtifactId() != null && !connector.getArtifactId().isBlank()
+                    ? connector.getArtifactId()
+                    : connectorName;
+
             // Check global/connector-level omitAllDrivers before reading coordinates
-            if (ConnectorConfigService.isOmitAllDrivers(projectPath, connectorName)) {
+            if (ConnectorConfigService.isOmitAllDrivers(projectPath, canonicalArtifactId)) {
                 LOGGER.log(Level.INFO, "All drivers for " + connectorName
                         + " are omitted via connector-config.json (omitAllDrivers); skipping download.");
                 return null;
@@ -230,7 +261,17 @@ public class ConnectorDownloadManager {
 
             // Apply any override from connector-config.json
             DependencyOverride override = ConnectorConfigService.findOverrideByConnectorNameAndConnectionType(
-                    projectPath, connectorName, connectionType);
+                    projectPath, canonicalArtifactId, connectionType);
+
+            if (override != null && !StringUtils.isBlank(override.localPath)) {
+                File localJar = new File(override.localPath);
+                if (localJar.exists() && localJar.isFile()) {
+                    LOGGER.log(Level.INFO, "Using local driver JAR override: " + override.localPath);
+                    return override.localPath;
+                }
+                LOGGER.log(Level.SEVERE, "Local driver JAR not found at: " + override.localPath);
+                return null;
+            }
             if (override != null) {
                 if (Boolean.TRUE.equals(override.omit)) {
                     LOGGER.log(Level.INFO, "Driver for " + connectorName + "/" + connectionType
@@ -284,7 +325,7 @@ public class ConnectorDownloadManager {
             LOGGER.log(Level.SEVERE, "IOException occurred while downloading driver: " + e.getMessage());
             return null;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while downloading driver: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Error while downloading driver: " + e);
             return null;
         }
     }
@@ -420,9 +461,12 @@ public class ConnectorDownloadManager {
         String artifactId = null;
         String version = null;
         if (StringUtils.isBlank(driverPath)) {
-            ConnectorHolder connectorHolder;
-            connectorHolder = ConnectorHolder.getInstance();
-            Connector connector = connectorHolder.getConnector(connectorName);
+            ConnectorHolder connectorHolder = ConnectorHolder.getInstance();
+            Connector connector = resolveConnector(connectorName, connectorHolder);
+            if (connector == null) {
+                LOGGER.log(Level.SEVERE, "Connector not found in holder: " + connectorName);
+                return null;
+            }
 
             String connectorPath = connector.getExtractedConnectorPath();
             File connectorDirectory = Path.of(connectorPath).toFile();
