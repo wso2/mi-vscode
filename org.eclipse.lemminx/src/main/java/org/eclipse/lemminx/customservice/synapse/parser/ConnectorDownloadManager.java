@@ -28,6 +28,8 @@ import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector;
 import org.eclipse.lemminx.customservice.synapse.driver.DriverGroupIdLookup;
 import org.eclipse.lemminx.customservice.synapse.driver.DriverMavenCoordinatesResponse;
 import org.eclipse.lemminx.customservice.synapse.mediator.TryOutConstants;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorConfigService;
+import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.DependencyOverride;
 import org.eclipse.lemminx.customservice.synapse.schemagen.json.JSONArray;
 import org.eclipse.lemminx.customservice.synapse.schemagen.json.JSONObject;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
@@ -170,63 +172,121 @@ public class ConnectorDownloadManager {
     }
 
     /**
-     * Downloads the driver JAR for a specific connector and add to local maven repo.
+     * Downloads the driver JAR for a specific connector and connection type by parsing the descriptor.yml file.
      */
-    public static String downloadDriverForConnector(String projectPath, String groupId, String artifactId,
-                                                    String version) {
-
-        if (StringUtils.isAnyBlank(groupId, artifactId, version)) {
-            LOGGER.log(Level.SEVERE, "Invalid Maven coordinates");
-            return null;
-        }
-
+    public static String downloadDriverForConnector(String projectPath, String connectorName, String connectionType) {
         try {
-            // 1. Try loading from local Maven repo
-            File localDriverFile = getDriverFromLocalRepo(groupId, artifactId, version);
-            if (localDriverFile != null) {
-                return localDriverFile.getAbsolutePath();
-            }
+            ConnectorHolder connectorHolder = ConnectorHolder.getInstance();
+            Connector connector = connectorHolder.getConnector(connectorName);
 
-            // 2. Prepare temp directory for download
             String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
-            File driversDirectory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
-                    Constant.CONNECTORS, projectId, Constant.DRIVERS).toFile();
+            File connectorsDirectory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
+                    Constant.CONNECTORS, projectId, Constant.EXTRACTED).toFile();
 
-            if (!driversDirectory.exists() && !driversDirectory.mkdirs()) {
-                LOGGER.log(Level.SEVERE, "Failed to create driver directory: " + driversDirectory.getAbsolutePath());
+            if (!connectorsDirectory.exists() || !connectorsDirectory.isDirectory()) {
+                LOGGER.log(Level.SEVERE,
+                        "Connectors directory does not exist: " + connectorsDirectory.getAbsolutePath());
                 return null;
             }
 
-            // 3. Check if driver already exists in temp
-            File tempDriverFile = new File(driversDirectory, artifactId + "-" + version + Constant.JAR_EXTENSION);
-            if (!tempDriverFile.exists()) {
-                // Download only if not present
-                LOGGER.log(Level.INFO, "Downloading driver from Maven repository...");
-                Utils.downloadConnector(groupId, artifactId, version, driversDirectory, Constant.JAR_EXTENSION_NO_DOT,projectPath);
-            } else {
-                LOGGER.log(Level.INFO, "Driver already exists in temp: " + tempDriverFile.getAbsolutePath());
+            String connectorPath = connector.getExtractedConnectorPath();
+            File connectorDirectory = Path.of(connectorPath).toFile();
+            if (!connectorDirectory.exists() || !connectorDirectory.isDirectory()) {
+                LOGGER.log(Level.SEVERE, "Connector directory does not exist: " + connectorDirectory.getAbsolutePath());
+                return null;
             }
 
-            // 4. Validate driver file exists
-            if (!tempDriverFile.exists() || !tempDriverFile.isFile()) {
-                String msg = "Driver JAR not found after attempted download: " + tempDriverFile.getAbsolutePath();
-                LOGGER.log(Level.SEVERE, msg);
-                throw new IOException(msg);
+            File descriptorFile = new File(connectorDirectory, Constant.DESCRIPTOR_FILE);
+            if (!descriptorFile.exists()) {
+                LOGGER.log(Level.SEVERE, "descriptor.yml not found in connector: " + connectorName);
+                return null;
             }
 
-            // 5. Add to local repo
-            String driverPath = addDriverToLocalRepo(groupId, artifactId, version, tempDriverFile.getAbsolutePath(),
-                    projectPath);
-            LOGGER.log(Level.INFO, "Driver added to local repo: " + driverPath);
-            return driverPath;
+            Map<String, Object> descriptorData;
+            try (InputStream inputStream = new FileInputStream(descriptorFile)) {
+                ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+                descriptorData = yamlMapper.readValue(inputStream, Map.class);
+            } catch (IOException e) {
+                LOGGER.log(Level.SEVERE, "Error reading descriptor.yml: " + e.getMessage());
+                return null;
+            }
+
+            Map<String, Object> driverInfo = findDriverForConnectionType(descriptorData, connectionType);
+            if (driverInfo == null) {
+                LOGGER.log(Level.SEVERE, "No driver found for connection type: " + connectionType);
+                return null;
+            }
+
+            // Check global/connector-level omitAllDrivers before reading coordinates
+            if (ConnectorConfigService.isOmitAllDrivers(projectPath, connectorName)) {
+                LOGGER.log(Level.INFO, "All drivers for " + connectorName
+                        + " are omitted via connector-config.json (omitAllDrivers); skipping download.");
+                return null;
+            }
+
+            String groupId = (String) driverInfo.get(Constant.GROUP_ID_KEY);
+            String artifactId = (String) driverInfo.get(Constant.ARTIFACT_ID_KEY);
+            String version = (String) driverInfo.get(Constant.VERSION_KEY);
+
+            // Apply any override from connector-config.json
+            DependencyOverride override = ConnectorConfigService.findOverrideByConnectorNameAndConnectionType(
+                    projectPath, connectorName, connectionType);
+            if (override != null) {
+                if (Boolean.TRUE.equals(override.omit)) {
+                    LOGGER.log(Level.INFO, "Driver for " + connectorName + "/" + connectionType
+                            + " is omitted via connector-config.json; skipping download.");
+                    return null;
+                }
+                if (!StringUtils.isBlank(override.groupId)) groupId = override.groupId;
+                if (!StringUtils.isBlank(override.artifactId)) artifactId = override.artifactId;
+                if (!StringUtils.isBlank(override.version)) {
+                    LOGGER.log(Level.INFO, "Overriding driver version for " + connectorName + "/"
+                            + connectionType + " from " + version + " to " + override.version
+                            + " as per connector-config.json.");
+                    version = override.version;
+                }
+            }
+
+            if (StringUtils.isAnyBlank(groupId, artifactId, version)) {
+                LOGGER.log(Level.SEVERE, "Invalid driver coordinates in descriptor");
+                return null;
+            }
+
+            File driversDirectory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
+                    Constant.CONNECTORS, projectId, Constant.DRIVERS).toFile();
+            if (!driversDirectory.exists()) {
+                driversDirectory.mkdirs();
+            }
+
+            File driverFile = new File(driversDirectory, artifactId + "-" + version + Constant.JAR_EXTENSION);
+            if (driverFile.exists()) {
+                LOGGER.log(Level.INFO, "Driver already exists: " + driverFile.getAbsolutePath());
+                return driverFile.getAbsolutePath();
+            }
+
+            File localDriverFile = getDriverFromLocalRepo(groupId, artifactId, version);
+            if (localDriverFile != null) {
+                copyFile(localDriverFile.getPath(), driversDirectory.getPath());
+                return new File(driversDirectory, localDriverFile.getName()).getAbsolutePath();
+            }
+
+            Utils.downloadConnector(groupId, artifactId, version, driversDirectory, Constant.JAR_EXTENSION_NO_DOT, projectPath);
+
+            File expectedDriverFile = new File(driversDirectory, artifactId + "-" + version + Constant.JAR_EXTENSION);
+            if (!expectedDriverFile.exists() || !expectedDriverFile.isFile()) {
+                throw new IOException("Failed to download or locate driver file: " + expectedDriverFile.getName());
+            }
+
+            LOGGER.log(Level.INFO, "Driver downloaded: " + expectedDriverFile.getAbsolutePath());
+            return expectedDriverFile.getAbsolutePath();
 
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "IO error while downloading driver: " + e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, "IOException occurred while downloading driver: " + e.getMessage());
+            return null;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Unexpected error while downloading driver: " + e.getMessage(), e);
+            LOGGER.log(Level.SEVERE, "Error while downloading driver: " + e.getMessage());
+            return null;
         }
-
-        return null;
     }
 
     /**
