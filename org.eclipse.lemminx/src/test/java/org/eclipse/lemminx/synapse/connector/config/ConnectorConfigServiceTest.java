@@ -29,7 +29,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -86,7 +85,7 @@ public class ConnectorConfigServiceTest {
 
         ConnectorConfigService.writeConfig(tempDir.toString(), config);
 
-        File written = tempDir.resolve("src/main/wso2mi/connector-config.json").toFile();
+        File written = tempDir.resolve("src/main/wso2mi/resources/connectors/connector-config.json").toFile();
         assertTrue(written.exists());
 
         ConnectorConfig readBack = ConnectorConfigService.readConfig(tempDir.toString());
@@ -102,7 +101,7 @@ public class ConnectorConfigServiceTest {
     public void testInitIfAbsent_CreatesFileWhenAbsent() {
         ConnectorConfigService.initIfAbsent(tempDir.toString());
 
-        File written = tempDir.resolve("src/main/wso2mi/connector-config.json").toFile();
+        File written = tempDir.resolve("src/main/wso2mi/resources/connectors/connector-config.json").toFile();
         assertTrue(written.exists());
     }
 
@@ -375,7 +374,7 @@ public class ConnectorConfigServiceTest {
     // -------------------------------------------------------------------------
 
     private void writeConfigFile(String content) throws IOException {
-        File dir = tempDir.resolve("src/main/wso2mi").toFile();
+        File dir = tempDir.resolve("src/main/wso2mi/resources/connectors").toFile();
         dir.mkdirs();
         try (FileWriter w = new FileWriter(new File(dir, "connector-config.json"))) {
             w.write(content);
