@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.extensions.synapse;
 
+import org.eclipse.lemminx.SynapseLanguageService;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.NewProjectResourceFinder;
@@ -1370,6 +1371,11 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         // Check cache first
         CachedArtifactIndex cached = artifactIndexCache.get(projectPath);
         if (cached != null && (System.currentTimeMillis() - cached.timestamp) < ARTIFACT_CACHE_TTL_MS) {
+            // Restore all derived state so cross-reference checks see the same
+            // template paths, duplicates, and cycles as a fresh build would.
+            this.templateFilePaths = cached.templateFilePaths;
+            this.duplicateArtifactNames = cached.duplicateArtifactNames;
+            this.cyclicArtifacts = cached.cyclicArtifacts;
             return cached.artifactNames;
         }
 
@@ -1382,52 +1388,12 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             }
             NewProjectResourceFinder resourceFinder = new NewProjectResourceFinder();
             Map<String, ResourceResponse> allResources = resourceFinder.findAllResources(projectPath);
+            collectResourceNames(allResources, artifactNames, templatePaths, nameToFiles);
 
-            for (Map.Entry<String, ResourceResponse> entry : allResources.entrySet()) {
-                String resourceType = entry.getKey();
-                ResourceResponse response = entry.getValue();
-                if (response.getResources() != null) {
-                    for (Resource resource : response.getResources()) {
-                        if (resource.getName() != null) {
-                            artifactNames.add(resource.getName());
-                            // Track template file paths for parameter validation
-                            if (resource instanceof ArtifactResource &&
-                                    (resourceType.contains("emplate") || resourceType.contains("template"))) {
-                                String absPath = ((ArtifactResource) resource).getAbsolutePath();
-                                if (absPath != null) {
-                                    templatePaths.put(resource.getName(), absPath);
-                                }
-                            }
-                            // Track all artifact names for duplicate detection
-                            if (resource instanceof ArtifactResource) {
-                                String absPath = ((ArtifactResource) resource).getAbsolutePath();
-                                nameToFiles.computeIfAbsent(resource.getName(), k -> new ArrayList<>())
-                                        .add(absPath != null ? absPath : "unknown");
-                            }
-                        }
-                    }
-                }
-                // Also collect registry keys for xslt/xquery/datamapper references
-                if (response.getRegistryResources() != null) {
-                    for (Resource resource : response.getRegistryResources()) {
-                        if (resource instanceof RegistryResource) {
-                            String regKey = ((RegistryResource) resource).getRegistryKey();
-                            if (regKey != null) {
-                                artifactNames.add(regKey);
-                                // Normalize: add both gov:path and gov:/path variants
-                                if (regKey.contains(":") && !regKey.contains(":/")) {
-                                    String prefix = regKey.substring(0, regKey.indexOf(':') + 1);
-                                    String path = regKey.substring(regKey.indexOf(':') + 1);
-                                    artifactNames.add(prefix + "/" + path);
-                                } else if (regKey.contains(":/")) {
-                                    String normalized = regKey.replace(":/", ":");
-                                    artifactNames.add(normalized);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            // Dependent-project artifacts were loaded once by SynapseLanguageService at init;
+            // read through the published finder instead of re-loading on every cache miss.
+            collectResourceNames(SynapseLanguageService.getLoadedDependentResources(),
+                    artifactNames, templatePaths, nameToFiles);
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to build artifact name index for cross-reference validation", e);
             return null;
@@ -1448,8 +1414,71 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         this.templateFilePaths = templatePaths;
         this.duplicateArtifactNames = duplicates;
         this.cyclicArtifacts = cycles;
-        artifactIndexCache.put(projectPath, new CachedArtifactIndex(artifactNames, System.currentTimeMillis()));
+        artifactIndexCache.put(projectPath, new CachedArtifactIndex(
+                artifactNames, templatePaths, duplicates, cycles, System.currentTimeMillis()));
         return artifactNames;
+    }
+
+    /**
+     * Walks a resource map (from either {@code findAllResources} or {@code getDependentResourcesMap})
+     * and populates the artifact-name index, template-path map, duplicate-detection map, and the
+     * normalized registry keys used for registry reference validation.
+     */
+    private void collectResourceNames(Map<String, ResourceResponse> resources,
+                                      Set<String> artifactNames,
+                                      Map<String, String> templatePaths,
+                                      Map<String, List<String>> nameToFiles) {
+        if (resources == null) {
+            return;
+        }
+        for (Map.Entry<String, ResourceResponse> entry : resources.entrySet()) {
+            String resourceType = entry.getKey();
+            ResourceResponse response = entry.getValue();
+            if (response == null) {
+                continue;
+            }
+            if (response.getResources() != null) {
+                for (Resource resource : response.getResources()) {
+                    if (resource.getName() != null) {
+                        artifactNames.add(resource.getName());
+                        // Track template file paths for parameter validation
+                        if (resource instanceof ArtifactResource &&
+                                (resourceType.contains("emplate") || resourceType.contains("template"))) {
+                            String absPath = ((ArtifactResource) resource).getAbsolutePath();
+                            if (absPath != null) {
+                                templatePaths.put(resource.getName(), absPath);
+                            }
+                        }
+                        // Track all artifact names for duplicate detection
+                        if (resource instanceof ArtifactResource) {
+                            String absPath = ((ArtifactResource) resource).getAbsolutePath();
+                            nameToFiles.computeIfAbsent(resource.getName(), k -> new ArrayList<>())
+                                    .add(absPath != null ? absPath : "unknown");
+                        }
+                    }
+                }
+            }
+            // Also collect registry keys for xslt/xquery/datamapper references
+            if (response.getRegistryResources() != null) {
+                for (Resource resource : response.getRegistryResources()) {
+                    if (resource instanceof RegistryResource) {
+                        String regKey = ((RegistryResource) resource).getRegistryKey();
+                        if (regKey != null) {
+                            artifactNames.add(regKey);
+                            // Normalize: add both gov:path and gov:/path variants
+                            if (regKey.contains(":") && !regKey.contains(":/")) {
+                                String prefix = regKey.substring(0, regKey.indexOf(':') + 1);
+                                String path = regKey.substring(regKey.indexOf(':') + 1);
+                                artifactNames.add(prefix + "/" + path);
+                            } else if (regKey.contains(":/")) {
+                                String normalized = regKey.replace(":/", ":");
+                                artifactNames.add(normalized);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -2180,14 +2209,26 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
     }
 
     /**
-     * Simple cache entry for the artifact name index.
+     * Cache entry for the artifact name index. Stores every piece of derived state
+     * that {@link #buildArtifactNameIndex} writes to instance fields, so cache hits
+     * restore the full picture instead of leaving stale data from a prior project.
      */
     private static class CachedArtifactIndex {
         final Set<String> artifactNames;
+        final Map<String, String> templateFilePaths;
+        final Set<String> duplicateArtifactNames;
+        final Set<String> cyclicArtifacts;
         final long timestamp;
 
-        CachedArtifactIndex(Set<String> artifactNames, long timestamp) {
+        CachedArtifactIndex(Set<String> artifactNames,
+                            Map<String, String> templateFilePaths,
+                            Set<String> duplicateArtifactNames,
+                            Set<String> cyclicArtifacts,
+                            long timestamp) {
             this.artifactNames = artifactNames;
+            this.templateFilePaths = templateFilePaths;
+            this.duplicateArtifactNames = duplicateArtifactNames;
+            this.cyclicArtifacts = cyclicArtifacts;
             this.timestamp = timestamp;
         }
     }

@@ -20,6 +20,12 @@ public class OperationParameter {
     private String description;
     private boolean required;
     private String xsdType = "xs:string";
+    /**
+     * Default value from the connector/UI schema, when one is defined.
+     * May be populated for both connection parameters and operation parameters;
+     * otherwise {@code null}.
+     */
+    private String defaultValue;
 
     public OperationParameter(String name, String description) {
 
@@ -61,5 +67,15 @@ public class OperationParameter {
     public void setXsdType(String xsdType) {
 
         this.xsdType = xsdType;
+    }
+
+    public String getDefaultValue() {
+
+        return defaultValue;
+    }
+
+    public void setDefaultValue(String defaultValue) {
+
+        this.defaultValue = defaultValue;
     }
 }

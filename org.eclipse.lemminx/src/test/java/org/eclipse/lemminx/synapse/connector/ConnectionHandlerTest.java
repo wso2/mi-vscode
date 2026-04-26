@@ -21,11 +21,11 @@ import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorReader;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector;
 import org.eclipse.lemminx.synapse.TestUtils;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class ConnectionHandlerTest {
 
     ConnectionHandler connectionHandler;
+    private Connector httpConnector;
 
     @BeforeAll
     public void setUp() throws Exception {
@@ -48,9 +49,19 @@ public class ConnectionHandlerTest {
         connectionHandler = new ConnectionHandler();
         String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
         ConnectorReader connectorReader = new ConnectorReader();
-        Connector connection = connectorReader.readConnector(connectorPath, null);
-        ConnectorHolder.getInstance().addConnector(connection);
+        httpConnector = connectorReader.readConnector(connectorPath, null);
         connectionHandler.init(ConnectorHolder.getInstance());
+    }
+
+    @BeforeEach
+    public void resetHolder() {
+
+        // ConnectorHolder is a singleton with a static connectors list that other test
+        // classes (ConnectorLoaderTest, ConnectorInfoEndpointTest) may have cleared or
+        // mutated. Re-populate before each test to make this class order-independent.
+        ConnectorHolder holder = ConnectorHolder.getInstance();
+        holder.clearConnectors();
+        holder.addConnector(httpConnector);
     }
 
     @Test

@@ -57,6 +57,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -994,6 +995,36 @@ public class Utils {
         }
     }
 
+    /**
+     * Returns the raw {@code <project.runtime.version>} value from pom.xml when it
+     * matches {@code x.y.z}, otherwise returns {@code defaultVersion}. Unlike
+     * {@link #getServerVersion(String, String)}, this does NOT collapse the version
+     * through {@link Constant#MI_SUPPORTED_VERSION_MAP} — callers that need the
+     * actual project runtime (e.g., for user-facing cache directories) should use
+     * this variant.
+     */
+    public static String getRawRuntimeVersion(String projectPath, String defaultVersion) {
+        try {
+            Path pomPath = Path.of(projectPath, "pom.xml");
+            File pomFile = pomPath.toFile();
+            DOMDocument document = getDOMDocument(pomFile);
+
+            DOMNode propertiesList = getChildNodeByName(document.getDocumentElement(), "properties");
+            if (propertiesList != null) {
+                DOMNode runtimeVersionList = getChildNodeByName(propertiesList, "project.runtime.version");
+                if (runtimeVersionList != null) {
+                    String version = getInlineString(runtimeVersionList.getFirstChild());
+                    if (version != null && Pattern.matches("^\\d+\\.\\d+\\.\\d+$", version)) {
+                        return version;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error occurred while extracting raw runtime version.", e);
+        }
+        return defaultVersion;
+    }
+
     public static String getServerVersion(String projectPath, String defaultVersion) {
         try {
             Path pomPath = Path.of(projectPath, "pom.xml");
@@ -1482,8 +1513,8 @@ public class Utils {
     public static void downloadConnector(String groupId, String artifactId, String version, File targetDirectory,
             String fileType, String projectPath) throws IOException {
 
-        if (!targetDirectory.exists()) {
-            targetDirectory.mkdirs();
+        if (!targetDirectory.exists() && !targetDirectory.mkdirs() && !targetDirectory.isDirectory()) {
+            throw new IOException("Failed to create download directory: " + targetDirectory.getAbsolutePath());
         }
 
         boolean useLocalMaven = false;
@@ -1529,6 +1560,21 @@ public class Utils {
             connection.setConnectTimeout(20_000);
             connection.setReadTimeout(40_000);
 
+            // Inspect the HTTP status before opening streams so we can give callers
+            // a precise FileNotFoundException for 404 (artifact missing) and a
+            // distinct IOException for other HTTP failures — separate from any
+            // local FileOutputStream errors raised in the try-with-resources below.
+            int responseCode = connection.getResponseCode();
+            if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
+                logger.log(Level.INFO, "Artifact not found on remote repository: " + artifactId + "-" + version + "."
+                        + effectiveFileType + " (" + urlString + ")");
+                throw new FileNotFoundException("Artifact not found at " + urlString);
+            }
+            if (responseCode >= 400) {
+                throw new IOException("Failed to download " + urlString + ": HTTP " + responseCode + " "
+                        + connection.getResponseMessage());
+            }
+
             try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
                  FileOutputStream fileOutputStream = new FileOutputStream(targetFile)) {
                 byte[] dataBuffer = new byte[1024];
@@ -1537,6 +1583,8 @@ public class Utils {
                     fileOutputStream.write(dataBuffer, 0, bytesRead);
                 }
             }
+        } catch (FileNotFoundException notFound) {
+            throw notFound;
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Error occurred while downloading dependency: " + artifactId + "-" + version + "."
                     + effectiveFileType + " from " + urlString + ". Error: " + e.getMessage());

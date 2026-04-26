@@ -25,6 +25,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.customservice.synapse.connectors.UiSchemaFlattener;
 import org.eclipse.lemminx.customservice.synapse.parser.Node;
 import org.eclipse.lemminx.customservice.synapse.parser.OverviewPageDetailsResponse;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
@@ -414,5 +415,56 @@ public class InboundConnectorHolder {
             LOGGER.log(Level.SEVERE, "Failed to serialize inbound-connector metadata to a JSON string.", e);
         }
         return localInboundConnectorList;
+    }
+
+    /**
+     * Returns the {@link InboundEndpointInfo} for a bundled inbound endpoint
+     * (those shipped inside the LS jar, e.g. {@code http}, {@code jms},
+     * {@code file}), or {@code null} if no bundled schema is registered under
+     * the given id. No disk I/O is performed.
+     */
+    public InboundEndpointInfo getBundledInboundEndpoint(String id) {
+
+        if (id == null || localInboundConnectors == null) {
+            return null;
+        }
+        JsonObject schema = localInboundConnectors.get(id);
+        if (schema == null) {
+            return null;
+        }
+        return buildInboundEndpointInfo(schema, "bundled");
+    }
+
+    /**
+     * Builds an {@link InboundEndpointInfo} from an already-parsed uischema JSON
+     * object. Callers that have just downloaded and parsed a {@code mi-inbound-*}
+     * artifact use this to produce the response payload with
+     * {@code source = "downloaded"}.
+     */
+    public static InboundEndpointInfo buildInboundEndpointInfo(JsonObject schema, String source) {
+
+        InboundEndpointInfo info = new InboundEndpointInfo();
+        info.setSource(source);
+        if (schema.has(Constant.NAME)) {
+            info.setName(schema.get(Constant.NAME).getAsString());
+        }
+        if (schema.has(Constant.ID)) {
+            info.setId(schema.get(Constant.ID).getAsString());
+        }
+        if (schema.has(Constant.TITLE)) {
+            info.setDisplayName(schema.get(Constant.TITLE).getAsString());
+        }
+        if (schema.has(Constant.HELP)) {
+            info.setDescription(schema.get(Constant.HELP).getAsString());
+        } else if (schema.has(Constant.DESCRIPTION)) {
+            info.setDescription(schema.get(Constant.DESCRIPTION).getAsString());
+        }
+        if (schema.has(Constant.TYPE)) {
+            info.setType(schema.get(Constant.TYPE).getAsString());
+        }
+        if (schema.has(Constant.ELEMENTS) && schema.get(Constant.ELEMENTS).isJsonArray()) {
+            info.setParameters(UiSchemaFlattener.flatten(schema.getAsJsonArray(Constant.ELEMENTS)));
+        }
+        return info;
     }
 }

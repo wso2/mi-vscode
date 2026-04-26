@@ -541,6 +541,8 @@ public class Constant {
     public static final String ZIP_EXTENSION_NO_DOT = "zip";
     public static final String JAR_EXTENSION_NO_DOT = "jar";
     public static final String CONNECTORS = "connectors";
+    public static final String COPILOT = "copilot";
+    public static final String CACHE = "cache";
     public static final String USER_HOME = "user.home";
     public static final String MAIN = "main";
     public static final String WSO2MI = "wso2mi";

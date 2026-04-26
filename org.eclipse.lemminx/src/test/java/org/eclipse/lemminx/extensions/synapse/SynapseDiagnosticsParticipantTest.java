@@ -14,13 +14,20 @@
 
 package org.eclipse.lemminx.extensions.synapse;
 
+import org.eclipse.lemminx.SynapseLanguageService;
 import org.eclipse.lemminx.commons.TextDocument;
+import org.eclipse.lemminx.customservice.synapse.resourceFinder.NewProjectResourceFinder;
+import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
 import org.eclipse.lemminx.dom.DOMParser;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DiagnosticSeverity;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -1499,4 +1506,104 @@ public class SynapseDiagnosticsParticipantTest {
     // ===== New-pattern hints (not testable via unit tests since they require project path) =====
     // Hints are gated on is440Plus which requires Utils.getServerVersion() with a real pom.xml.
     // Integration tests in the MI extension validate hint behavior end-to-end.
+
+    // ===== Cross-project reference resolution (pom.xml dependencies) =====
+
+    private String originalUserHome;
+
+    @AfterEach
+    public void restoreUserHome() {
+        if (originalUserHome != null) {
+            System.setProperty("user.home", originalUserHome);
+            originalUserHome = null;
+        }
+        SynapseLanguageService.setLoadedResourceFinder(null);
+    }
+
+    /**
+     * Simulates what {@link SynapseLanguageService#init} does for dependent projects:
+     * loads them via a real finder and publishes it so the diagnostics participant
+     * can see the resulting map through {@link SynapseLanguageService#getLoadedDependentResources()}.
+     */
+    private void loadDependentResourcesForProject(Path projectPath) {
+        NewProjectResourceFinder finder = new NewProjectResourceFinder();
+        finder.loadDependentResources(projectPath.toString());
+        SynapseLanguageService.setLoadedResourceFinder(finder);
+    }
+
+    /**
+     * Runs diagnostics against an XML document whose URI is a real file path under
+     * {@code <projectRoot>/src/main/wso2mi/artifacts/...}, so
+     * {@link SynapseDiagnosticsParticipant#deriveProjectPath} can resolve the project root
+     * and trigger cross-file reference validation.
+     */
+    private List<Diagnostic> diagnoseAtPath(String xml, Path xmlFilePath) throws Exception {
+        Files.createDirectories(xmlFilePath.getParent());
+        Files.writeString(xmlFilePath, xml);
+        TextDocument textDocument = new TextDocument(xml, xmlFilePath.toUri().toString());
+        DOMDocument document = DOMParser.getInstance().parse(textDocument, null);
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        SynapseDiagnosticsParticipant participant = new SynapseDiagnosticsParticipant();
+        participant.doDiagnostics(document, diagnostics, null, () -> {});
+        return diagnostics;
+    }
+
+    @Test
+    public void testSequenceKeyFromPomDependencyResolves(@TempDir Path tempDir) throws Exception {
+        // Redirect user.home so loadDependentResources looks inside tempDir
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        // Consumer project references a sequence defined only in a pom dependency
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"fromDep\"/></inSequence>"
+                + "</resource></api>";
+
+        // Fake extracted dependency project containing the referenced sequence
+        String hash = Utils.getHash(consumer.toString());
+        Path depSequence = tempDir.resolve(".wso2-mi/integration-project-dependencies")
+                .resolve("consumer_" + hash)
+                .resolve("Extracted/dep/src/main/wso2mi/artifacts/sequences/fromDep-1.0.0.xml");
+        Files.createDirectories(depSequence.getParent());
+        Files.writeString(depSequence,
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"fromDep\"><log/></sequence>");
+
+        loadDependentResourcesForProject(consumer);
+        List<Diagnostic> diags = diagnoseAtPath(xml, apiXml);
+        List<Diagnostic> unresolved = diagnosticsWithCode(diags, "UnresolvedArtifactReference");
+        assertTrue(unresolved.isEmpty(),
+                "Sequence 'fromDep' is defined in a pom dependency and should resolve, but got: "
+                        + unresolved.stream().map(Diagnostic::getMessage).collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testUnknownSequenceStillFlaggedWithDependencies(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"reallyDoesNotExist\"/></inSequence>"
+                + "</resource></api>";
+
+        // A dependency with a different sequence name — should not mask the typo
+        String hash = Utils.getHash(consumer.toString());
+        Path depSequence = tempDir.resolve(".wso2-mi/integration-project-dependencies")
+                .resolve("consumer_" + hash)
+                .resolve("Extracted/dep/src/main/wso2mi/artifacts/sequences/somethingElse-1.0.0.xml");
+        Files.createDirectories(depSequence.getParent());
+        Files.writeString(depSequence,
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"somethingElse\"><log/></sequence>");
+
+        loadDependentResourcesForProject(consumer);
+        List<Diagnostic> diags = diagnoseAtPath(xml, apiXml);
+        List<Diagnostic> unresolved = diagnosticsWithCode(diags, "UnresolvedArtifactReference");
+        assertEquals(1, unresolved.size());
+        assertTrue(unresolved.get(0).getMessage().contains("reallyDoesNotExist"));
+    }
 }
