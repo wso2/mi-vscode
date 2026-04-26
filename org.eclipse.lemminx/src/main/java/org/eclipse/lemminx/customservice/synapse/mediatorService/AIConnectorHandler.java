@@ -61,6 +61,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
+import java.net.ConnectException;
 import java.net.http.HttpClient;
 import java.net.http.HttpResponse;
 import java.net.http.HttpRequest;
@@ -103,6 +104,8 @@ public class AIConnectorHandler {
     private static final String ERROR = "error";
     private static final String SERVER_URL = "mcpServerUrl";
     private static final String ACCESS_TOKEN = "bearerToken";
+    private static final String AUTHENTICATION_TYPE = "authenticationType";
+    private static final String NONE = "None";
     private static final Path TEMPLATE_FOLDER_PATH = Path.of("src", "main", "wso2mi", "artifacts", "templates");
     Set<String> TOOL_EDIT_FIELDS = Set.of(TOOL_NAME, TOOL_DESCRIPTION, TOOL_RESULT_EXPRESSION, MCP_TOOLS_SELECTION);
     private final MediatorHandler mediatorHandler;
@@ -1364,32 +1367,40 @@ public class AIConnectorHandler {
 
             String serverUrl = null;
             String accessToken = null;
+            String authenticationType = null;
             for (ConnectionParameter param : connection.getParameters()) {
                 if (SERVER_URL.equals(param.getName())) {
                     serverUrl = param.getValue();
                 } else if (ACCESS_TOKEN.equals(param.getName())) {
                     accessToken = param.getValue();
+                } else if (AUTHENTICATION_TYPE.equals(param.getName())) {
+                    authenticationType = param.getValue();
                 }
             }
-            if (serverUrl == null || accessToken == null) {
-                response.error = "ServerUrl or accessToken cannot be fetched from the connection parameters";
+            if (serverUrl == null) {
+                response.error = "ServerUrl cannot be fetched from the connection parameters";
+                return response;
+            }
+            if (!NONE.equalsIgnoreCase(authenticationType) && accessToken == null) {
+                response.error = "AccessToken cannot be fetched from the connection parameters";
                 return response;
             }
 
             HttpClient client = HttpClient.newHttpClient();
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri(URI.create(serverUrl))
-                    .header("Authorization", "Bearer " + accessToken)
                     .header("Accept", "*/*")
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(
-                            "{"
-                            + "\"jsonrpc\":\"2.0\","
-                            + "\"id\":1,"
-                            + "\"method\":\"tools/list\""
-                            + "}"
-                    ))
-                    .build();
+                    .header("Content-Type", "application/json");
+            if (!NONE.equalsIgnoreCase(authenticationType)) {
+                builder.header("Authorization", "Bearer " + accessToken);
+            }
+            HttpRequest request = builder.POST(HttpRequest.BodyPublishers.ofString(
+					"{"
+							+ "\"jsonrpc\":\"2.0\","
+							+ "\"id\":1,"
+							+ "\"method\":\"tools/list\""
+							+ "}"))
+					.build();
 
             HttpResponse<String> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (httpResponse.statusCode() != 200) {
@@ -1442,6 +1453,8 @@ public class AIConnectorHandler {
                 response.error = "Unexpected MCP response";
             }
             response.selectedTools = existingToolsForConnection;
+        } catch (ConnectException e) {
+            response.error = "Error occurred while connecting to the MCP Server";
         } catch (Exception e) {
             response.error = e.getMessage();
         }
