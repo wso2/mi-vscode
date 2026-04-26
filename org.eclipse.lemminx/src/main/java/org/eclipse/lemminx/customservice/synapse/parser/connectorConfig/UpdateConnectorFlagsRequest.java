@@ -19,8 +19,6 @@ package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
  */
 public class UpdateConnectorFlagsRequest {
 
-    public String projectPath;
-
     /** The connector Maven artifactId (e.g. "mi-connector-file"). */
     public String connectorArtifactId;
 

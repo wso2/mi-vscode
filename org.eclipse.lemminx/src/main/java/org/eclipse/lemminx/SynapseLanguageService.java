@@ -952,6 +952,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             try {
                 ConnectorConfigService.updateDependencyOverride(projectUri, request);
                 return true;
+            } catch (IllegalArgumentException e) {
+                log.log(Level.WARNING, "Invalid request to updateConnectorDependencyOverride: " + e.getMessage());
+                return false;
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Failed to update connector dependency override: " + e.getMessage(), e);
                 return false;
@@ -967,6 +970,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             try {
                 ConnectorConfigService.resetDependencyOverrides(projectUri, request);
                 return true;
+            } catch (IllegalArgumentException e) {
+                log.log(Level.WARNING, "Invalid request to resetConnectorDependencyOverrides: " + e.getMessage());
+                return false;
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Failed to reset connector dependency overrides: " + e.getMessage(), e);
                 return false;
@@ -981,6 +987,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             try {
                 ConnectorConfigService.updateConnectorFlags(projectUri, request);
                 return true;
+            } catch (IllegalArgumentException e) {
+                log.log(Level.WARNING, "Invalid request to updateConnectorFlags: " + e.getMessage());
+                return false;
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Failed to update connector flags: " + e.getMessage(), e);
                 return false;
@@ -995,6 +1004,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             try {
                 ConnectorConfigService.updateGlobalConnectorFlags(projectUri, request);
                 return true;
+            } catch (IllegalArgumentException e) {
+                log.log(Level.WARNING, "Invalid request to updateGlobalConnectorFlags: " + e.getMessage());
+                return false;
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Failed to update root connector config: " + e.getMessage(), e);
                 return false;

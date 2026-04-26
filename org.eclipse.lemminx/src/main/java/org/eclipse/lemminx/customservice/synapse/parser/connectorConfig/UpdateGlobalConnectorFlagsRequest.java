@@ -19,8 +19,6 @@ package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
  */
 public class UpdateGlobalConnectorFlagsRequest {
 
-    public String projectPath;
-
     /** When non-null, sets whether all driver JARs are omitted globally. */
     public Boolean omitAllDrivers;
 

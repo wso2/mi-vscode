@@ -269,6 +269,15 @@ public class ConnectorConfigServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
+    public void testResetDependencyOverrides_ThrowsWhenArtifactIdIsBlank() {
+        ResetConnectorDependencyRequest req = new ResetConnectorDependencyRequest();
+        req.connectorArtifactId = "  ";
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ConnectorConfigService.resetDependencyOverrides(tempDir.toString(), req));
+    }
+
+    @Test
     public void testResetDependencyOverrides_RemovesSpecificConnectionType() throws IOException {
         writeConfigFile(
                 "{\n" +
@@ -496,7 +505,6 @@ public class ConnectorConfigServiceTest {
     @Test
     public void testUpdateGlobalConnectorFlags_SetsOmitAllDrivers() throws IOException {
         UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
-        req.projectPath = tempDir.toString();
         req.omitAllDrivers = true;
 
         ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
@@ -509,7 +517,6 @@ public class ConnectorConfigServiceTest {
     @Test
     public void testUpdateGlobalConnectorFlags_SetsOmitAllConnectors() throws IOException {
         UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
-        req.projectPath = tempDir.toString();
         req.omitAllConnectors = true;
 
         ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
@@ -531,7 +538,6 @@ public class ConnectorConfigServiceTest {
         );
 
         UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
-        req.projectPath = tempDir.toString();
         req.omitAllDrivers = false;
         req.omitAllConnectors = false;
 
@@ -554,7 +560,6 @@ public class ConnectorConfigServiceTest {
 
         // Only set omitAllConnectors — omitAllDrivers must be left untouched
         UpdateGlobalConnectorFlagsRequest req = new UpdateGlobalConnectorFlagsRequest();
-        req.projectPath = tempDir.toString();
         req.omitAllConnectors = true;
 
         ConnectorConfigService.updateGlobalConnectorFlags(tempDir.toString(), req);
@@ -569,7 +574,7 @@ public class ConnectorConfigServiceTest {
     // -------------------------------------------------------------------------
 
     @Test
-    public void testFindOverrideByConnectorName_MatchesBySuffix() throws IOException {
+    public void testFindOverrideByConnectorName_MatchesByArtifactId() throws IOException {
         writeConfigFile(
                 "{\n" +
                 "  \"version\": \"1.0\",\n" +
@@ -583,9 +588,8 @@ public class ConnectorConfigServiceTest {
                 "}"
         );
 
-        // ConnectorHolder name is "file", artifactId in config is "mi-connector-file"
         DependencyOverride result = ConnectorConfigService.findOverrideByConnectorNameAndConnectionType(
-                tempDir.toString(), "file", "MYSQL");
+                tempDir.toString(), "mi-connector-file", "MYSQL");
 
         assertNotNull(result);
         assertEquals("9.0.0", result.version);
@@ -617,7 +621,7 @@ public class ConnectorConfigServiceTest {
         );
 
         DependencyOverride result = ConnectorConfigService.findOverrideByConnectorNameAndConnectionType(
-                tempDir.toString(), "db", "ORACLE");
+                tempDir.toString(), "mi-connector-db", "ORACLE");
 
         assertNotNull(result);
         assertEquals(Boolean.TRUE, result.omit);

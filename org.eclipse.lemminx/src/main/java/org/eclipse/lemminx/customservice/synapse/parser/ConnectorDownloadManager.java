@@ -206,16 +206,12 @@ public class ConnectorDownloadManager {
             }
 
             String projectId = new File(projectPath).getName() + "_" + Utils.getHash(projectPath);
-            File connectorsDirectory = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
-                    Constant.CONNECTORS, projectId, Constant.EXTRACTED).toFile();
-
-            if (!connectorsDirectory.exists() || !connectorsDirectory.isDirectory()) {
-                LOGGER.log(Level.SEVERE,
-                        "Connectors directory does not exist: " + connectorsDirectory.getAbsolutePath());
-                return null;
-            }
 
             String connectorPath = connector.getExtractedConnectorPath();
+            if (StringUtils.isBlank(connectorPath)) {
+                LOGGER.log(Level.SEVERE, "Extracted connector path is not set for connector: " + connector.getName());
+                return null;
+            }
             File connectorDirectory = Path.of(connectorPath).toFile();
             if (!connectorDirectory.exists() || !connectorDirectory.isDirectory()) {
                 LOGGER.log(Level.SEVERE, "Connector directory does not exist: " + connectorDirectory.getAbsolutePath());
@@ -322,10 +318,10 @@ public class ConnectorDownloadManager {
             return expectedDriverFile.getAbsolutePath();
 
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "IOException occurred while downloading driver: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "IOException occurred while downloading driver: " + e.getMessage(), e);
             return null;
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error while downloading driver: " + e);
+            LOGGER.log(Level.SEVERE, "Error while downloading driver: " + e.getMessage(), e);
             return null;
         }
     }
@@ -469,6 +465,10 @@ public class ConnectorDownloadManager {
             }
 
             String connectorPath = connector.getExtractedConnectorPath();
+            if (StringUtils.isBlank(connectorPath)) {
+                LOGGER.log(Level.SEVERE, "Extracted connector path is not set for connector: " + connector.getName());
+                return null;
+            }
             File connectorDirectory = Path.of(connectorPath).toFile();
             if (!connectorDirectory.exists() || !connectorDirectory.isDirectory()) {
                 LOGGER.log(Level.SEVERE, "Connector directory does not exist: " + connectorDirectory.getAbsolutePath());
