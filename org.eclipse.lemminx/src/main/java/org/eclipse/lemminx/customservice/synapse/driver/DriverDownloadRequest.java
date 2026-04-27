@@ -19,42 +19,31 @@ package org.eclipse.lemminx.customservice.synapse.driver;
  */
 public class DriverDownloadRequest {
 
-    private String groupId;
-    private String artifactId;
-    private String version;
+    private String connectorName;
+    private String connectionType;
 
     public DriverDownloadRequest() {
-        
     }
 
-    public DriverDownloadRequest(String groupId,String artifactId,String version) {
-
-        this.groupId=groupId;
-        this.artifactId=artifactId;
-        this.version=version;
+    public DriverDownloadRequest(String connectorName, String connectionType) {
+        this.connectorName = connectorName;
+        this.connectionType = connectionType;
     }
 
-    public String getGroupId() {
-        return groupId;
+    public String getConnectorName() {
+        return connectorName;
     }
 
-    public void setArtifactId(String artifactId) {
-        this.artifactId = artifactId;
+    public void setConnectorName(String connectorName) {
+        this.connectorName = connectorName;
     }
 
-    public String getArtifactId() {
-        return artifactId;
+    public String getConnectionType() {
+        return connectionType;
     }
 
-    public void setGroupId(String groupId) {
-        this.groupId = groupId;
-    }
-    public String getVersion() {
-        return version;
-    }
-
-    public void setVersion(String version) {
-        this.version = version;
+    public void setConnectionType(String connectionType) {
+        this.connectionType = connectionType;
     }
 
 }
