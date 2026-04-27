@@ -73,7 +73,7 @@ public class IntegrationProjectDownloadManager {
      * @return a result object containing any dependencies that failed to download or process
      */
     public static IntegrationProjectDependencyDownloadResult refetchDependencies(String projectPath, List<DependencyDetails> dependencies,
-                                                               boolean isVersionedDeploymentEnabled) {
+                                                               boolean isVersionedDeploymentEnabled) throws IOException {
 
         LOGGER.log(Level.INFO, "Starting hard refresh of dependencies for project: " + new File(projectPath).getName()
                 + " with " + dependencies.size() + " dependencies");
@@ -82,7 +82,7 @@ public class IntegrationProjectDownloadManager {
     }
 
     public static IntegrationProjectDependencyDownloadResult refetchDependencies(String projectPath, List<DependencyDetails> dependencies,
-                                                        boolean isVersionedDeploymentEnabled, Path userHome) {
+                                                        boolean isVersionedDeploymentEnabled, Path userHome) throws IOException {
 
         String projectId = new File(projectPath).getName() + UNDERSCORE + Utils.getHash(projectPath);
         File directory = userHome.resolve(Constant.WSO2_MI)
@@ -103,6 +103,7 @@ public class IntegrationProjectDownloadManager {
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Failed to clear dependency directories for project " + projectId
                     + ": " + e.getMessage());
+            throw e;
         }
 
         return downloadDependencies(projectPath, dependencies, isVersionedDeploymentEnabled, userHome);

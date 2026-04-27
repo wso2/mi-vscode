@@ -18,6 +18,7 @@ import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,9 +97,15 @@ public class DependencyDownloadManager {
         Node isVersionedDeployment = pomDetailsResponse.getBuildDetails().getVersionedDeployment();
         boolean isVersionedDeploymentEnabled = isVersionedDeployment != null ?
                 Boolean.parseBoolean(isVersionedDeployment.getValue()) : false;
-        IntegrationProjectDependencyDownloadResult result =
-                IntegrationProjectDownloadManager.refetchDependencies(projectPath, integrationProjectDependencies,
-                        isVersionedDeploymentEnabled);
+        IntegrationProjectDependencyDownloadResult result;
+        try {
+            result = IntegrationProjectDownloadManager.refetchDependencies(projectPath, integrationProjectDependencies,
+                    isVersionedDeploymentEnabled);
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Failed to clear dependency directories for project " + projectPath
+                    + ": " + e.getMessage());
+            return "Failed to clear dependency directories: " + e.getMessage();
+        }
 
         String errorMessage = buildIntegrationProjectsErrorMessage(result);
         if (errorMessage.isEmpty()) {
