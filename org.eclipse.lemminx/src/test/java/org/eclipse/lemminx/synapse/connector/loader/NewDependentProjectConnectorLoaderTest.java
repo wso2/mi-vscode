@@ -497,8 +497,10 @@ public class NewDependentProjectConnectorLoaderTest {
     private static void deleteRecursively(Path path) throws IOException {
 
         if (path == null || !Files.exists(path)) {
+            LOGGER.info("Skipping deletion - path is null or does not exist");
             return;
         }
+        LOGGER.info("Deleting directory recursively: " + path.toString());
         Files.walk(path)
                 .sorted(Comparator.reverseOrder())
                 .map(Path::toFile)

@@ -101,7 +101,7 @@ public class IntegrationProjectDownloadManager {
                 LOGGER.log(Level.INFO, "Cleared Extracted directory for project: " + projectId);
             }
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Failed to clear dependency directories for project " + projectId
+            LOGGER.log(Level.SEVERE, "Failed to clear dependency directories for project " + projectId
                     + ": " + e.getMessage());
         }
 

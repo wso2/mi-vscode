@@ -202,6 +202,7 @@ public class NewProjectConnectorLoader extends AbstractConnectorLoader {
 
         Path extractedDir = findProjectDependencyExtractedDir();
         if (extractedDir == null) {
+            log.info("No dependency project extracted directory found for project: " + projectId);
             return;
         }
         File[] dependentProjects = extractedDir.toFile().listFiles(File::isDirectory);
