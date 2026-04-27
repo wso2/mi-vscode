@@ -88,11 +88,10 @@ public abstract class AbstractResourceFinder {
     private static final String CONNECTOR_REGISTRY_KEY_PREFIX = "resources:connectors/";
 
     /**
-     * Name prefix of the built-in HTTP connector. The HTTP connector is bundled with every
-     * project, so any connector whose name starts with this prefix is excluded from dependency
-     * conflict detection.
+     * Core name (version-stripped) of the built-in HTTP connector. The HTTP connector is bundled
+     * with every project and is excluded from dependency conflict detection.
      */
-    private static final String HTTP_CONNECTOR_PREFIX = "mi-connector-http";
+    private static final String HTTP_CONNECTOR_CORE_NAME = "mi-connector-http";
     protected static final List<String> resourceFromRegistryOnly = List.of("dataMapper", "js", "json", "smooksConfig",
             "wsdl", "ws_policy", "xsd", "xsl", "xslt", "yaml", "registry", "unitTestRegistry", "schema", "swagger");
 
@@ -211,8 +210,8 @@ public abstract class AbstractResourceFinder {
                     mergeDepResources(depResources);
                     existingResourceNames.addAll(depResourceNames);
                     depConnectorZipBaseNames.stream()
-                            .filter(n -> !n.startsWith(HTTP_CONNECTOR_PREFIX))
                             .map(Utils::stripConnectorVersion)
+                            .filter(n -> !HTTP_CONNECTOR_CORE_NAME.equals(n))
                             .forEach(loadedDepConnectorCoreNames::add);
                 }
             }
@@ -360,7 +359,7 @@ public abstract class AbstractResourceFinder {
      * {@code mi-connector-email-2.0.1} are treated as the same connector because loading two
      * different versions of a connector simultaneously is not supported.
      * <p>
-     * The built-in HTTP connector ({@value #HTTP_CONNECTOR_PREFIX}) is always excluded from
+     * The built-in HTTP connector ({@value #HTTP_CONNECTOR_CORE_NAME}) is always excluded from
      * conflict detection because it is bundled with every project.
      *
      * @param depConnectorZipBaseNames        zip base names (without {@code .zip}) from the dependency
@@ -378,10 +377,10 @@ public abstract class AbstractResourceFinder {
 
         Set<String> conflicting = new HashSet<>();
         for (String zipBaseName : depConnectorZipBaseNames) {
-            if (zipBaseName.startsWith(HTTP_CONNECTOR_PREFIX)) {
+            String coreName = Utils.stripConnectorVersion(zipBaseName);
+            if (HTTP_CONNECTOR_CORE_NAME.equals(coreName)) {
                 continue;
             }
-            String coreName = Utils.stripConnectorVersion(zipBaseName);
             boolean conflictsWithHolder = existingConnectorArtifactIds.contains(coreName);
             boolean conflictsWithCurrentRun = loadedDepConnectorCoreNames.contains(coreName);
             if (conflictsWithHolder || conflictsWithCurrentRun) {
