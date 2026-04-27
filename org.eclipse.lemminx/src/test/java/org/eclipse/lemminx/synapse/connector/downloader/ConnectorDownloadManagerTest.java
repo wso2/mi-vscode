@@ -90,8 +90,9 @@ public class ConnectorDownloadManagerTest {
 
         ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies);
 
+        assertEquals(0, result.getFailedDependencies().size());
         assertTrue(result.getFromIntegrationProjectDependencies().stream().anyMatch(dep -> dep.contains("mi-connector-http")),
-                "Connector from integration project dependency should be marked as failed");
+                "Connector from integration project dependency should be in fromIntegrationProjectDependencies list");
     }
 
     @Test
