@@ -375,7 +375,7 @@ public class ConnectorConfigService {
      * @param projectPath absolute path to the project root
      * @return map of connectorArtifactId → list of effective dependencies
      */
-    public static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(String projectPath) {
+    private static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(String projectPath) {
 
         return getAllEffectiveDependencies(readConfig(projectPath), projectPath);
     }
