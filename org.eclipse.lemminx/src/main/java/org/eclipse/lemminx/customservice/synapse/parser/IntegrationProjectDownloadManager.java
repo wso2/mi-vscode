@@ -152,13 +152,14 @@ public class IntegrationProjectDownloadManager {
         List<String> failedDependencies = new ArrayList<>();
         List<String> noDescriptorDependencies = new ArrayList<>();
         List<String> versioningMismatchDependencies = new ArrayList<>();
-        Set<String> fetchedDependencies = new HashSet<>();
+        Set<String> visitedDependencies = new HashSet<>();
+        Set<String> resolvedDependencies = new HashSet<>();
 
         for (DependencyDetails dependency : dependencies) {
             try {
                 LOGGER.log(Level.INFO, "Processing dependency: " + dependency.getGroupId() + HYPHEN
                         + dependency.getArtifact() + HYPHEN + dependency.getVersion());
-                fetchDependencyRecursively(dependency, downloadDirectory, fetchedDependencies,
+                fetchDependencyRecursively(dependency, downloadDirectory, visitedDependencies, resolvedDependencies,
                         isVersionedDeploymentEnabled, userHome);
             } catch (NoDescriptorException e) {
                 String failedDependency =
@@ -182,7 +183,7 @@ public class IntegrationProjectDownloadManager {
             }
         }
 
-        Set<String> expectedBaseNames = buildExpectedBaseNames(fetchedDependencies);
+        Set<String> expectedBaseNames = buildExpectedBaseNames(resolvedDependencies);
         deleteObsoleteDownloadedFiles(downloadDirectory, expectedBaseNames);
         deleteObsoleteExtractedDirs(extractDirectory, expectedBaseNames);
 
@@ -273,24 +274,25 @@ public class IntegrationProjectDownloadManager {
      * downloads and infinite loops.
      * </p>
      *
-     * @param dependency          the dependency to fetch
-     * @param downloadDirectory   the directory to store downloaded .car files
-     * @param fetchedDependencies a set of dependency keys already fetched to prevent duplication
+     * @param dependency           the dependency to fetch
+     * @param downloadDirectory    the directory to store downloaded .car files
+     * @param visitedDependencies  a set of dependency keys already visited to prevent duplicate processing and infinite loops
+     * @param resolvedDependencies a set of dependency keys successfully fetched and parsed, used to determine which cached files to keep
      * @param isVersionedDeploymentEnabled indicates if versioned deployment is enabled in the parent project
      * @throws Exception if fetching or parsing fails
      */
     static void fetchDependencyRecursively(DependencyDetails dependency, File downloadDirectory,
-                                           Set<String> fetchedDependencies, boolean isVersionedDeploymentEnabled,
-                                           Path userHome)
+                                           Set<String> visitedDependencies, Set<String> resolvedDependencies,
+                                           boolean isVersionedDeploymentEnabled, Path userHome)
             throws Exception {
 
         // Colon separator avoids key collisions as colons are invalid in Maven coordinates.
         String dependencyKey = dependency.getGroupId() + COLON + dependency.getArtifact() + COLON + dependency.getVersion();
-        if (fetchedDependencies.contains(dependencyKey)) {
-            return; // Skip already fetched dependencies
+        if (visitedDependencies.contains(dependencyKey)) {
+            return; // Skip already visited dependencies
         }
 
-        fetchedDependencies.add(dependencyKey);
+        visitedDependencies.add(dependencyKey);
 
         String carBaseName = dependency.getGroupId() + HYPHEN + dependency.getArtifact() + HYPHEN + dependency.getVersion();
 
@@ -317,10 +319,12 @@ public class IntegrationProjectDownloadManager {
             throw e;
         }
 
+        resolvedDependencies.add(dependencyKey);
+
         // Recursively fetch transitive dependencies
         for (DependencyDetails transitiveDependency : transitiveDependencies) {
             fetchDependencyRecursively(transitiveDependency, downloadDirectory,
-                    fetchedDependencies, isVersionedDeploymentEnabled, userHome);
+                    visitedDependencies, resolvedDependencies, isVersionedDeploymentEnabled, userHome);
         }
     }
 
