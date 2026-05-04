@@ -379,6 +379,7 @@ public abstract class AbstractResourceFinder {
         for (String zipBaseName : depConnectorZipBaseNames) {
             String coreName = Utils.stripConnectorVersion(zipBaseName);
             if (HTTP_CONNECTOR_CORE_NAME.equals(coreName)) {
+				LOGGER.info("Skipping conflict check for built-in HTTP connector: " + zipBaseName);
                 continue;
             }
             boolean conflictsWithHolder = existingConnectorArtifactIds.contains(coreName);

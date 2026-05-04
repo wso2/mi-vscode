@@ -89,7 +89,6 @@ public class DependencyDownloadManager {
      */
     public static String refetchIntegrationProjectDependencies(String projectPath) {
 
-        LOGGER.log(Level.INFO, "Starting integration project dependencies re-fetch for project: " + projectPath);
         OverviewPageDetailsResponse pomDetailsResponse = new OverviewPageDetailsResponse();
         getPomDetails(projectPath, pomDetailsResponse);
         List<DependencyDetails> integrationProjectDependencies =
@@ -97,6 +96,9 @@ public class DependencyDownloadManager {
         Node isVersionedDeployment = pomDetailsResponse.getBuildDetails().getVersionedDeployment();
         boolean isVersionedDeploymentEnabled = isVersionedDeployment != null ?
                 Boolean.parseBoolean(isVersionedDeployment.getValue()) : false;
+        LOGGER.log(Level.INFO, "Starting integration project dependencies re-fetch for project: " + projectPath
+                + ", versioned deployment: " + isVersionedDeploymentEnabled);
+        
         IntegrationProjectDependencyDownloadResult result;
         try {
             result = IntegrationProjectDownloadManager.refetchDependencies(projectPath, integrationProjectDependencies,

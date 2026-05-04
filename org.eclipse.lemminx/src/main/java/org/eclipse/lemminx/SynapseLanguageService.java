@@ -1024,12 +1024,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<LoadDependentResourcesResponse> loadDependentResources() {
 
         return CompletableFuture.supplyAsync(() -> {
-			log.info("Loading dependent resources for project: " + projectUri);
-			LoadDependentResourcesResponse result = resourceFinder.loadDependentResources(projectUri);
-        	updateConnectors();
-			log.fine("Dependent resources loaded successfully for project: " + projectUri);
-			return result;
-		});
+            log.info("Loading dependent resources for project: " + projectUri);
+            LoadDependentResourcesResponse result = resourceFinder.loadDependentResources(projectUri);
+            updateConnectors();
+            log.info("Dependent resources loaded successfully for project: " + projectUri);
+            return result;
+        });
     }
 
     @Override
