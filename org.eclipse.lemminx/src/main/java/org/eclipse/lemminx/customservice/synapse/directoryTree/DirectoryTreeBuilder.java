@@ -55,7 +55,9 @@ import java.net.URLDecoder;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -69,6 +71,10 @@ public class DirectoryTreeBuilder {
     private static final String WSO2MI = "wso2mi";
     private static final String RESOURCES = "resources";
     private static final String JAVA = "java";
+    private static final String MCP_CONFIG_SUFFIX = "-mcp-config";
+    private static final String MCP_ENDPOINT_SUFFIX = "-endpoint";
+    private static final String MCP_SERVERS_SECTION = "MCP Servers";
+    private static final String MCP_SERVERS_KEY = "mcpServers";
     private static String projectPath;
     private static String mainSequence;
     private static List<String> artifactResourcePaths = new ArrayList<>();
@@ -104,7 +110,35 @@ public class DirectoryTreeBuilder {
         }
 
         DirectoryMapResponse directoryMapResponse = new DirectoryMapResponse(directoryTree);
+        if (directoryTree instanceof IntegrationDirectoryTree) {
+            applyMcpClassification(directoryMapResponse);
+        }
         return directoryMapResponse;
+    }
+
+    /**
+     * Classifies MCP server artifacts in the raw directory tree response.
+     */
+    private static void applyMcpClassification(DirectoryMapResponse response) {
+
+        if (response.getDirectoryMap() == null) return;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode root = mapper.readTree(response.getDirectoryMap().getAsJsonObject().toString());
+            JsonNode artifactsNode = root.path(Constant.SRC).path(MAIN).path(WSO2MI).path(Constant.ARTIFACTS);
+            if (artifactsNode.isMissingNode() || !artifactsNode.isObject()) return;
+
+            ArrayNode[] result = extractMcpServers(mapper, artifactsNode);
+            ObjectNode artifacts = (ObjectNode) artifactsNode;
+            artifacts.set(Constant.INBOUNDENDPOINTS, result[1]);
+            artifacts.set(Constant.LOCALENTRIES, result[2]);
+            artifacts.set(MCP_SERVERS_KEY, result[0]);
+
+            String updated = mapper.writeValueAsString(root);
+            response.setDirectoryMap(JsonParser.parseString(updated));
+        } catch (JsonProcessingException e) {
+            LOGGER.log(Level.SEVERE, "Error occurred while applying MCP classification.", e);
+        }
     }
 
     /**
@@ -128,10 +162,18 @@ public class DirectoryTreeBuilder {
             JsonNode resources = root.path(Constant.SRC).path(MAIN).path(WSO2MI).path(Constant.RESOURCES);
             ObjectNode newArtifacts = mapper.createObjectNode();
 
+            ArrayNode mcpServersArray = artifacts.path(MCP_SERVERS_KEY).isArray()
+                    ? (ArrayNode) artifacts.path(MCP_SERVERS_KEY) : mapper.createArrayNode();
+            ArrayNode filteredInboundEndpoints = artifacts.path(Constant.INBOUNDENDPOINTS).isArray()
+                    ? (ArrayNode) artifacts.path(Constant.INBOUNDENDPOINTS) : mapper.createArrayNode();
+            ArrayNode filteredLocalEntries = artifacts.path(Constant.LOCALENTRIES).isArray()
+                    ? (ArrayNode) artifacts.path(Constant.LOCALENTRIES) : mapper.createArrayNode();
+
             newArtifacts.set("APIs", artifacts.path(Constant.APIS));
-            newArtifacts.set("Event Integrations", artifacts.path(Constant.INBOUNDENDPOINTS));
+            newArtifacts.set("Event Integrations", filteredInboundEndpoints);
             newArtifacts.set("Automations", artifacts.path(Constant.TASKS));
             newArtifacts.set("Data Services", artifacts.path(Constant.DATA_SERVICES));
+            newArtifacts.set(MCP_SERVERS_SECTION, mcpServersArray);
 
             ObjectNode otherArtifacts = newArtifacts.putObject("Other Artifacts");
             otherArtifacts.set("Sequences", artifacts.path(Constant.SEQUENCES));
@@ -152,7 +194,7 @@ public class DirectoryTreeBuilder {
             otherArtifacts.set("Proxy Services", artifacts.path(Constant.PROXYSERVICES));
             otherArtifacts.set("Message Stores", artifacts.path(Constant.MESSAGE_STORES));
             otherArtifacts.set("Message Processors", artifacts.path(Constant.MESSAGE_PROCESSORS));
-            otherArtifacts.set("Local Entries", artifacts.path(Constant.LOCALENTRIES));
+            otherArtifacts.set("Local Entries", filteredLocalEntries);
             otherArtifacts.set("Templates", artifacts.path(Constant.TEMPLATES));
 
             JsonNode registryFolders = root.path(Constant.SRC).path(MAIN).path(WSO2MI).path(Constant.RESOURCES)
@@ -820,6 +862,64 @@ public class DirectoryTreeBuilder {
                 ((APINode) advancedNode).addResource(resource);
             }
         }
+    }
+
+    /**
+     * Separates MCP server artifacts from the regular inbound endpoints and local entries.
+     */
+    private static ArrayNode[] extractMcpServers(ObjectMapper mapper, JsonNode artifacts) {
+
+        JsonNode inboundEndpointsNode = artifacts.path(Constant.INBOUNDENDPOINTS);
+        JsonNode localEntriesNode = artifacts.path(Constant.LOCALENTRIES);
+
+        Map<String, JsonNode> mcpLocalEntries = new LinkedHashMap<>();
+        ArrayNode filteredLocalEntries = mapper.createArrayNode();
+        for (JsonNode localEntry : localEntriesNode) {
+            if (!localEntry.has(Constant.NAME)) {
+                // Connector group object (e.g. {"HTTP": [...]}) — keep as-is
+                filteredLocalEntries.add(localEntry);
+                continue;
+            }
+            String entryName = localEntry.path(Constant.NAME).asText();
+            if (entryName.endsWith(MCP_CONFIG_SUFFIX)) {
+                String serverName = entryName.substring(0, entryName.length() - MCP_CONFIG_SUFFIX.length());
+                mcpLocalEntries.put(serverName, localEntry);
+            } else {
+                filteredLocalEntries.add(localEntry);
+            }
+        }
+
+        Map<String, JsonNode> mcpInboundEndpoints = new LinkedHashMap<>();
+        ArrayNode filteredInboundEndpoints = mapper.createArrayNode();
+        for (JsonNode inboundEndpoint : inboundEndpointsNode) {
+            String endpointName = inboundEndpoint.path(Constant.NAME).asText();
+            if (endpointName.endsWith(MCP_ENDPOINT_SUFFIX)) {
+                String serverName = endpointName.substring(0, endpointName.length() - MCP_ENDPOINT_SUFFIX.length());
+                if (mcpLocalEntries.containsKey(serverName)) {
+                    mcpInboundEndpoints.put(serverName, inboundEndpoint);
+                    continue;
+                }
+            }
+            filteredInboundEndpoints.add(inboundEndpoint);
+        }
+
+        // Restore any -mcp-config local entries that have no matching -endpoint
+        for (Map.Entry<String, JsonNode> entry : mcpLocalEntries.entrySet()) {
+            if (!mcpInboundEndpoints.containsKey(entry.getKey())) {
+                filteredLocalEntries.add(entry.getValue());
+            }
+        }
+
+        ArrayNode mcpServersArray = mapper.createArrayNode();
+        for (String serverName : mcpInboundEndpoints.keySet()) {
+            ObjectNode mcpServer = mapper.createObjectNode();
+            mcpServer.put(Constant.NAME, serverName);
+            mcpServer.set(Constant.LOCAL_ENTRY, mcpLocalEntries.get(serverName));
+            mcpServer.set(Constant.INBOUND_ENDPOINT, mcpInboundEndpoints.get(serverName));
+            mcpServersArray.add(mcpServer);
+        }
+
+        return new ArrayNode[]{mcpServersArray, filteredInboundEndpoints, filteredLocalEntries};
     }
 
     private static void extractClassMediators(JsonNode mediatorFolders, ArrayNode classMediatorArray) {
