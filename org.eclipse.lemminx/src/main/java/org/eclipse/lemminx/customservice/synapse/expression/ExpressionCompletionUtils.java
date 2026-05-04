@@ -540,15 +540,16 @@ public class ExpressionCompletionUtils {
         Path inputFilePath = Path.of(projectPath, ".tryout", fileName + ".json");
         if (inputFilePath.toFile().exists()) {
             String fileContent = Utils.readFile(inputFilePath.toFile());
-            JsonObject allPayloads = Utils.getJsonObject(fileContent);
-            if (allPayloads != null) {
+            JsonObject root = Utils.getJsonObject(fileContent);
+            if (root != null) {
                 if (StringUtils.isNotEmpty(key)) {
-                    allPayloads = allPayloads.getAsJsonObject(key);
+                    JsonObject resourceScope = root.getAsJsonObject(key);
+                    if (resourceScope == null) {
+                        return extractInputPayload(root, null);
+                    }
+                    return extractInputPayload(resourceScope, root);
                 }
-                if (allPayloads == null) {
-                    return StringUtils.EMPTY;
-                }
-                return extractInputPayload(allPayloads);
+                return extractInputPayload(root, null);
             }
         }
         return StringUtils.EMPTY;
@@ -556,23 +557,43 @@ public class ExpressionCompletionUtils {
 
     /**
      * Extract the input payload from the given JsonObject.
+     * If a defaultRequest is not found in scopePayloads, falls back to commonScope requests.
      *
-     * @param allPayloads the JsonObject which contains all the payloads
+     * @param scopePayloads the JsonObject for the current scope (resource or root)
+     * @param commonScope   the root JsonObject to fall back to for common-scope requests, or null
      * @return the input payload
      */
-    private static String extractInputPayload(JsonObject allPayloads) {
+    private static String extractInputPayload(JsonObject scopePayloads, JsonObject commonScope) {
 
-        JsonElement payloads = allPayloads.get(Constant.REQUESTS);
-        JsonElement defaultPayloadNameObj = allPayloads.get(Constant.DEFAULT_REQUEST);
-        if (defaultPayloadNameObj != null && payloads.isJsonArray()) {
-            JsonElement defaultPayload = payloads.getAsJsonArray().asList().stream()
-                    .filter(payload -> payload.getAsJsonObject().get(Constant.NAME).getAsString()
-                            .equals(defaultPayloadNameObj.getAsString())).findFirst().orElse(null);
-            if (defaultPayload != null && defaultPayload.getAsJsonObject().has(Constant.CONTENT)) {
-                return defaultPayload.getAsJsonObject().get(Constant.CONTENT).toString();
+        JsonElement defaultPayloadNameObj = scopePayloads.get(Constant.DEFAULT_REQUEST);
+        if (defaultPayloadNameObj != null) {
+            String defaultName = defaultPayloadNameObj.getAsString();
+            JsonElement scopeRequests = scopePayloads.get(Constant.REQUESTS);
+            if (scopeRequests != null && scopeRequests.isJsonArray()) {
+                JsonElement match = findRequestByName(scopeRequests.getAsJsonArray(), defaultName);
+                if (match != null) {
+                    return match.getAsJsonObject().get(Constant.CONTENT).toString();
+                }
+            }
+            if (commonScope != null) {
+                JsonElement commonRequests = commonScope.get(Constant.REQUESTS);
+                if (commonRequests != null && commonRequests.isJsonArray()) {
+                    JsonElement match = findRequestByName(commonRequests.getAsJsonArray(), defaultName);
+                    if (match != null) {
+                        return match.getAsJsonObject().get(Constant.CONTENT).toString();
+                    }
+                }
             }
         }
         return StringUtils.EMPTY;
+    }
+
+    private static JsonElement findRequestByName(com.google.gson.JsonArray requests, String name) {
+
+        return requests.asList().stream()
+                .filter(p -> name.equals(p.getAsJsonObject().get(Constant.NAME).getAsString())
+                        && p.getAsJsonObject().has(Constant.CONTENT))
+                .findFirst().orElse(null);
     }
 
     /**
