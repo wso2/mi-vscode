@@ -462,8 +462,9 @@ public class LoadDependentResourcesTest {
     void testConflictBetweenDependentProjectsDetected() throws IOException {
 
         Path depBaseDir = createDependencyBaseDir();
-        // dep1 is created first so its directory has an older mtime and is processed first
+        // dep1 is created first and back-dated so its mtime is deterministically older than dep2's
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
+        Files.setLastModifiedTime(dep1, FileTime.fromMillis(System.currentTimeMillis() - 5000));
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
@@ -486,6 +487,7 @@ public class LoadDependentResourcesTest {
 
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
+        Files.setLastModifiedTime(dep1, FileTime.fromMillis(System.currentTimeMillis() - 5000));
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
@@ -743,6 +745,7 @@ public class LoadDependentResourcesTest {
         // ConnectorHolder is empty — both deps are new
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
+        Files.setLastModifiedTime(dep1, FileTime.fromMillis(System.currentTimeMillis() - 5000));
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
@@ -767,6 +770,7 @@ public class LoadDependentResourcesTest {
 
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
+        Files.setLastModifiedTime(dep1, FileTime.fromMillis(System.currentTimeMillis() - 5000));
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
@@ -1143,6 +1147,7 @@ public class LoadDependentResourcesTest {
         // dep1 has salesforce 1.0.0, dep2 has salesforce 2.0.0 — different versions, same connector
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
+        Files.setLastModifiedTime(dep1, FileTime.fromMillis(System.currentTimeMillis() - 5000));
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
@@ -1308,6 +1313,7 @@ public class LoadDependentResourcesTest {
 
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
+        Files.setLastModifiedTime(dep1, FileTime.fromMillis(System.currentTimeMillis() - 5000));
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());

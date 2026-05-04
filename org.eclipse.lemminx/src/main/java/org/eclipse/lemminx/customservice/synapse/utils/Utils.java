@@ -551,6 +551,7 @@ public class Utils {
      */
     public static String stripConnectorVersion(String zipBaseName) {
 
+        logger.info("Stripping version from connector zip base name: " + zipBaseName);
         int lastHyphen = zipBaseName.lastIndexOf(Constant.HYPHEN);
         return lastHyphen > 0 ? zipBaseName.substring(0, lastHyphen) : zipBaseName;
     }

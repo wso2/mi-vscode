@@ -202,12 +202,16 @@ public class NewProjectConnectorLoader extends AbstractConnectorLoader {
 
         Path extractedDir = findProjectDependencyExtractedDir();
         if (extractedDir == null) {
+            log.info("No dependency project extracted directory found for project: " + projectId);
             return;
         }
+		log.info("Found dependency project extracted directory: " + extractedDir + " for project: " + projectId);
         File[] dependentProjects = extractedDir.toFile().listFiles(File::isDirectory);
         if (dependentProjects == null) {
+			log.info("No dependent projects found in extracted directory: " + extractedDir);
             return;
         }
+		log.info("Found " + dependentProjects.length + " dependent projects in: " + extractedDir);
         for (File dependentProject : dependentProjects) {
             Path connectorPath = dependentProject.toPath()
                     .resolve(Constant.SRC).resolve(Constant.MAIN).resolve(Constant.WSO2MI)

@@ -31,10 +31,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.logging.Logger;
 
+import static org.eclipse.lemminx.synapse.TestUtils.deleteRecursively;
 import static org.eclipse.lemminx.synapse.TestUtils.getResourceFilePath;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -109,6 +109,7 @@ public class NewDependentProjectConnectorLoaderTest {
     public void tearDown() throws IOException {
 
         LOGGER.info("Tearing down test environment for NewDependentProjectConnectorLoaderTest");
+        ConnectorHolder.getInstance().clearConnectors();
         deleteRecursively(tempHome);
         deleteRecursively(projectRoot);
     }
@@ -365,7 +366,10 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        Connector connector = ConnectorHolder.getInstance().getConnector("http");
+        ConnectorHolder holder = ConnectorHolder.getInstance();
+        assertEquals(1, holder.getConnectors().size(),
+                "Same connector in project and dependency should be loaded only once");
+        Connector connector = holder.getConnector("http");
         assertNotNull(connector, "http connector should be loaded");
         assertTrue(connector.isFromProject(),
                 "Connector present in both project and dependency should be marked as fromProject");
@@ -494,14 +498,4 @@ public class NewDependentProjectConnectorLoaderTest {
         return extractedDir;
     }
 
-    private static void deleteRecursively(Path path) throws IOException {
-
-        if (path == null || !Files.exists(path)) {
-            return;
-        }
-        Files.walk(path)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-    }
 }

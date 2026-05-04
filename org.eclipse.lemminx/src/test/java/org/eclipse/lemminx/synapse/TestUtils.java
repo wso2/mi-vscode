@@ -21,9 +21,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class TestUtils {
 
@@ -43,6 +48,19 @@ public class TestUtils {
             String zipName = zip.getName();
             zipName = zipName.substring(0, zipName.lastIndexOf(Constant.DOT));
             Utils.extractZip(zip, extractFolder.resolve(zipName).toFile());
+        }
+    }
+
+    public static void deleteRecursively(Path path) throws IOException {
+
+        if (path == null || !Files.exists(path)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(path)) {
+            List<Path> sorted = paths.sorted(Comparator.reverseOrder()).collect(Collectors.toList());
+            for (Path p : sorted) {
+                Files.deleteIfExists(p);
+            }
         }
     }
 }

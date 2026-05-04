@@ -19,6 +19,7 @@ import org.eclipse.lemminx.customservice.synapse.parser.IntegrationProjectDepend
 import org.eclipse.lemminx.customservice.synapse.parser.IntegrationProjectDownloadManager;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
+import org.eclipse.lemminx.synapse.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -69,8 +69,8 @@ public class IntegrationProjectDownloadManagerTest {
     @AfterEach
     public void tearDown() throws IOException {
 
-        deleteRecursively(tempHome);
-        deleteRecursively(projectRoot);
+        TestUtils.deleteRecursively(tempHome);
+        TestUtils.deleteRecursively(projectRoot);
     }
 
     // -------------------------------------------------------------------------
@@ -112,7 +112,7 @@ public class IntegrationProjectDownloadManagerTest {
         DependencyDetails dep = makeDep("com.example", "my-project", "1.0.0", "car");
 
         try (MockedStatic<Utils> utilsMock = mockStatic(Utils.class)) {
-            utilsMock.when(() -> Utils.getDependencyFromLocalRepo(any(), any(), any(), any()))
+            utilsMock.when(() -> Utils.getDependencyFromLocalRepo(any(), any(), any(), any(), any()))
                     .thenReturn(null);
             utilsMock.when(() -> Utils.getHash(any())).thenCallRealMethod();
             utilsMock.when(() -> Utils.deleteDirectory(any())).thenCallRealMethod();
@@ -1021,14 +1021,4 @@ public class IntegrationProjectDownloadManagerTest {
         assertTrue(result.getVersioningTypeMismatchDependencies().isEmpty());
     }
 
-    private static void deleteRecursively(Path path) throws IOException {
-
-        if (path == null || !Files.exists(path)) {
-            return;
-        }
-        Files.walk(path)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-    }
 }
