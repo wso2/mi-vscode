@@ -1298,11 +1298,17 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
                 console.error("Error sending agent message (stale run, suppressed UI):", error);
             } else {
                 setMessages((prevMessages) => {
+                    // Skip if the streaming 'error' event already surfaced this failure
+                    // as a terminal Error message. Without this guard the rejected RPC
+                    // appends the same text to that message, producing "Error: X.X."
+                    const lastIdx = prevMessages.length - 1;
+                    if (lastIdx >= 0 && prevMessages[lastIdx].type === MessageType.Error) {
+                        return prevMessages;
+                    }
                     const newMessages = [...prevMessages];
-                    const lastIdx = newMessages.length - 1;
                     const cleanedContent = removeWorkingOnItToolCallTag(newMessages[lastIdx].content);
                     newMessages[lastIdx].content = cleanedContent + errorMessage;
-                    newMessages[newMessages.length - 1].type = MessageType.Error;
+                    newMessages[lastIdx].type = MessageType.Error;
                     return newMessages;
                 });
                 console.error("Error sending agent message:", error);
