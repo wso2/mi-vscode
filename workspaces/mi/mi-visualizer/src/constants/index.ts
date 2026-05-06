@@ -43,7 +43,7 @@ export const SYNTAX_TREE_KIND = {
 // Diagram view
 export const SIDE_PANEL_WIDTH = 450;
 
-export const gitIssueUrl = "https://github.com/wso2/mi-vscode/issues";
+export const gitIssueUrl = "https://github.com/wso2/product-integrator/issues";
 
 export const COMMANDS = {
     MIGRATE_PROJECT: "MI.migrateProject",

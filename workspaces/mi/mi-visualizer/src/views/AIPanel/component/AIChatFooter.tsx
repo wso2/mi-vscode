@@ -725,12 +725,22 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
             case "error":
                 clearWorkingOnItTimer();
                 clearWorkingOnItPlaceholder();
-                setMessages((prevMessages) => [...prevMessages, {
-                    id: generateId(),
-                    role: Role.MICopilot,
-                    content: `Error: ${event.error || "An error occurred"}`,
-                    type: MessageType.Error
-                }]);
+                setMessages((prevMessages) => {
+                    // Guard against the opposite arrival order: if the rejected
+                    // sendAgentMessage RPC already converted the in-progress
+                    // assistant message into a terminal Error, don't push a
+                    // second Error card from this streaming event.
+                    const lastIdx = prevMessages.length - 1;
+                    if (lastIdx >= 0 && prevMessages[lastIdx].type === MessageType.Error) {
+                        return prevMessages;
+                    }
+                    return [...prevMessages, {
+                        id: generateId(),
+                        role: Role.MICopilot,
+                        content: `Error: ${event.error || "An error occurred"}`,
+                        type: MessageType.Error
+                    }];
+                });
                 setBackendRequestTriggered(false);
                 setToolStatus("");
                 break;

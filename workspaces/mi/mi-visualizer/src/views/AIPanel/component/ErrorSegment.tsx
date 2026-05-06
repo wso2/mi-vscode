@@ -18,8 +18,7 @@
 
 import React, { useState } from "react";
 import styled from "@emotion/styled";
-
-const ISSUE_REPORT_URL = "https://github.com/wso2/product-integrator/issues";
+import { gitIssueUrl } from "../../../constants";
 
 const ErrorContainer = styled.div`
     display: flex;
@@ -135,7 +134,7 @@ const ErrorSegment: React.FC<ErrorSegmentProps> = ({ text }) => {
                         <span className={`codicon codicon-chevron-${showTips ? "down" : "right"}`} aria-hidden="true" />
                         Troubleshooting
                     </ActionButton>
-                    <ActionLink href={ISSUE_REPORT_URL} target="_blank" rel="noopener noreferrer">
+                    <ActionLink href={gitIssueUrl} target="_blank" rel="noopener noreferrer">
                         <span className="codicon codicon-bug" aria-hidden="true" />
                         Report issue
                     </ActionLink>
@@ -145,7 +144,7 @@ const ErrorSegment: React.FC<ErrorSegmentProps> = ({ text }) => {
                         <li>Send the message again — transient network or proxy hiccups usually clear on retry.</li>
                         <li>Check your internet connection and any VPN or corporate proxy.</li>
                         <li>Verify your sign-in or API key is still valid in Settings.</li>
-                        <li>Try logging out and login again. The login might be expired.</li>
+                        <li>Try signing out and signing in again — your session may have expired.</li>
                         <li>If it keeps happening, share the error and steps to reproduce in a new GitHub issue.</li>
                     </Tips>
                 )}
