@@ -2,6 +2,12 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.
 
+## [3.2.1] - 2026-05-06   
+
+### Fixed     
+
+Fixed: Issue in loading the project explorer view   
+
 ## [3.2.0] - 2026-04-28
 
 ### New Features   
