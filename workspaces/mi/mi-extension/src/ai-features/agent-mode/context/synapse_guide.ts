@@ -210,6 +210,7 @@ For the full property reference (70+ properties with exact names, scopes, and us
 
 ## Filter mediator (prefer xpath for new code):
     - The \`xpath\` attribute accepts Synapse Expressions (despite the attribute name). The expression must evaluate to a boolean.
+    - **Always include \`<else>\` (empty if not needed)**. The diagram view renders \`<filter>\` as a two-branch construct; omitting \`<else>\` causes the diagram to show only the Then branch, even though the runtime accepts the bare form. Use \`<else/>\` (self-closing) when there is no else logic — guard / early-return patterns ending in \`<respond/>\` or \`<throwError/>\` still need it for diagram correctness.
 \`\`\`xml
 <filter xpath="\${payload.age &gt; 18}">
     <then>
@@ -218,6 +219,14 @@ For the full property reference (70+ properties with exact names, scopes, and us
     <else>
         <!-- minor flow -->
     </else>
+</filter>
+
+<!-- Guard / early-return — still include empty <else/> for the diagram -->
+<filter xpath="\${not(exists(payload.userId))}">
+    <then>
+        <throwError type="VALIDATION" errorMessage="userId is required"/>
+    </then>
+    <else/>
 </filter>
 \`\`\`
 

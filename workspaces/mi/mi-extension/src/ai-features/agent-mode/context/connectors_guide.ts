@@ -154,6 +154,7 @@ Access patterns:
     </payloadFactory>
     <respond/>
   </then>
+  <else/>
 </filter>
 \`\`\`
 - Then check for HTTP 4xx/5xx errors when a status code is present:
@@ -168,6 +169,7 @@ Access patterns:
     </payloadFactory>
     <respond/>
   </then>
+  <else/>
 </filter>
 \`\`\`
 - Connectors that don't support \`responseVariable\` replace the message body directly. Use a fault sequence for error handling.
