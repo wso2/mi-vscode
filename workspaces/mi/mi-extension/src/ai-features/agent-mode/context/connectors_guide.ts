@@ -49,9 +49,9 @@ noInitializationNeeded? (HIGHEST PRECEDENCE — check this first)
 <localEntry key="EMAIL_CONN" xmlns="http://ws.apache.org/ns/synapse">
     <email.init>
         <connectionType>IMAP</connectionType>
+        <name>EMAIL_CONN</name>
         <host>gmail.com</host>
         <port>993</port>
-        <name>EMAIL_CONN</name>
         <username>joe</username>
     </email.init>
 </localEntry>
@@ -76,10 +76,38 @@ noInitializationNeeded? (HIGHEST PRECEDENCE — check this first)
 5. Connector-specific timeouts (e.g., HTTP \`connectionTimeout\`) override global endpoint timeouts. Set them explicitly for long-running operations.
 6. Variables set by \`responseVariable\` are available immediately after the connector operation in the same flow scope.
 7. Do not use the utility connector unless absolutely necessary.
+
+### 3) Parameter values: dynamic vs static
+Inside a connector operation child element, a value is treated as **static text** unless the entire value is wrapped in outer \`{...}\`. Bare \`\${...}\` in a connector child element is **NOT** evaluated — it becomes literal characters.
+
+\`\`\`xml
+<!-- WRONG: bare \${...} → literal text "\${vars.objectKey}" sent to S3 -->
+<objectKey>\${vars.objectKey}</objectKey>
+<fileContent>\${payload}</fileContent>
+
+<!-- RIGHT: outer { ... } makes the whole value a dynamic expression -->
+<objectKey>{\${vars.objectKey}}</objectKey>
+<fileContent>{\${payload}}</fileContent>
+
+<!-- Static literal — leave bare, no wrapping needed -->
+<bucketName>my-bucket</bucketName>
+
+<!-- Mixed literal + expression — use string concat inside { ... }.
+     Inside { ... } you're already in expression context, so reference
+     variables as vars.x / payload.y (NO inner \${}) -->
+<bucketName>{"prod-" + vars.region}</bucketName>
+<objectKey>{"users/" + vars.userId + "/profile.json"}</objectKey>
+\`\`\`
+
+This wrapping rule applies to **connector child elements only**. Other XML contexts use different parsers and don't need outer \`{...}\`:
+- Attribute-level expressions on mediators: \`<variable name="x" expression="\${payload.value}"/>\`, \`<filter xpath="\${payload.count > 0}">\` — bare \`\${...}\` evaluated directly.
+- Inline templates inside text: \`<log><message>User \${payload.name}</message></log>\` — bare \`\${...}\` placeholders interpolated.
+
+For deep details on expression contexts, load \`synapse-expression-spec:contexts\`.
 `;
 
 const CONNECTOR_DOCUMENTATION_REVAMPED_RESPONSE_HANDLING = `
-### 3) Revamped response handling (supported only by certain connectors)
+### 4) Revamped response handling (supported only by certain connectors)
 Now some connectors support two additional operation parameters ( ongoing connector improvement by WSO2 team ) :
 1. \`responseVariable\`
     - Stores connector response in a named variable.
