@@ -369,9 +369,57 @@ async function getCarFiles(targetDirectory) {
 let serverProcess: ChildProcess;
 const debugConsole = vscode.debug.activeDebugConsole;
 
+export function isCipherToolEnabled(serverPath: string): boolean {
+    const secretConfPath = path.join(serverPath, 'conf', 'security', 'secret-conf.properties');
+    if (!fs.existsSync(secretConfPath)) {
+        return false;
+    }
+    const lines = fs.readFileSync(secretConfPath, 'utf-8').split(/\r?\n/);
+    return lines.some(line => {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('#')) {
+            return false;
+        }
+        const [key, ...rest] = trimmed.split('=');
+        const value = rest.join('=').split('#')[0].trim();
+        return key.trim() === 'secVault.enabled' && value === 'true';
+    });
+}
+
+export async function promptAndWriteCipherToolPassword(serverPath: string): Promise<boolean> {
+    if (!isCipherToolEnabled(serverPath)) {
+        return true;
+    }
+    const password = await vscode.window.showInputBox({
+        title: 'Cipher Tool Decrypt Password',
+        prompt: 'Enter the decrypt password for the cipher tool',
+        password: true,
+        ignoreFocusOut: true,
+        placeHolder: 'Decrypt password',
+        validateInput: (value: string) => value.trim() === '' ? 'Password cannot be blank' : undefined
+    });
+    if (password === undefined) {
+        return false;
+    }
+    const passwordFileName = process.platform === 'win32' ? 'password-tmp.txt' : 'password-tmp';
+    try {
+        fs.writeFileSync(path.join(serverPath, passwordFileName), password, { encoding: 'utf8' });
+        return true;
+    } catch (err) {
+        vscode.window.showErrorMessage(`Failed to write cipher tool password file: ${(err as Error).message}`);
+        return false;
+    }
+}
+
 // Start the server
 export async function startServer(projectUri: string, serverPath: string, isDebug: boolean): Promise<void> {
     return new Promise<void>(async (resolve, reject) => {
+        const passwordWritten = await promptAndWriteCipherToolPassword(serverPath);
+        if (!passwordWritten) {
+            reject('Server startup cancelled: cipher tool decrypt password was not provided.');
+            return;
+        }
+
         if (DebuggerConfig.getProjectList().length > 0) {
             for (const project of DebuggerConfig.getProjectList()) {
                 const filePath = path.resolve(project, '.env');
