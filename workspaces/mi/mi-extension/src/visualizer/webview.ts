@@ -30,6 +30,8 @@ import { refreshDiagram } from './activate';
 import { MILanguageClient } from '../lang-client/activator';
 import { deletePopupStateMachine } from '../stateMachinePopup';
 import { hasOpenedDocumentInProject } from '../util/workspace';
+import { AiPanelWebview } from '../ai-features/webview';
+import { RuntimeServicesWebview } from '../runtime-services-panel/webview';
 
 export const webviews: Map<string, VisualizerWebview> = new Map();
 export class VisualizerWebview {
@@ -275,9 +277,22 @@ export class VisualizerWebview {
 
     public async dispose() {
         webviews.delete(this.projectUri);
-        deleteStateMachine(this.projectUri);
-        deletePopupStateMachine(this.projectUri);
-        RPCLayer._messengers.delete(this.projectUri);
+
+        // The shared per-project messenger and state machine are reused by sibling webviews
+        // (AI panel, runtime services panel). Tearing them down while a sibling is still alive
+        // breaks the sibling: the messenger lookup returns undefined so streaming notifications
+        // are silently dropped (manifests as the AI panel stuck on "working on..." until reopen),
+        // and the agent loses awareness of the currently-open file (documentUri on the state
+        // machine). Only clean these up when no sibling is left on this project.
+        const hasSiblingWebview =
+            !!AiPanelWebview.currentPanel ||
+            RuntimeServicesWebview.webviews.has(this.projectUri);
+        if (!hasSiblingWebview) {
+            deleteStateMachine(this.projectUri);
+            deletePopupStateMachine(this.projectUri);
+            RPCLayer._messengers.delete(this.projectUri);
+        }
+
         const hasActiveDocument = hasOpenedDocumentInProject(this.projectUri);
 
         if (!hasActiveDocument) {

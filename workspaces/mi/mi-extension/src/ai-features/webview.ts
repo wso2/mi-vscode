@@ -24,11 +24,12 @@ import { RPCLayer } from '../RPCLayer';
 import { extension } from '../MIExtensionContext';
 import { StateMachineAI } from './aiMachine';
 import { AI_EVENT_TYPE } from '@wso2/mi-core';
+import { webviews as visualizerWebviews } from '../visualizer/webview';
+import { RuntimeServicesWebview } from '../runtime-services-panel/webview';
 
 export class AiPanelWebview {
     public static currentPanel: AiPanelWebview | undefined;
     public static readonly viewType = 'micro-integrator.ai-panel';
-    private static webviewName: string = 'AIPanel';
     private _panel: vscode.WebviewPanel | undefined;
     private _disposables: vscode.Disposable[] = [];
 
@@ -115,7 +116,18 @@ export class AiPanelWebview {
             }
         }
 
-        RPCLayer._messengers.delete(AiPanelWebview.webviewName);
+        // The shared messenger is keyed by projectUri and reused by the visualizer and
+        // runtime services panels. Only clean it up when no sibling webview on this
+        // project is still alive.
+        const projectUri = workspace.workspaceFolders?.[0].uri.fsPath;
+        if (projectUri) {
+            const hasSiblingWebview =
+                visualizerWebviews.has(projectUri) ||
+                RuntimeServicesWebview.webviews.has(projectUri);
+            if (!hasSiblingWebview) {
+                RPCLayer._messengers.delete(projectUri);
+            }
+        }
         this._panel = undefined;
     }
 }
