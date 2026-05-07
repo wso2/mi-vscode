@@ -78,26 +78,27 @@ noInitializationNeeded? (HIGHEST PRECEDENCE — check this first)
 7. Do not use the utility connector unless absolutely necessary.
 
 ### 3) Parameter values: dynamic vs static
-Inside a connector operation child element, a value is treated as **static text** unless the entire value is wrapped in outer \`{...}\`. Bare \`\${...}\` in a connector child element is **NOT** evaluated — it becomes literal characters.
+Inside a connector operation child element, a value is treated as **static text** unless wrapped in \`{\${ ... }}\`. The outer \`{...}\` is the dynamic-value trigger; the inner \`\${...}\` is the Synapse Expression evaluated at runtime. Bare \`\${...}\` (no outer \`{}\`) is NOT evaluated in connector child elements — it becomes literal characters.
 
 \`\`\`xml
 <!-- WRONG: bare \${...} → literal text "\${vars.objectKey}" sent to S3 -->
 <objectKey>\${vars.objectKey}</objectKey>
 <fileContent>\${payload}</fileContent>
 
-<!-- RIGHT: outer { ... } makes the whole value a dynamic expression -->
-<objectKey>{\${vars.objectKey}}</objectKey>
-<fileContent>{\${payload}}</fileContent>
-
 <!-- Static literal — leave bare, no wrapping needed -->
 <bucketName>my-bucket</bucketName>
 
-<!-- Mixed literal + expression — use string concat inside { ... }.
-     Inside { ... } you're already in expression context, so reference
-     variables as vars.x / payload.y (NO inner \${}) -->
-<bucketName>{"prod-" + vars.region}</bucketName>
-<objectKey>{"users/" + vars.userId + "/profile.json"}</objectKey>
+<!-- RIGHT — single variable/payload reference -->
+<objectKey>{\${vars.objectKey}}</objectKey>
+<fileContent>{\${payload}}</fileContent>
+
+<!-- RIGHT — concat / computed values: keep the whole expression INSIDE \${ ... }
+     so it parses as Synapse Expression Language (SEL). -->
+<bucketName>{\${"prod-" + vars.region}}</bucketName>
+<objectKey>{\${"users/" + vars.userId + "/profile.json"}}</objectKey>
 \`\`\`
+
+Outer \`{...}\` *without* inner \`\${...}\` (e.g. \`{vars.region}\` or \`{"prod-" + vars.region}\`) falls into the legacy XPath branch (\`SynapseXPath\`) and will NOT evaluate as SEL — always keep the inner \`\${...}\`.
 
 This wrapping rule applies to **connector child elements only**. Other XML contexts use different parsers and don't need outer \`{...}\`:
 - Attribute-level expressions on mediators: \`<variable name="x" expression="\${payload.value}"/>\`, \`<filter xpath="\${payload.count > 0}">\` — bare \`\${...}\` evaluated directly.
