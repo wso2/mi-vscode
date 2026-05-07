@@ -24,14 +24,12 @@ import { Uri, ViewColumn } from 'vscode';
 import { getComposerJSFiles } from '../util';
 import { RPCLayer } from '../RPCLayer';
 import { extension } from '../MIExtensionContext';
-import { deleteStateMachine, getStateMachine } from '../stateMachine';
+import { getStateMachine } from '../stateMachine';
 import { MACHINE_VIEW } from '@wso2/mi-core';
 import { refreshDiagram } from './activate';
 import { MILanguageClient } from '../lang-client/activator';
-import { deletePopupStateMachine } from '../stateMachinePopup';
 import { hasOpenedDocumentInProject } from '../util/workspace';
-import { AiPanelWebview } from '../ai-features/webview';
-import { RuntimeServicesWebview } from '../runtime-services-panel/webview';
+import { disposeProjectResourcesIfOrphaned } from '../util/projectResources';
 
 export const webviews: Map<string, VisualizerWebview> = new Map();
 export class VisualizerWebview {
@@ -283,15 +281,8 @@ export class VisualizerWebview {
         // breaks the sibling: the messenger lookup returns undefined so streaming notifications
         // are silently dropped (manifests as the AI panel stuck on "working on..." until reopen),
         // and the agent loses awareness of the currently-open file (documentUri on the state
-        // machine). Only clean these up when no sibling is left on this project.
-        const hasSiblingWebview =
-            !!AiPanelWebview.currentPanel ||
-            RuntimeServicesWebview.webviews.has(this.projectUri);
-        if (!hasSiblingWebview) {
-            deleteStateMachine(this.projectUri);
-            deletePopupStateMachine(this.projectUri);
-            RPCLayer._messengers.delete(this.projectUri);
-        }
+        // machine). Delegate to the helper which self-skips when siblings remain.
+        disposeProjectResourcesIfOrphaned(this.projectUri);
 
         const hasActiveDocument = hasOpenedDocumentInProject(this.projectUri);
 
