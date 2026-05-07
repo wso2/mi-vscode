@@ -36,6 +36,7 @@ export interface HurlRunOptions {
 	timeoutMs?: number;
 	env?: Record<string, string>;
 	variables?: Record<string, string>;
+	file_root?: string;
 	insecure?: boolean;
 	followRedirects?: boolean;
 	includeResponseOutput?: boolean;
