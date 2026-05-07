@@ -198,8 +198,11 @@ export async function executeBuildTask(projectUri: string, serverPath: string, s
         const orderedProjectList = DebuggerConfig.getProjectList().length > 1 ? 
                 await getBuildOrder(DebuggerConfig.getProjectList()) : DebuggerConfig.getProjectList();
         for (const project of orderedProjectList) {
-            await new Promise<void>(async (resolve, reject) => {
-                const buildCommand = getBuildCommand(project);
+            let buildOutput = '';
+
+            const runBuildProcess = (forceUpdate?: boolean): Promise<void> => new Promise<void>(async (resolve, reject) => {
+                buildOutput = '';
+                const buildCommand = getBuildCommand(project) + (forceUpdate ? ' -U' : '');
                 const envVariables = {
                     ...process.env,
                     ...setJavaHomeInEnvironmentAndPath(project)
@@ -213,7 +216,9 @@ export async function executeBuildTask(projectUri: string, serverPath: string, s
                 showServerOutputChannel();
 
                 buildProcess.stdout.on('data', (data) => {
-                    serverLog(data.toString('utf8'));
+                    const text = data.toString('utf8');
+                    buildOutput += text;
+                    serverLog(text);
                 });
 
                 if (shouldCopyTarget) {
@@ -227,7 +232,9 @@ export async function executeBuildTask(projectUri: string, serverPath: string, s
                 }
 
                 buildProcess.stderr.on('data', (data) => {
-                    serverLog(`Build error:\n${data.toString('utf8')}`);
+                    const text = data.toString('utf8');
+                    buildOutput += text;
+                    serverLog(`Build error:\n${text}`);
                 });
 
                 if (shouldCopyTarget) {
@@ -298,6 +305,18 @@ export async function executeBuildTask(projectUri: string, serverPath: string, s
                     });
                 }
             });
+
+            try {
+                await runBuildProcess(false);
+            } catch (err) {
+                if (buildOutput.includes('resolution will not be reattempted until the update interval') ||
+                    buildOutput.includes('updates are forced')) {
+                    serverLog('\nRe-running build with -U flag to force update snapshots/releases...\n');
+                    await runBuildProcess(true);
+                } else {
+                    throw err;
+                }
+            }
         }
         if (postBuildTask) {
             postBuildTask();
