@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import styled from "@emotion/styled";
 import { gitIssueUrl } from "../../../constants";
 
@@ -118,18 +118,20 @@ const ErrorSegment: React.FC<ErrorSegmentProps> = ({ text }) => {
     // Strip a leading "Error:" prefix — the title label already conveys that.
     const message = text.replace(/^\s*Error:\s*/i, "").trim() || "An error occurred";
     const [showTips, setShowTips] = useState(false);
+    const tipsSectionId = useId();
 
     return (
-        <ErrorContainer role="alert">
+        <ErrorContainer>
             <ErrorIcon className="codicon codicon-error" aria-hidden="true" />
             <ErrorBody>
                 <ErrorTitle>Error</ErrorTitle>
-                <ErrorMessage>{message}</ErrorMessage>
+                <ErrorMessage role="alert">{message}</ErrorMessage>
                 <ErrorActions>
                     <ActionButton
                         type="button"
                         onClick={() => setShowTips((prev) => !prev)}
                         aria-expanded={showTips}
+                        aria-controls={tipsSectionId}
                     >
                         <span className={`codicon codicon-chevron-${showTips ? "down" : "right"}`} aria-hidden="true" />
                         Troubleshooting
@@ -139,15 +141,13 @@ const ErrorSegment: React.FC<ErrorSegmentProps> = ({ text }) => {
                         Report issue
                     </ActionLink>
                 </ErrorActions>
-                {showTips && (
-                    <Tips>
-                        <li>Send the message again — transient network or proxy hiccups usually clear on retry.</li>
-                        <li>Check your internet connection and any VPN or corporate proxy.</li>
-                        <li>Verify your sign-in or API key is still valid in Settings.</li>
-                        <li>Try signing out and signing in again — your session may have expired.</li>
-                        <li>If it keeps happening, share the error and steps to reproduce in a new GitHub issue.</li>
-                    </Tips>
-                )}
+                <Tips id={tipsSectionId} hidden={!showTips}>
+                    <li>Send the message again — transient network or proxy hiccups usually clear on retry.</li>
+                    <li>Check your internet connection and any VPN or corporate proxy.</li>
+                    <li>Verify your sign-in or API key is still valid in Settings.</li>
+                    <li>Try signing out and signing in again — your session may have expired.</li>
+                    <li>If it keeps happening, share the error and steps to reproduce in a new GitHub issue.</li>
+                </Tips>
             </ErrorBody>
         </ErrorContainer>
     );
