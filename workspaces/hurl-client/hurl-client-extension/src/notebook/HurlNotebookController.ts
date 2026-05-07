@@ -98,7 +98,7 @@ export class HurlNotebookController {
             const tempFile = path.join(tempDir, 'cell.hurl');
             await fs.writeFile(tempFile, hurlContent, 'utf-8');
 
-            // Determine file_root: check configuration and fallback to notebook directory.
+            // Determine fileRoot: check configuration and fallback to notebook directory.
             const configuredFileRoot = vscode.workspace.getConfiguration('hurl-client', notebook.uri).get<string>('fileRoot');
             const notebookPath = notebook.uri.fsPath;
             const fileRoot = configuredFileRoot || path.dirname(notebookPath);
@@ -106,7 +106,7 @@ export class HurlNotebookController {
             const runner = createHurlRunner();
             const result = await runner.run(
                 { collectionPath: tempDir, includePatterns: ['cell.hurl'] },
-                { commandPath, includeResponseOutput: true, continueOnError: true, file_root: fileRoot }
+                { commandPath, includeResponseOutput: true, continueOnError: true, fileRoot: fileRoot }
             );
 
             const fileResult = result.files[0];

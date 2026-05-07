@@ -393,8 +393,8 @@ export class HurlRunnerImpl implements HurlRunner {
 
 	private buildHurlArgs(filePath: string, reportPath: string, options: HurlRunOptions): string[] {
 		const args = [filePath, '--report-json', reportPath];
-		if (options.file_root) {
-			args.push('--file-root', options.file_root);
+		if (options.fileRoot) {
+			args.push('--file-root', options.fileRoot);
 		}
 		// --test suppresses all response output; omit it when the caller wants the response body
 		if (!options.includeResponseOutput) {
