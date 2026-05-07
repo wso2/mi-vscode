@@ -122,7 +122,7 @@ Now some connectors support two additional operation parameters ( ongoing connec
 
 For other connectors, use the older response-handling approach instead.
 
-### 4) Connector Response Structure
+### 5) Connector Response Structure
 When a connector stores its response in a variable (via \`responseVariable\`), the variable is a **Map** with these keys:
 - \`payload\` — the response body (JSON, XML, or text depending on the connector)
 - \`headers\` — response headers as a map
@@ -141,7 +141,7 @@ Access patterns:
 \${vars.myResponse.headers["Content-Type"]}
 \`\`\`
 
-### 5) Error Handling with Connectors
+### 6) Error Handling with Connectors
 - First check for transport errors (e.g. connection timeout, DNS failure) where no HTTP status code exists:
 \`\`\`xml
 <filter xpath="\${not(exists(vars.myResponse.attributes.statusCode))}">
