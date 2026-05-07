@@ -29,7 +29,7 @@ module.exports = {
         if (deps['esbuild']) deps['esbuild'] = '0.25.12';
         if (deps['lodash']) deps['lodash'] = '4.18.0';
         if (deps['qs']) deps['qs'] = '6.14.2';
-        if (deps['hono']) deps['hono'] = '4.12.14';
+        if (deps['hono']) deps['hono'] = '4.12.16';
         if (deps['serialize-javascript']) deps['serialize-javascript'] = '7.0.3';
         if (deps['@hono/node-server']) deps['@hono/node-server'] = '1.19.13';
         if (deps['@tootallnate/once']) deps['@tootallnate/once'] = '3.0.1';
@@ -43,6 +43,8 @@ module.exports = {
         if (deps['handlebars']) deps['handlebars'] = '4.7.9';
         if (deps['tmp']) deps['tmp'] = '0.2.4';
         if (deps['undici']) deps['undici'] = '7.24.0';
+        if (deps['axios']) deps['axios'] = '1.15.2';
+        if (deps['ip-address']) deps['ip-address'] = '10.1.1';
         if (deps['protobufjs']) {
           const currentVersion = deps['protobufjs'];
           if (currentVersion.startsWith('^8') || currentVersion.startsWith('8')) {

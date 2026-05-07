@@ -100,7 +100,8 @@ export class VSBrowser {
             "ballerina.traceLog": true,
             "ballerina.enableTelemetry": true,
             "ballerina.debugLog": true,
-            "ballerina-vscode.trace.server": "verbose"
+            "ballerina-vscode.trace.server": "verbose",
+            "workbench.welcomePage.experimentalOnboarding": false
         };
         if (Object.keys(this.customSettings).length > 0) {
             console.log('Detected user defined code settings');
