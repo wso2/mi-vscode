@@ -35,7 +35,7 @@ module.exports = {
         if (deps['dompurify']) deps['dompurify'] = '3.4.0'; // security fix: XSS vulnerability
         if (deps['axios']) deps['axios'] = '1.15.2'; // security fix: SSRF vulnerability
         if (deps['ip-address']) { // security fix: force patch within 10.x range only to avoid breaking consumers on earlier majors
-          if (deps['ip-address'].startsWith('^10') || deps['ip-address'].startsWith('10')) {
+          if (/^[\s\^~><=]*10[.\s]/.test(deps['ip-address'])) {
             deps['ip-address'] = '10.1.1';
           }
         }
