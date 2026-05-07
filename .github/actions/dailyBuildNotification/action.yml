@@ -10,6 +10,10 @@ inputs:
   chatAPI:
     description: 'Google chat API'
     required: true
+  prUrl:
+    description: 'Optional product-integrator pull request URL'
+    required: false
+    default: ''
 
 runs:
   using: "composite"
@@ -37,12 +41,35 @@ runs:
     - name: "Release Notification"
       shell: bash
       run: |
+          pr_widget=''
+          if [ -n "${{ inputs.prUrl }}" ]; then
+            pr_widget=$(cat << EOF
+                      ,
+                      {
+                      "keyValue": {
+                          "topLabel": "Product Integrator PR",
+                          "content": "${{ inputs.prUrl }}",
+                          "button": {
+                          "textButton": {
+                              "text": "View PR",
+                              "onClick": {
+                              "openLink": {
+                                  "url": "${{ inputs.prUrl }}"
+                              }
+                              }
+                          }
+                          }
+                      }
+                      }
+          EOF
+          )
+          fi
           body=$(cat << EOF
           {
           "cards": [
               { 
               "header": {
-                  "title": "Daily Build",
+                  "title": "Daily Build"
               },
               "sections": [
                   {
@@ -69,6 +96,7 @@ runs:
                           }
                       }
                       }
+                      ${pr_widget}
                   ]
                   }
               ]
