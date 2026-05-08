@@ -61,7 +61,7 @@ const TroubleshootingList = styled.ol`
 
 export const DisabledMessage = (props: { showProjectHeader?: boolean }) => {
     const { rpcClient } = useVisualizerContext();
-    const issueUrl = gitIssueUrl;
+    const issueUrl = "https://github.com/wso2/product-integrator/issues";
     const Retry = () => {
         rpcClient.sendAIStateEvent(AI_EVENT_TYPE.RETRY);
     };
