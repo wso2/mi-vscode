@@ -975,6 +975,13 @@ public class DirectoryTreeBuilder {
             mcpServersArray.add(mcpServer);
         }
 
+        // Restore MCP local entries (with <mcptools>) that have no matching endpoint
+        for (Map.Entry<String, JsonElement> entry : mcpLocalEntries.entrySet()) {
+            if (!mcpInboundEndpoints.containsKey(entry.getKey())) {
+                filteredLocalEntries.add(entry.getValue());
+            }
+        }
+
         return new JsonArray[]{mcpServersArray, filteredInboundEndpoints, filteredLocalEntries};
     }
 
