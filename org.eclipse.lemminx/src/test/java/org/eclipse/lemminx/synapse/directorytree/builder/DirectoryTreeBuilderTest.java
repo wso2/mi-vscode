@@ -129,7 +129,7 @@ public class DirectoryTreeBuilderTest {
     private static JsonObject sanitizeJson(JsonObject jsonObject) {
         JsonObject sanitizedJson = new JsonObject();
         for (String key : jsonObject.keySet()) {
-            if (!(key.equals("path") || key.equals("registryPath"))) {
+            if (!(key.equals("path") || key.equals("registryPath") || key.equals("mcpConfigReference") || key.equals("isMcpConfig"))) {
                 JsonElement value = jsonObject.get(key);
                 if (value.isJsonObject()) {
                     sanitizedJson.add(key, sanitizeJson(value.getAsJsonObject()));

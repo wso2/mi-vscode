@@ -74,8 +74,6 @@ public class DirectoryTreeBuilder {
     private static final String WSO2MI = "wso2mi";
     private static final String RESOURCES = "resources";
     private static final String JAVA = "java";
-    private static final String MCP_CONFIG_SUFFIX = "-mcp-config";
-    private static final String MCP_ENDPOINT_SUFFIX = "-endpoint";
     private static final String MCP_SERVERS_SECTION = "MCP Servers";
     private static final String MCP_SERVERS_KEY = "mcpServers";
     private static String projectPath;
@@ -735,6 +733,12 @@ public class DirectoryTreeBuilder {
             if (Constant.API.equalsIgnoreCase(type)) {
                 addResources(rootElement, advancedNode);
             }
+            if (Constant.INBOUND_ENDPOINT.equalsIgnoreCase(type)) {
+                String mcpConfigRef = getMcpConfigReference(rootElement);
+                if (mcpConfigRef != null) {
+                    component.setMcpConfigReference(mcpConfigRef);
+                }
+            }
         }
         return advancedNode;
     }
@@ -747,6 +751,12 @@ public class DirectoryTreeBuilder {
             if (domDocument != null) {
                 DOMElement rootElement = domDocument.getDocumentElement();
                 String key = rootElement.getAttribute(Constant.KEY);
+
+                if (isMcpConfig(rootElement)) {
+                    component.setIsMcpConfig(true);
+                    return component;
+                }
+
                 DOMElement childElement = Utils.getFirstElement(rootElement);
                 if (childElement != null) {
                     String entryTag = childElement.getNodeName();
@@ -775,6 +785,39 @@ public class DirectoryTreeBuilder {
                 if ("connectionType".equals(nodeName)) {
                     String connectionType = Utils.getInlineString(child.getFirstChild());
                     return connectionType;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean isMcpConfig(DOMElement rootElement) {
+
+        List<DOMNode> children = rootElement.getChildren();
+        if (children != null) {
+            for (DOMNode child : children) {
+                if ("mcptools".equals(child.getNodeName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String getMcpConfigReference(DOMElement inboundElement) {
+
+        DOMNode parametersNode = Utils.getChildNodeByName(inboundElement, "parameters");
+        if (parametersNode != null) {
+            List<DOMNode> children = parametersNode.getChildren();
+            if (children != null) {
+                for (DOMNode child : children) {
+                    if ("parameter".equals(child.getNodeName())) {
+                        String paramName = ((DOMElement) child).getAttribute("name");
+                        if ("mcp.tools.localentry".equals(paramName)) {
+                            String paramValue = Utils.getInlineString(child.getFirstChild());
+                            return paramValue;
+                        }
+                    }
                 }
             }
         }
@@ -887,10 +930,11 @@ public class DirectoryTreeBuilder {
                 filteredLocalEntries.add(localEntry);
                 continue;
             }
-            String entryName = localEntry.getAsJsonObject().get(Constant.NAME).getAsString();
-            if (entryName.endsWith(MCP_CONFIG_SUFFIX)) {
-                String serverName = entryName.substring(0, entryName.length() - MCP_CONFIG_SUFFIX.length());
-                mcpLocalEntries.put(serverName, localEntry);
+            JsonObject entryObj = localEntry.getAsJsonObject();
+            String entryName = entryObj.get(Constant.NAME).getAsString();
+
+            if (entryObj.has("isMcpConfig") && entryObj.get("isMcpConfig").getAsBoolean()) {
+                mcpLocalEntries.put(entryName, localEntry);
             } else {
                 filteredLocalEntries.add(localEntry);
             }
@@ -903,30 +947,31 @@ public class DirectoryTreeBuilder {
                 filteredInboundEndpoints.add(inboundEndpoint);
                 continue;
             }
-            String endpointName = inboundEndpoint.getAsJsonObject().get(Constant.NAME).getAsString();
-            if (endpointName.endsWith(MCP_ENDPOINT_SUFFIX)) {
-                String serverName = endpointName.substring(0, endpointName.length() - MCP_ENDPOINT_SUFFIX.length());
-                if (mcpLocalEntries.containsKey(serverName)) {
-                    mcpInboundEndpoints.put(serverName, inboundEndpoint);
-                    continue;
-                }
-            }
-            filteredInboundEndpoints.add(inboundEndpoint);
-        }
+            JsonObject endpointObj = inboundEndpoint.getAsJsonObject();
+            String mcpConfigRef = null;
 
-        // Restore any -mcp-config local entries that have no matching -endpoint
-        for (Map.Entry<String, JsonElement> entry : mcpLocalEntries.entrySet()) {
-            if (!mcpInboundEndpoints.containsKey(entry.getKey())) {
-                filteredLocalEntries.add(entry.getValue());
+            if (endpointObj.has("mcpConfigReference") && !endpointObj.get("mcpConfigReference").isJsonNull()) {
+                mcpConfigRef = endpointObj.get("mcpConfigReference").getAsString();
+            }
+
+            if (mcpConfigRef != null && mcpLocalEntries.containsKey(mcpConfigRef)) {
+                mcpInboundEndpoints.put(mcpConfigRef, inboundEndpoint);
+            } else {
+                filteredInboundEndpoints.add(inboundEndpoint);
             }
         }
 
         JsonArray mcpServersArray = new JsonArray();
-        for (String serverName : mcpInboundEndpoints.keySet()) {
+        for (String mcpConfigKey : mcpInboundEndpoints.keySet()) {
+            JsonElement localEntry = mcpLocalEntries.get(mcpConfigKey);
+            if (localEntry == null) {
+                filteredInboundEndpoints.add(mcpInboundEndpoints.get(mcpConfigKey));
+                continue;
+            }
             JsonObject mcpServer = new JsonObject();
-            mcpServer.addProperty(Constant.NAME, serverName);
-            mcpServer.add(Constant.LOCAL_ENTRY, mcpLocalEntries.get(serverName));
-            mcpServer.add(Constant.INBOUND_ENDPOINT, mcpInboundEndpoints.get(serverName));
+            mcpServer.addProperty(Constant.NAME, mcpConfigKey);
+            mcpServer.add(Constant.LOCAL_ENTRY, localEntry);
+            mcpServer.add(Constant.INBOUND_ENDPOINT, mcpInboundEndpoints.get(mcpConfigKey));
             mcpServersArray.add(mcpServer);
         }
 

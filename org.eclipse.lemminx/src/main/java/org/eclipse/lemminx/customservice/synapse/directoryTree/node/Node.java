@@ -21,6 +21,8 @@ public class Node {
     String name;
     String path;
     Boolean isFaulty = false;
+    String mcpConfigReference;
+    Boolean isMcpConfig = false;
 
     public Node(String type, String name, String path) {
 
@@ -85,6 +87,26 @@ public class Node {
     public void setFaulty(Boolean faulty) {
 
         isFaulty = faulty;
+    }
+
+    public String getMcpConfigReference() {
+
+        return mcpConfigReference;
+    }
+
+    public void setMcpConfigReference(String mcpConfigReference) {
+
+        this.mcpConfigReference = mcpConfigReference;
+    }
+
+    public Boolean getIsMcpConfig() {
+
+        return isMcpConfig;
+    }
+
+    public void setIsMcpConfig(Boolean isMcpConfig) {
+
+        this.isMcpConfig = isMcpConfig;
     }
 
     protected Boolean equals(Node component) {
