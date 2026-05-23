@@ -17,6 +17,7 @@ package org.eclipse.lemminx.customservice.synapse.mediatorService.mediators;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.MediatorUtils;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.endpoint.Endpoint;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.mediator.core.call.Call;
+import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lsp4j.Range;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
@@ -107,7 +108,7 @@ public class CallMediator {
 
                 String endpointXml = node.getInlineEndpointXml();
                 if (endpointXml != null) {
-                    data.put("inlineEndpoint", endpointXml);
+                    data.put("inlineEndpoint", Utils.formatXml(endpointXml));
                 }
             } else {
                 endpointData.put("isExpression", endpoint.getKeyExpression() != null);
