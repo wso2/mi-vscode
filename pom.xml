@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.wso2.language.server</groupId>
 	<artifactId>mi-language-server-parent</artifactId>
-	<version>0.24.0-wso2v89</version>
+	<version>0.24.0-wso2v90</version>
 	<packaging>pom</packaging>
 	<name>MI Language Server - Parent</name>
 	<description>LemMinX is a XML Language Server Protocol (LSP), and can be used with any editor that supports LSP, to offer an outstanding XML editing experience</description>
