@@ -1,0 +1,14 @@
+<payloadFactory {{#description}}description="{{description}}"{{/description}} media-type="{{mediaType}}" template-type="{{templateType}}">
+    {{#isInlined}}
+    {{#isFreemarker}}<format><![CDATA[{{{payload}}}]]></format>{{/isFreemarker}}
+    {{^isFreemarker}}<format>{{{payload}}}</format>{{/isFreemarker}}
+    {{/isInlined}}
+    {{^isInlined}}
+    <format key="{{payloadKey}}"/>
+    {{/isInlined}}
+    <args>
+        {{#args}}
+        <arg {{#literal}}literal="{{literal}}"{{/literal}} {{#value}}value="{{value}}"{{/value}} {{#expression}}expression="{{value}}" evaluator="{{evaluator}}" {{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}} {{/expression}} />
+        {{/args}}
+    </args>
+</payloadFactory>

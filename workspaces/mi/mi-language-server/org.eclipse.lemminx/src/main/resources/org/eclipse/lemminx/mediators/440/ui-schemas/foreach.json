@@ -1,0 +1,178 @@
+{
+  "name": "ForEachMediator",
+  "type": "mediator",
+  "title": "ForEach Mediator",
+  "canTryOut": true,
+  "help": "Iterate over a list and then merges back the result.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "version",
+        "displayName": "version",
+        "inputType": "string",
+        "required": false,
+        "defaultValue": "v2",
+        "helpTip": "",
+        "hidden": true
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "collection",
+        "displayName": "Collection to iterate",
+        "inputType": "expression",
+        "required": true,
+        "helpTip": "The collection to iterate over. This can be a JSON array or XML list"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "parallelExecution",
+        "displayName": "Execute Parallel",
+        "inputType": "checkbox",
+        "defaultValue": true,
+        "required": false,
+        "helpTip": "If enabled, the messages will be processed in parallel. If disabled, the messages will be processed sequentially."
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "continueWithoutAggregation",
+        "displayName": "Continue without aggregation",
+        "inputType": "checkbox",
+        "defaultValue": false,
+        "required": false,
+        "helpTip": "If enabled, the parent flow will continue without waiting for the aggregation."
+      }
+    },
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Output Configurations",
+        "enableCondition": [
+          {
+            "continueWithoutAggregation": false
+          }
+        ],
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "updateOriginalContent",
+              "displayName": "Update original collection",
+              "inputType": "checkbox",
+              "defaultValue": true,
+              "required": false,
+              "helpTip": "If enabled, the original list will be updated with the content. The content type should be the same as the original collection content type."
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "resultTarget",
+              "displayName": "Variable Name",
+              "inputType": "string",
+              "required": true,
+              "helpTip": "The name of the variable where the new content will be saved.",
+              "enableCondition": [
+                {
+                  "updateOriginalContent": false
+                }
+              ]
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "resultType",
+              "displayName": "Variable Type",
+              "inputType": "combo",
+              "defaultValue": "JSON",
+              "comboValues": [
+                "JSON",
+                "XML"
+              ],
+              "required": true,
+              "helpTip": "The type of the variable where the new content will be saved.",
+              "enableCondition": [
+                {
+                  "updateOriginalContent": false
+                }
+              ]
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "rootElement",
+              "displayName": "Result Enclosing Element Name",
+              "inputType": "string",
+              "defaultValue": "ForEachResult",
+              "required": true,
+              "helpTip": "The aggregation result will be wrapped in this root element.",
+              "enableCondition": [
+                "AND",
+                {
+                  "updateOriginalContent": false
+                },
+                {
+                  "resultType": "XML"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Advanced",
+        "isCollapsed": "true",
+        "enableCondition": [
+          {
+            "parallelExecution": false
+          }
+        ],
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "counterVariableName",
+              "displayName": "Counter Variable Name",
+              "inputType": "string",
+              "defaultValue": "",
+              "required": "false",
+              "helpTip": "You can access the current iteration number using this variable within the ForEach mediator."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

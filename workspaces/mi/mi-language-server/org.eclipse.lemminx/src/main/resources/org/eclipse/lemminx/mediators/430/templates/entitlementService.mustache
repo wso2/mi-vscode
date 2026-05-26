@@ -1,0 +1,31 @@
+    {{#newMediator}}
+    {{#selfClosed}}
+    <entitlementService callbackClass="{{callbackClassName}}" {{#client}}client="{{client}}"{{/client}} remoteServicePassword="{{password}}" remoteServiceUrl="{{entitlementServerURL}}" remoteServiceUserName="{{username}}" {{#thriftHost}}thriftHost="{{thriftHost}}"{{/thriftHost}} {{#thriftPort}}thriftPort="{{thriftPort}}"{{/thriftPort}} {{#onAcceptSequenceKey}}onAccept="{{onAcceptSequenceKey}}"{{/onAcceptSequenceKey}} {{#onRejectSequenceKey}}onReject="{{onRejectSequenceKey}}"{{/onRejectSequenceKey}} {{#obligationsSequenceKey}}obligations="{{obligationsSequenceKey}}"{{/obligationsSequenceKey}} {{#adviceSequenceKey}}advice="{{adviceSequenceKey}}"{{/adviceSequenceKey}} {{#description}}description="{{description}}"{{/description}}/>
+    {{/selfClosed}}
+    {{^selfClosed}}
+    <entitlementService callbackClass="{{callbackClassName}}" {{#client}}client="{{client}}"{{/client}} remoteServicePassword="{{password}}" remoteServiceUrl="{{entitlementServerURL}}" remoteServiceUserName="{{username}}" {{#thriftHost}}thriftHost="{{thriftHost}}"{{/thriftHost}} {{#thriftPort}}thriftPort="{{thriftPort}}"{{/thriftPort}} {{#onAcceptSequenceKey}}onAccept="{{onAcceptSequenceKey}}"{{/onAcceptSequenceKey}} {{#onRejectSequenceKey}}onReject="{{onRejectSequenceKey}}"{{/onRejectSequenceKey}} {{#obligationsSequenceKey}}obligations="{{obligationsSequenceKey}}"{{/obligationsSequenceKey}} {{#adviceSequenceKey}}advice="{{adviceSequenceKey}}"{{/adviceSequenceKey}} {{#description}}description="{{description}}"{{/description}}>
+        {{^onRejectSequenceKey}}<onReject></onReject>{{/onRejectSequenceKey}}
+        {{^onAcceptSequenceKey}}<onAccept></onAccept>{{/onAcceptSequenceKey}}
+        {{^obligationsSequenceKey}}<obligations></obligations>{{/obligationsSequenceKey}}
+        {{^adviceSequenceKey}}<advice></advice>{{/adviceSequenceKey}}
+    </entitlementService>
+    {{/selfClosed}}
+    {{/newMediator}}
+    {{^newMediator}}
+    {{#editEntitlement}}
+    <entitlementService callbackClass="{{callbackClassName}}" {{#client}}client="{{client}}"{{/client}} remoteServicePassword="{{password}}" remoteServiceUrl="{{entitlementServerURL}}" remoteServiceUserName="{{username}}" {{#thriftHost}}thriftHost="{{thriftHost}}"{{/thriftHost}} {{#thriftPort}}thriftPort="{{thriftPort}}"{{/thriftPort}} {{#onAcceptSequenceKey}}onAccept="{{onAcceptSequenceKey}}"{{/onAcceptSequenceKey}} {{#onRejectSequenceKey}}onReject="{{onRejectSequenceKey}}"{{/onRejectSequenceKey}} {{#obligationsSequenceKey}}obligations="{{obligationsSequenceKey}}"{{/obligationsSequenceKey}} {{#adviceSequenceKey}}advice="{{adviceSequenceKey}}"{{/adviceSequenceKey}} {{#description}}description="{{description}}"{{/description}}>
+    {{/editEntitlement}}
+    {{#addOnReject}}
+    <onReject></onReject>
+    {{/addOnReject}}
+    {{#addOnAccept}}
+    <onAccept></onAccept>
+    {{/addOnAccept}}
+    {{#addObligation}}
+    <obligations></obligations>
+    {{/addObligation}}
+    {{#addAdvice}}
+    <advice></advice>
+    {{/addAdvice}}
+    {{#removeSequence}}{{/removeSequence}}
+    {{/newMediator}}

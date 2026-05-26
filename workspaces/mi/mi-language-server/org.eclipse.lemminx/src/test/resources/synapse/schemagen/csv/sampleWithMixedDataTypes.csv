@@ -1,0 +1,4 @@
+id,name,is_active,salary
+1,Alice,true,50000.50
+2,Bob,false,40000
+3,Charlie,TRUE,55000

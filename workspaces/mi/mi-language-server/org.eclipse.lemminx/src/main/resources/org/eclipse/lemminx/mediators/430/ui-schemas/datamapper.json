@@ -1,0 +1,73 @@
+{
+  "name": "Data Mapper",
+  "type": "mediator",
+  "title": "Data Mapper Mediator",
+  "help": "Transforms one data format to another, or changes the data structure in the message.",
+  "onSubmit": "openDataMapperEditor",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "name",
+        "displayName": "Name",
+        "inputType": "comboOrKey",
+        "defaultValue": "",
+        "required": true,
+        "helpTip": "",
+        "keyType": "dataMapper",
+        "canAddNew": true
+      }
+    },
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Advanced",
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "inputType",
+              "displayName": "Input Type",
+              "inputType": "combo",
+              "defaultValue": "",
+              "comboValues": [
+                "XML",
+                "CSV",
+                "JSON"
+              ],
+              "required": false,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "outputType",
+              "displayName": "Output Type",
+              "inputType": "combo",
+              "defaultValue": "",
+              "comboValues": [
+                "XML",
+                "CSV",
+                "JSON"
+              ],
+              "required": false,
+              "helpTip": ""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "sequence",
+  "type": "mediator",
+  "title": "Sequence Mediator",
+  "help": "Inserts reference to a sequence.",
+  "canTryout": true,
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "referringSequence",
+        "displayName": "Referring Sequence",
+        "inputType": "keyOrExpression",
+        "required": true,
+        "helpTip": "",
+        "keyType": "sequence"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

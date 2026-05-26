@@ -1,0 +1,10 @@
+  {{#hasProperties}}
+    <jsontransform description="{{description}}" schema="{{schema}}" >
+        {{#jsonTransformProperties}}
+        <property name="{{propertyName}}" value="{{propertyValue}}" />
+        {{/jsonTransformProperties}}
+    </jsontransform>
+  {{/hasProperties}}
+  {{^hasProperties}}
+    <jsontransform description="{{description}}" schema="{{schema}}" />
+  {{/hasProperties}}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<task class="org.apache.synapse.startup.tasks.MessageInjector" group="synapse.simple.quartz" name="testTask" xmlns="http://ws.apache.org/ns/synapse">
+    <trigger once="true"/>
+    <property xmlns:task="http://www.wso2.org/products/wso2commons/tasks" name="format" value="soap12"/>
+    <property xmlns:task="http://www.wso2.org/products/wso2commons/tasks" name="injectTo" value="main"/>
+</task>

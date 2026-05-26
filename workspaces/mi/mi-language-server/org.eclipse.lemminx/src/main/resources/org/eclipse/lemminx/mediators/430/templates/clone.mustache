@@ -1,0 +1,71 @@
+{{#newBranch}}
+<target>
+    <sequence></sequence>
+</target>
+{{/newBranch}}
+{{^newBranch}}
+{{#empty}}
+{{/empty}}
+{{^empty}}
+    {{#newMediator}}
+    <clone {{#continueParent}}continueParent="{{continueParent}}" {{/continueParent}}{{#cloneId}}id="{{cloneId}}" {{/cloneId}}{{#sequentialMediation}}sequential="{{sequentialMediation}}" {{/sequentialMediation}}{{#description}}description="{{description}}" {{/description}}>
+    {{#targets}}
+    {{#isRegistrySeqAndEndpoint}}
+    <target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}/>
+    {{/isRegistrySeqAndEndpoint}}
+    {{^isRegistrySeqAndEndpoint}}
+    <target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}>
+        {{^sequenceRegistryKey}}
+        <sequence></sequence>
+        {{/sequenceRegistryKey}}
+    </target>
+    {{/isRegistrySeqAndEndpoint}}
+    {{/targets}}
+</clone>
+{{/newMediator}}
+{{^newMediator}}
+{{#editClone}}
+<clone {{#continueParent}}continueParent="{{continueParent}}" {{/continueParent}}{{#cloneId}}id="{{cloneId}}" {{/cloneId}}{{#sequentialMediation}}sequential="{{sequentialMediation}}" {{/sequentialMediation}}{{#description}}description="{{description}}" {{/description}}>
+{{/editClone}}
+{{^editClone}}
+{{#newTarget}}
+{{#isRegistrySeqAndEndpoint}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}/>
+{{/isRegistrySeqAndEndpoint}}
+{{^isRegistrySeqAndEndpoint}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}>
+    {{^sequenceRegistryKey}}
+    <sequence></sequence>
+    {{/sequenceRegistryKey}}
+</target>
+{{/isRegistrySeqAndEndpoint}}
+{{/newTarget}}
+{{^newTarget}}
+{{#isRegistrySeqAndEndpoint}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}/>
+{{/isRegistrySeqAndEndpoint}}
+{{^isRegistrySeqAndEndpoint}}
+{{#addSequence}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}>
+    <sequence></sequence>
+</target>
+{{/addSequence}}
+{{^addSequence}}
+{{#removeSequence}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}/>
+{{/removeSequence}}
+{{^removeSequence}}
+{{#selfClosed}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}/>
+{{/selfClosed}}
+{{^selfClosed}}
+<target {{#endpointRegistryKey}}endpoint="{{endpointRegistryKey}}" {{/endpointRegistryKey}}{{#sequenceRegistryKey}}sequence="{{sequenceRegistryKey}}" {{/sequenceRegistryKey}}{{#soapAction}}soapAction="{{soapAction}}" {{/soapAction}}{{#toAddress}}to="{{toAddress}}" {{/toAddress}}>
+{{/selfClosed}}
+{{/removeSequence}}
+{{/addSequence}}
+{{/isRegistrySeqAndEndpoint}}
+{{/newTarget}}
+{{/editClone}}
+{{/newMediator}}
+{{/empty}}
+{{/newBranch}}

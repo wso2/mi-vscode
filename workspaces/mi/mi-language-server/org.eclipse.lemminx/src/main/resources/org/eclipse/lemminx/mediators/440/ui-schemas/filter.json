@@ -1,0 +1,99 @@
+{
+  "name": "Filter",
+  "type": "mediator",
+  "title": "If Else Mediator",
+  "canTryOut": true,
+  "help": "Filters messages based on a condition.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "xPath",
+        "displayName": "Condition",
+        "inputType": "expression",
+        "defaultValue": "",
+        "required": true,
+        "helpTip": "Condition that resolves to a boolean value. The message will be branched based on the result of this condition.",
+        "enableCondition": [
+          {
+            "useRegex": false
+          }
+        ]
+      }
+    },
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Advanced configurations",
+        "isCollapsed": true,
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "useRegex",
+              "displayName": "Use a regex pattern",
+              "inputType": "checkbox",
+              "defaultValue": false,
+              "required": false,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "source",
+              "displayName": "Expression",
+              "inputType": "expression",
+              "defaultValue": "",
+              "required": true,
+              "helpTip": "Expression that resolves to a string value which will be compared with the regex pattern.",
+              "enableCondition": [
+                {
+                  "useRegex": true
+                }
+              ]
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "regularExpression",
+              "displayName": "Matches",
+              "inputType": "string",
+              "defaultValue": "",
+              "required": true,
+              "helpTip": "The regex pattern to compare with the evaluated expression.",
+              "enableCondition": [
+                {
+                  "useRegex": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

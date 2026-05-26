@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<localEntry key="HttpsCon" xmlns="http://ws.apache.org/ns/synapse">
+  <http.init>
+    <connectionType>INVALID_TYPE</connectionType>
+    <baseUrl>https://test.com/getDetails</baseUrl>
+    <authType>None</authType>
+    <timeoutAction>Never</timeoutAction>
+    <retryCount>0</retryCount>
+    <retryDelay>0</retryDelay>
+    <suspendInitialDuration>-1</suspendInitialDuration>
+    <suspendProgressionFactor>1</suspendProgressionFactor>
+    <name>HttpsCon</name>
+  </http.init>
+</localEntry>

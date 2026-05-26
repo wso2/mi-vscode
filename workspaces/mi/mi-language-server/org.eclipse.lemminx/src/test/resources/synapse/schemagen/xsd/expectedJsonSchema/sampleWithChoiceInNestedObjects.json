@@ -1,0 +1,144 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "orderID": {
+            "id": "http://wso2jsonschema.org/orderID",
+            "type": "string"
+        },
+        "PaymentDetails": {
+            "oneOf": [
+                {
+                    "id": "http://wso2jsonschema.org/PaymentDetails",
+                    "type": "object",
+                    "properties": {
+                        "CreditCard": {
+                            "oneOf": [
+                                {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard",
+                                    "type": "object",
+                                    "properties": {
+                                        "Visa": {
+                                            "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/Visa",
+                                            "type": "object",
+                                            "properties": {
+                                                "cardNumber": {
+                                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/Visa/cardNumber",
+                                                    "type": "string"
+                                                },
+                                                "expiryDate": {
+                                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/Visa/expiryDate",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "cardNumber",
+                                                "expiryDate"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "Visa"
+                                    ]
+                                },
+                                {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard",
+                                    "type": "object",
+                                    "properties": {
+                                        "MasterCard": {
+                                            "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/MasterCard",
+                                            "type": "object",
+                                            "properties": {
+                                                "cardNumber": {
+                                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/MasterCard/cardNumber",
+                                                    "type": "string"
+                                                },
+                                                "expiryDate": {
+                                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/MasterCard/expiryDate",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "cardNumber",
+                                                "expiryDate"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "MasterCard"
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "required": [
+                        "CreditCard"
+                    ]
+                },
+                {
+                    "id": "http://wso2jsonschema.org/PaymentDetails",
+                    "type": "object",
+                    "properties": {
+                        "DigitalWallet": {
+                            "oneOf": [
+                                {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/DigitalWallet",
+                                    "type": "object",
+                                    "properties": {
+                                        "PayPal": {
+                                            "id": "http://wso2jsonschema.org/PaymentDetails/DigitalWallet/PayPal",
+                                            "type": "object",
+                                            "properties": {
+                                                "email": {
+                                                    "id": "http://wso2jsonschema.org/PaymentDetails/DigitalWallet/PayPal/email",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "email"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "PayPal"
+                                    ]
+                                },
+                                {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/DigitalWallet",
+                                    "type": "object",
+                                    "properties": {
+                                        "GooglePay": {
+                                            "id": "http://wso2jsonschema.org/PaymentDetails/DigitalWallet/GooglePay",
+                                            "type": "object",
+                                            "properties": {
+                                                "email": {
+                                                    "id": "http://wso2jsonschema.org/PaymentDetails/DigitalWallet/GooglePay/email",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "email"
+                                            ]
+                                        }
+                                    },
+                                    "required": [
+                                        "GooglePay"
+                                    ]
+                                }
+                            ]
+                        }
+                    },
+                    "required": [
+                        "DigitalWallet"
+                    ]
+                }
+            ]
+        }
+    },
+    "required": [
+        "orderID",
+        "PaymentDetails"
+    ],
+    "title": "Order"
+}

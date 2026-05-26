@@ -1,0 +1,6 @@
+<data name="RDBMSDataservice" serviceNamespace="" serviceGroup="" transports="http https" disableStreaming="true">
+    <description/>
+    <config id="carbon-datasource">
+        <property name="carbon_datasource_name">RDBMSDatasource</property>
+    </config>
+</data>

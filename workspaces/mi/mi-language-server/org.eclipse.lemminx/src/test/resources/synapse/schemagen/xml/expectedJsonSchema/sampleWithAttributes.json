@@ -1,0 +1,24 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "attr_prodid": {
+            "id": "http://wso2jsonschema.org/attr_prodid",
+            "type": "number"
+        },
+        "name": {
+            "id": "http://wso2jsonschema.org/name",
+            "type": "string"
+        },
+        "price": {
+            "id": "http://wso2jsonschema.org/price",
+            "type": "number"
+        },
+        "description": {
+            "id": "http://wso2jsonschema.org/description",
+            "type": "string"
+        }
+    },
+    "title": "product"
+}

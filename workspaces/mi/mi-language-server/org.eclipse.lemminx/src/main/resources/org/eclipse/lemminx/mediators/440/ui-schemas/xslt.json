@@ -1,0 +1,170 @@
+{
+  "name": "XSLT",
+  "type": "mediator",
+  "title": "XSLT Mediator",
+  "canTryOut": true,
+  "help": "Transforms message payload based on an XSLT script. For faster XSLT transformation, use FastXSLT.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "sourceXPath",
+        "displayName": "Source XPath",
+        "inputType": "expression",
+        "expressionType":"xpath/jsonPath",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": ""
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "xsltSchemaKey",
+        "displayName": "XSLT Schema Key",
+        "inputType": "resourceOrExpression",
+        "defaultValue": "",
+        "required": true,
+        "helpTip": "",
+        "keyType": "xslt",
+        "canAddNew": true
+      }
+    },
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Advanced",
+        "isCollapsible": true,
+        "elements": [
+          {
+            "type": "table",
+            "value": {
+              "name": "properties",
+              "displayName": "Properties",
+              "title": "XSLT property",
+              "description": "Editing of the properties of an object XSLT Property",
+              "tableKey": "propertyName",
+              "tableValue": "propertyValue",
+              "elements": [
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "propertyName",
+                    "displayName": "Property Name",
+                    "inputType": "string",
+                    "required": false,
+                    "helpTip": ""
+                  }
+                },
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "propertyValue",
+                    "displayName": "Property Value",
+                    "inputType": "stringOrExpression",
+                    "expressionType":"xpath/jsonPath",
+                    "required": false,
+                    "helpTip": ""
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "value": {
+              "name": "resources",
+              "displayName": "Resources",
+              "title": "XSLT Resource",
+              "description": "Editing of the properties of an object XSLT Resource",
+              "tableKey": "location",
+              "tableValue": "resourceRegistryKey",
+              "elements": [
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "location",
+                    "displayName": "Location",
+                    "inputType": "string",
+                    "defaultValue": "",
+                    "required": false,
+                    "helpTip": ""
+                  }
+                },
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "resourceRegistryKey",
+                    "displayName": "Resource Registry Key",
+                    "inputType": "resource",
+                    "defaultValue": "",
+                    "required": false,
+                    "helpTip": "",
+                    "keyType": ["xslt", "xsl", "xsd"]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "type": "table",
+            "value": {
+              "name": "features",
+              "displayName": "Features",
+              "title": "XSLT Features",
+              "description": "Editing of the properties of an object XSLT Features",
+              "tableKey": "featureName",
+              "tableValue": "featureEnabled",
+              "elements": [
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "featureName",
+                    "displayName": "Feature Name",
+                    "inputType": "string",
+                    "defaultValue": "",
+                    "required": false,
+                    "helpTip": ""
+                  }
+                },
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "featureEnabled",
+                    "displayName": "Feature Enabled",
+                    "inputType": "checkbox",
+                    "defaultValue": false,
+                    "required": false,
+                    "helpTip": ""
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

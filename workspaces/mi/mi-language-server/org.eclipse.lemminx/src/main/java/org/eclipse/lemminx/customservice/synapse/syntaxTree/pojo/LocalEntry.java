@@ -1,0 +1,63 @@
+/*
+ * Copyright (c) 2025, WSO2 LLC. (http://www.wso2.com).
+ *
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * SPDX-License-Identifier: EPL-2.0
+ *
+ * Contributors:
+ *     WSO2 LLC - support for WSO2 Micro Integrator Configuration
+ */
+
+package org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo;
+
+public class LocalEntry extends STNode {
+
+    String content;
+    String key;
+    String src;
+    String subType;
+
+    public String getContent() {
+
+        return content;
+    }
+
+    public void setContent(String content) {
+
+        this.content = content;
+    }
+
+    public String getKey() {
+
+        return key;
+    }
+
+    public void setKey(String key) {
+
+        this.key = key;
+    }
+
+    public String getSrc() {
+
+        return src;
+    }
+
+    public void setSrc(String src) {
+
+        this.src = src;
+    }
+
+    public String getSubType() {
+
+        return subType;
+    }
+
+    public void setSubType(String subType) {
+
+        this.subType = subType;
+    }
+}

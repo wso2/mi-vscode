@@ -1,0 +1,40 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "FirstName": {
+            "id": "http://wso2jsonschema.org/FirstName",
+            "type": "string"
+        },
+        "LastName": {
+            "id": "http://wso2jsonschema.org/LastName",
+            "type": "string"
+        },
+        "PhoneNumbers": {
+            "id": "http://wso2jsonschema.org/PhoneNumbers",
+            "type": "object",
+            "properties": {
+                "PhoneNumber": {
+                    "id": "http://wso2jsonschema.org/PhoneNumbers/PhoneNumber",
+                    "type": "array",
+                    "items": [
+                        {
+                            "id": "http://wso2jsonschema.org/PhoneNumbers/PhoneNumber/0",
+                            "type": "string"
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "PhoneNumber"
+            ]
+        }
+    },
+    "required": [
+        "FirstName",
+        "LastName",
+        "PhoneNumbers"
+    ],
+    "title": "Person"
+}

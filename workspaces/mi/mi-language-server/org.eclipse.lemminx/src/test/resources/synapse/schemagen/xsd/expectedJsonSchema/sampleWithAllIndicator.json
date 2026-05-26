@@ -1,0 +1,44 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "attr_currency": {
+            "id": "http://wso2jsonschema.org/attr_currency",
+            "type": "string"
+        },
+        "id": {
+            "id": "http://wso2jsonschema.org/id",
+            "type": "number"
+        },
+        "name": {
+            "id": "http://wso2jsonschema.org/name",
+            "type": "string"
+        },
+        "price": {
+            "id": "http://wso2jsonschema.org/price",
+            "type": "number"
+        },
+        "category": {
+            "id": "http://wso2jsonschema.org/category",
+            "type": "string"
+        },
+        "status": {
+            "id": "http://wso2jsonschema.org/status",
+            "type": "string",
+            "enum": [
+                "Available",
+                "Out of Stock",
+                "Discontinued"
+            ]
+        }
+    },
+    "required": [
+        "id",
+        "name",
+        "price",
+        "category",
+        "status"
+    ],
+    "title": "Product"
+}

@@ -1,0 +1,28 @@
+<callout{{#serviceURL}} serviceURL="{{serviceURL}}"{{/serviceURL}}{{#soapAction}} action="{{soapAction}}"{{/soapAction}}{{#initAxis2ClientOptions}} initAxis2ClientOptions="{{initAxis2ClientOptions}}"{{/initAxis2ClientOptions}}{{#addressEndpoint}} endpointKey="{{addressEndpoint}}"{{/addressEndpoint}}{{#description}} description="{{description}}"{{/description}}>
+  {{#configurationEnabled}}
+  <configuration axis2xml="{{pathToAxis2xml}}" repository="{{pathToAxis2Repository}}"/>
+  {{/configurationEnabled}}
+  {{#xpathPayload}}
+  <source {{#payloadMessageXPath}}xpath="{{value}}"{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}{{/payloadMessageXPath}}/>
+  {{/xpathPayload}}
+  {{#propertyPayload}}
+  <source key="{{payloadProperty}}"/>
+  {{/propertyPayload}}
+  {{#envelopePayload}}
+  <source type="envelope"/>
+  {{/envelopePayload}}
+  {{#xpathTarget}}
+  <target {{#targetMessageXPath}}xpath="{{value}}"{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}{{/targetMessageXPath}}/>
+  {{/xpathTarget}}
+  {{#propertyTarget}}
+  <target key="{{targetProperty}}"/>
+  {{/propertyTarget}}
+  {{#securityEnabled}}
+  {{#policies}}
+  <enableSec inboundPolicy="{{inboundPolicyKey}}" outboundPolicy="{{outboundPolicyKey}}"/>
+  {{/policies}}
+  {{^policies}}
+  <enableSec policy="{{policyKey}}"/>
+  {{/policies}}
+  {{/securityEnabled}}
+</callout>

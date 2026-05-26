@@ -1,0 +1,36 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "B": {
+            "id": "http://wso2jsonschema.org/B",
+            "type": "object",
+            "properties": {
+                "C": {
+                    "id": "http://wso2jsonschema.org/B/C",
+                    "type": "object",
+                    "properties": {
+                        "D": {
+                            "id": "http://wso2jsonschema.org/B/C/D",
+                            "type": "object",
+                            "properties": {
+                                "E": {
+                                    "id": "http://wso2jsonschema.org/B/C/D/E",
+                                    "type": "object",
+                                    "properties": {
+                                        "F": {
+                                            "id": "http://wso2jsonschema.org/B/C/D/E/F",
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "title": "A"
+}

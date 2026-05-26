@@ -1,0 +1,155 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "Order": {
+            "id": "http://wso2jsonschema.org/Order",
+            "type": "array",
+            "items": [
+                {
+                    "oneOf": [
+                        {
+                            "id": "http://wso2jsonschema.org/Order/0",
+                            "type": "object",
+                            "properties": {
+                                "PhysicalProduct": {
+                                    "oneOf": [
+                                        {
+                                            "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct",
+                                            "type": "object",
+                                            "properties": {
+                                                "FragileItem": {
+                                                    "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct/FragileItem",
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "name": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct/FragileItem/name",
+                                                            "type": "string"
+                                                        },
+                                                        "weight": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct/FragileItem/weight",
+                                                            "type": "number"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "name",
+                                                        "weight"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "FragileItem"
+                                            ]
+                                        },
+                                        {
+                                            "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct",
+                                            "type": "object",
+                                            "properties": {
+                                                "NonFragileItem": {
+                                                    "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct/NonFragileItem",
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "name": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct/NonFragileItem/name",
+                                                            "type": "string"
+                                                        },
+                                                        "weight": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/PhysicalProduct/NonFragileItem/weight",
+                                                            "type": "number"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "name",
+                                                        "weight"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "NonFragileItem"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "PhysicalProduct"
+                            ]
+                        },
+                        {
+                            "id": "http://wso2jsonschema.org/Order/0",
+                            "type": "object",
+                            "properties": {
+                                "DigitalProduct": {
+                                    "oneOf": [
+                                        {
+                                            "id": "http://wso2jsonschema.org/Order/0/DigitalProduct",
+                                            "type": "object",
+                                            "properties": {
+                                                "EBook": {
+                                                    "id": "http://wso2jsonschema.org/Order/0/DigitalProduct/EBook",
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "title": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/DigitalProduct/EBook/title",
+                                                            "type": "string"
+                                                        },
+                                                        "sizeMB": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/DigitalProduct/EBook/sizeMB",
+                                                            "type": "number"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "title",
+                                                        "sizeMB"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "EBook"
+                                            ]
+                                        },
+                                        {
+                                            "id": "http://wso2jsonschema.org/Order/0/DigitalProduct",
+                                            "type": "object",
+                                            "properties": {
+                                                "Software": {
+                                                    "id": "http://wso2jsonschema.org/Order/0/DigitalProduct/Software",
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "title": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/DigitalProduct/Software/title",
+                                                            "type": "string"
+                                                        },
+                                                        "sizeMB": {
+                                                            "id": "http://wso2jsonschema.org/Order/0/DigitalProduct/Software/sizeMB",
+                                                            "type": "number"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "title",
+                                                        "sizeMB"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "Software"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "DigitalProduct"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "required": [
+        "Order"
+    ],
+    "title": "Orders"
+}

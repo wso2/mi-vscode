@@ -1,0 +1,77 @@
+{
+  "name": "Switch",
+  "type": "mediator",
+  "title": "Switch Mediator",
+  "canTryOut": true,
+  "help": "Routes messages based on Regex matching.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "sourceXPath",
+        "displayName": "Expression",
+        "inputType": "expression",
+        "required": true,
+        "helpTip": "Expression that resolves to a string value to be compared with the case patterns."
+      }
+    },
+    {
+      "type": "table",
+      "value": {
+        "name": "caseBranches",
+        "displayName": "Cases",
+        "title": "Switch Case Branch",
+        "description": "Define a case for the switch mediator.",
+        "addParamText": "Add new case",
+        "tableKey": "{row.number}",
+        "tableValue": "caseRegex",
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "caseRegex",
+              "displayName": "Regex Pattern",
+              "inputType": "string",
+              "defaultValue": "",
+              "required": true,
+              "helpTip": "Regular expression pattern to match the evaluated expression.",
+              "placeholder": ".*+"
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "index",
+              "displayName": "Index",
+              "inputType": "string",
+              "required": false,
+              "helpTip": "",
+              "hidden": "true"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

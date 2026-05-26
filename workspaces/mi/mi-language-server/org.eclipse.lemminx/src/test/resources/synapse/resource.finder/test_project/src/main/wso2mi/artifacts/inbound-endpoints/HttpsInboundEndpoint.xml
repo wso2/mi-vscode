@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inboundEndpoint name="HttpsInboundEndpoint" sequence="HttpsInboundEndpoint-inboundSequence" onError="HttpsInboundEndpoint-inboundErrorSequence" suspend="false" protocol="https">
+    <parameters xmlns="http://ws.apache.org/ns/synapse">
+        <parameter name="generateSequences">true</parameter>
+        <parameter name="inbound.http.port">8080</parameter>
+        <parameter name="sequential">true</parameter>
+        <parameter name="coordination">true</parameter>
+        <parameter name="inbound.worker.pool.size.core">400</parameter>
+        <parameter name="inbound.worker.pool.size.max">500</parameter>
+        <parameter name="inbound.worker.thread.keep.alive.sec">60</parameter>
+        <parameter name="inbound.worker.pool.queue.length">-1</parameter>
+        <parameter name="inbound.thread.id">PassThroughInboundWorkerPool</parameter>
+    </parameters>
+</inboundEndpoint>

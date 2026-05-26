@@ -1,0 +1,4 @@
+<header name="{{headerName}}" {{#namespaces}}xmlns:{{prefix}}="{{uri}}" {{/namespaces}}{{#headerAction}}action="{{headerAction}}" {{/headerAction}}{{#scope}}scope="{{scope}}" {{/scope}}{{#valueExpression}}expression="{{value}}" {{/valueExpression}}{{#valueLiteral}}value="{{valueLiteral}}" {{/valueLiteral}}{{#description}}description="{{description}}" {{/description}}{{^valueInline}}/{{/valueInline}}>
+    {{#valueInline}}
+    {{{valueInline}}}
+</header>{{/valueInline}}
