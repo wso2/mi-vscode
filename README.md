@@ -1,67 +1,125 @@
-# Micro Integrator for Visual Studio Code (MI for VS Code) 
+# WSO2 VSCode Extensions
 
-WSO2 Micro Integrator (MI) offers an extension for Visual Studio Code (VS Code) that simplifies the development of integration solutions.
+This repository contains multiple Visual Studio Code extensions developed by WSO2, along with a set of shared libraries. The extensions in this monorepo include:
+
+- [Ballerina](https://marketplace.visualstudio.com/items?itemName=WSO2.ballerina)
+- [Choreo](https://marketplace.visualstudio.com/items?itemName=WSO2.choreo)
+- [WSO2 Integrator: BI](https://marketplace.visualstudio.com/items?itemName=WSO2.ballerina-integrator)
+- [APK Config Language Support](https://marketplace.visualstudio.com/items?itemName=WSO2.apk-config-language-support)
+- [WSO2 Integrator: MI](https://marketplace.visualstudio.com/items?itemName=WSO2.micro-integrator)
 
 ## Prerequisites
 
-You need the following to work with the MI for VS Code extension.
+Before using this repository, ensure you have the following installed:
 
-- Java Development Kit (JDK)
-- WSO2 Micro Integrator (MI) runtime
+- **Node.js** – version **22.x** or later  
+  [Download Node.js](https://nodejs.org)
 
-If these are not installed on your local machine, the Micro Integrator for VS Code extension will automatically prompt you to download and configure them during the project creation step, depending on the project runtime version.
+- **npm** – version **10.x** or later (comes with Node.js)
 
-If a different JDK or WSO2 MI version is installed on your local machine, you'll be prompted to download the required versions.
+- **pnpm** – version **10.10** or later  
+  Install with:
+    ```bash
+    npm install -g pnpm
+    ```
 
-If the required JDK and WSO2 MI versions are already installed, you can directly configure the Java Home and MI Home paths in this step.
+- **Rush.js** – version **5.153** or later  
+  Install with:
+    ```bash
+    npm install -g @microsoft/rush
+    ```
 
-## Get Started
+## Installation
 
-1. Launch VS Code with the Micro Integrator for Visual Studio Code (MI for VS Code) extension installed. When the extension is installed properly, you can see the Micro Integrator icon in the Activity Bar of the VS Code editor.
+Install all dependencies for the repository:
 
-2. Click on the Micro Integrator icon on the Activity Bar of the VS Code editor to open the extension and get started.
+```bash
+rush install
+```
 
-    <img src="https://github.com/wso2/docs-mi/blob/main/en/docs/assets/img/develop/mi-for-vscode/mi-vscode-extension.png?raw=true" width="100%" />
+This will install dependencies for all workspaces in the monorepo.
 
-When you open the extension for the first time, you'll see the **Design View** panel on the right side and the **Micro Integrator: Project Explorer** view on the left.
+## Building the Monorepo
 
-<img src="https://github.com/wso2/docs-mi/blob/main/en/docs/assets/img/develop/mi-for-vscode/getting-started.png?raw=true" width="100%" />
+To build all packages:
 
-To get started, you need to first create the integration project. You can either open a folder containing an integration project or create a new project. Alternatively, you can use an integration sample provided under Explore Samples, which will generate the required projects and files for a specific use case.
+```bash
+rush build
+```
 
-## Micro Integrator Project Explorer
+This uses a local build cache, so only changed packages are rebuilt.
 
-Micro Integrator (MI) Project Explorer provides a view of all the project directories created for your integration solution. Shown below is the project explorer of a sample project.
+### Building a Single Workspace
 
-<img src="https://github.com/wso2/docs-mi/blob/main/en/docs/assets/img/develop/mi-for-vscode/project-explorer.png?raw=true" width="100%" />
+To build a specific package:
 
-You can add the artifacts required for your integration using MI Project Explorer.
+```bash
+rush build --to <package-name>
+```
 
-## WSO2 MI Copilot
+Replace `<package-name>` with the name of the package you want to build.
 
-The WSO2 Micro Integrator (MI) Copilot is an AI-powered tool that simplifies the process of creating integration scenarios. It allows you to specify integration requirements using natural language or by providing relevant files, such as OpenAPI specifications. MI Copilot generates the necessary integration artifacts, which can be seamlessly incorporated into your projects. You can iteratively refine your projects through conversational prompts, enabling the addition of features or modifications with ease. This approach supports incremental development, allowing you to build and enhance your integration projects over time.
+Example:
+```bash
+rush build --to @wso2/ballerina-visualizer
+```
 
-<img src="https://github.com/wso2/docs-mi/blob/main/en/docs/assets/img/develop/mi-for-vscode/open-ai-panel.png?raw=true" width="100%" />
+### Adding a New Package
 
-You can create any integration project by entering your integration scenario in natural language into the provided text box, allowing AI to generate the necessary artifacts.
+To add a new package:
 
-You can provide integration requirements as:
+1. Navigate to the root directory of the desired package:
+    ```bash
+    cd <path-to-workspace>
+    ```
+2. Run:
+    ```bash
+    rush add --package <package-name>
+    ```
+   Use the `-m` argument to update other packages' `package.json` files to the same version if needed.
 
-- Text prompts: Describe your integration scenario in natural language.
-- Files: Upload relevant files, such as OpenAPI specifications, that provide additional context for the integration.
+## Other Important Commands
 
-<img src="https://github.com/wso2/docs-mi/blob/main/en/docs/assets/img/develop/mi-for-vscode/mi-copilot.png?raw=true" width="100%" />
+- `rush update`: Updates the dependencies shrinkwrap file.
+- `rush rebuild`: Cleans the `common/temp` folder and then runs `rush build`.
+- `rush check`: Checks dependency consistency across packages.
+- `rush purge`: Cleans up temporary files and folders.
 
-## Samples
+## Git Pre-Commit Hooks
 
-The **Design View** lists a set of sample projects and integration artifacts that represent common integration scenarios. You can use these to explore WSO2 Micro Integrator and to try out common integration use cases.
+This repository uses [Husky](https://typicode.github.io/husky/) to enforce code quality standards before commits.
 
-<img src="https://github.com/wso2/docs-mi/blob/main/en/docs/assets/img/develop/mi-for-vscode/samples.png?raw=true" width="100%" />
+### Strict Version Validation
 
-## Documentation
+All `package.json` files must use **strict versioning** for npm dependencies:
+- ❌ **Not allowed**: `^1.2.3`, `~1.2.3` (caret and tilde prefixes)
+- ✅ **Allowed**: `1.2.3` (exact version)
 
-To learn more about the Micro Integrator for Visual Studio Code extension, go to the [Micro Integrator for VS Code](https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/mi-for-vscode-overview/) documentation.
+The pre-commit hook will automatically validate all staged `package.json` files and block commits with non-strict versions.
 
-## Reach Out
+For more details, see the [Git Hooks Documentation](./docs/git-hooks.md).
 
-For further assistance, create a [GitHub issue](https://github.com/wso2/mi-vscode/issues). Our team will review and respond promptly to address your concerns.
+## Contribution Guidelines
+
+If you are planning on contributing to the development efforts of WSO2 API Manager or related extensions, you can do so by checking out the latest development version. The `master` branch holds the latest unreleased source code.
+
+Please follow the detailed instructions available here: [https://wso2.github.io](https://wso2.github.io)
+
+- Fork the repository before making changes.
+- Follow the structure and conventions outlined in this document.
+- Submit pull requests with clear descriptions and reference related issues if applicable.
+
+## License
+
+By downloading and using any of the Visual Studio Code extensions in this repository, you agree to the [license terms](https://wso2.com/licenses/ballerina-vscode-plugin-2021-05-25/) and [privacy statement](https://wso2.com/privacy-policy).
+
+Some extensions use additional components licensed separately. For example:
+
+- The Ballerina extension uses the Ballerina Language Server, part of the [Ballerina language](https://ballerina.io/) (Apache License 2.0).
+- The Ballerina extension pack includes [TOML Language Support](https://marketplace.visualstudio.com/items?itemName=be5invis.toml).
+
+Please refer to each extension's documentation for more details on licensing and dependencies.
+
+## Source Organization Document
+
+For organization-wide standards and additional information, see [SOURCE_ORG.md](./SOURCE_ORG.md).
