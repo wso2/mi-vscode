@@ -1119,9 +1119,8 @@
     "clean": "rimraf ./dist",
     "compile": "tsc -p .",
     "watch": "tsc -p . -w",
-    "package": "node ../../common-libs/scripts/package-vsix.js",
-    "download-ls": "node ./scripts/download-ls.js",
-    "build": "pnpm clean && pnpm run download-ls && pnpm run copyJSLibs && pnpm run copyLSLibs && pnpm run copyFonts && pnpm run copyDMUtils && pnpm run renameDMUtils && webpack --mode production --devtool hidden-source-map && pnpm run package && pnpm run postbuild",
+    "package": "node ../../../submodules/vscode-extensions/workspaces/common-libs/scripts/package-vsix.js",
+    "build": "pnpm clean && pnpm run copyJSLibs && pnpm run copyFonts && pnpm run copyDMUtils && pnpm run renameDMUtils && webpack --mode production --devtool hidden-source-map && pnpm run package && pnpm run postbuild",
     "compile-tests": "pnpm run compile",
     "watch-tests": "pnpm run watch",
     "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
@@ -1130,7 +1129,6 @@
     "e2e-test": "pnpm run compile-tests && pnpm exec playwright test",
     "copyFonts": "copyfiles -f ./node_modules/@wso2/font-wso2-vscode/dist/* ./resources/font-wso2-vscode/dist/",
     "copyJSLibs": "copyfiles -f ../mi-visualizer/build/*.js resources/jslibs",
-    "copyLSLibs": "copyfiles -f language-server/org.eclipse.lemminx/target/*.jar ls",
     "copyDMUtils": "copyfiles -f ./node_modules/@wso2/mi-data-mapper-utils/src/* ./resources/data-mapper-utils/",
     "renameDMUtils": "node -e \"require('fs').rename('./resources/data-mapper-utils/dm-utils.ts', './resources/data-mapper-utils/dm-utils.ts.lib', function(err) { if (err) console.log(err); else console.log('DMUtils successfully renamed!') })\"",
     "copyVSIX": "copyfiles *.vsix ./vsix",
@@ -1162,7 +1160,8 @@
     "typescript": "5.8.3",
     "webpack": "5.104.1",
     "webpack-cli": "4.10.0",
-    "yaml": "2.8.3"
+    "yaml": "2.8.3",
+    "@wso2/mi-language-server-build": "workspace:*"
   },
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "4.0.96",

@@ -50,7 +50,8 @@ module.exports = {
     devtoolModuleFilenameTemplate: '../[resource-path]'
   },
   externals: {
-    vscode: 'commonjs vscode'
+    vscode: 'commonjs vscode',
+    '@aws-sdk/client-s3': 'commonjs @aws-sdk/client-s3'
   },
   resolve: {
     extensions: ['.ts', '.js'],

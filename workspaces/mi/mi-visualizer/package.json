@@ -82,6 +82,7 @@
     "style-loader": "4.0.0",
     "ts-loader": "9.5.2",
     "typescript": "5.8.3",
+    "react-refresh": "0.17.0",
     "@types/node": "22.15.21",
     "@types/react": "18.2.0",
     "@types/react-dom": "18.2.0",

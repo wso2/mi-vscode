@@ -16,10 +16,10 @@
 			"path": "workspaces/mi/mi-visualizer"
 		},
 		{
-			"path": "workspaces/common-libs/ui-toolkit"
+			"path": "submodules/vscode-extensions/workspaces/common-libs/ui-toolkit"
 		},
 		{
-			"path": "workspaces/common-libs/service-designer"
+			"path": "submodules/vscode-extensions/workspaces/common-libs/service-designer"
 		},
 		{
 			"path": "workspaces/mi/mi-component-diagram"
@@ -31,7 +31,7 @@
 			"path": "workspaces/mi/mi-data-mapper"
 		},
 		{
-			"path": "workspaces/common-libs/playwright-vscode-tester"
+			"path": "submodules/vscode-extensions/workspaces/common-libs/playwright-vscode-tester"
 		},
 		{
 			"path": "workspaces/mi/mi-rpc-client"
