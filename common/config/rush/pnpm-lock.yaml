@@ -14,6 +14,27 @@ importers:
 
   .: {}
 
+  ../../submodules/vscode-extensions/workspaces/ballerina/syntax-tree:
+    devDependencies:
+      husky:
+        specifier: 9.1.7
+        version: 9.1.7
+      lint-staged:
+        specifier: 16.0.0
+        version: 16.0.0
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+      rimraf:
+        specifier: 6.0.1
+        version: 6.0.1
+      tslint:
+        specifier: 6.1.3
+        version: 6.1.3(typescript@5.8.3)
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
+
   ../../submodules/vscode-extensions/workspaces/common-libs/font-wso2-vscode:
     devDependencies:
       '@twbs/fantasticon':
@@ -100,7 +121,7 @@ importers:
         version: link:../font-wso2-vscode
       '@wso2/syntax-tree':
         specifier: workspace:*
-        version: link:../../../../../workspaces/mi/shared-syntax-tree
+        version: link:../../ballerina/syntax-tree
       '@wso2/ui-toolkit':
         specifier: workspace:*
         version: link:../ui-toolkit
@@ -277,6 +298,22 @@ importers:
       vite:
         specifier: 6.0.14
         version: 6.0.14(@types/node@22.15.24)(jiti@2.7.0)(terser@5.48.0)(yaml@2.8.3)
+
+  ../../submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core:
+    dependencies:
+      vscode-messenger-common:
+        specifier: 0.5.1
+        version: 0.5.1
+      vscode-messenger-webview:
+        specifier: 0.5.1
+        version: 0.5.1
+    devDependencies:
+      '@biomejs/biome':
+        specifier: 1.9.4
+        version: 1.9.4
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
 
   ../../workspaces/mi/mi-component-diagram:
     dependencies:
@@ -973,7 +1010,7 @@ importers:
         version: link:../mi-visualizer
       '@wso2/wso2-platform-core':
         specifier: workspace:*
-        version: link:../wso2-platform-core
+        version: link:../../../submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core
       await-notify:
         specifier: 1.0.1
         version: 1.0.1
@@ -1141,7 +1178,7 @@ importers:
         version: link:../../../submodules/vscode-extensions/workspaces/common-libs/ui-toolkit
       '@wso2/wso2-platform-core':
         specifier: workspace:*
-        version: link:../wso2-platform-core
+        version: link:../../../submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core
       cron-expression-validator:
         specifier: 1.0.20
         version: 1.0.20
@@ -1300,27 +1337,6 @@ importers:
         specifier: 2.8.3
         version: 2.8.3
 
-  ../../workspaces/mi/shared-syntax-tree:
-    devDependencies:
-      husky:
-        specifier: 9.1.7
-        version: 9.1.7
-      lint-staged:
-        specifier: 16.0.0
-        version: 16.0.0
-      prettier:
-        specifier: 3.5.3
-        version: 3.5.3
-      rimraf:
-        specifier: 6.0.1
-        version: 6.0.1
-      tslint:
-        specifier: 6.1.3
-        version: 6.1.3(typescript@5.8.3)
-      typescript:
-        specifier: 5.8.3
-        version: 5.8.3
-
   ../../workspaces/mi/syntax-tree:
     dependencies:
       '@types/node':
@@ -1366,22 +1382,6 @@ importers:
       tslib:
         specifier: 2.5.0
         version: 2.5.0
-      typescript:
-        specifier: 5.8.3
-        version: 5.8.3
-
-  ../../workspaces/mi/wso2-platform-core:
-    dependencies:
-      vscode-messenger-common:
-        specifier: 0.5.1
-        version: 0.5.1
-      vscode-messenger-webview:
-        specifier: 0.5.1
-        version: 0.5.1
-    devDependencies:
-      '@biomejs/biome':
-        specifier: 1.9.4
-        version: 1.9.4
       typescript:
         specifier: 5.8.3
         version: 5.8.3
@@ -24677,7 +24677,7 @@ snapshots:
 
   fork-ts-checker-webpack-plugin@4.1.6:
     dependencies:
-      '@babel/code-frame': 7.10.4
+      '@babel/code-frame': 7.29.0
       chalk: 2.4.2
       micromatch: 4.0.8
       minimatch: 3.1.5

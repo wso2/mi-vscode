@@ -35,11 +35,11 @@
     },
     {
       "packageName": "@wso2/wso2-platform-core",
-      "projectFolder": "workspaces/mi/wso2-platform-core"
+      "projectFolder": "submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core"
     },
     {
       "packageName": "@wso2/syntax-tree",
-      "projectFolder": "workspaces/mi/shared-syntax-tree"
+      "projectFolder": "submodules/vscode-extensions/workspaces/ballerina/syntax-tree"
     },
     {
       "packageName": "@wso2/mi-language-server-build",
