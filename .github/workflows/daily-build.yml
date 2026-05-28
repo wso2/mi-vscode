@@ -8,9 +8,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit  
     with:
-      bi: true
       mi: true
-      ballerina: true
       runTests: true
       runMIE2ETests: true
 
@@ -30,13 +28,6 @@ jobs:
           unzip build.zip
           rm build.zip
   
-      - name: Notification - Ballerina
-        uses: ./.github/actions/dailyBuildNotification
-        with:
-          title: Ballerina
-          fileName: ballerina
-          chatAPI: ${{ secrets.BI_TEAM_CHAT_API }}
-
       - name: Notification - MI
         uses: ./.github/actions/dailyBuildNotification
         with:
@@ -46,7 +37,7 @@ jobs:
 
   NotifyFailure:
     needs: Build
-    if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/vscode-extensions'}}
+    if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode'}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -55,5 +46,5 @@ jobs:
         with:
           title: "Daily Build Failed"
           run_id: ${{ github.run_id }}
-          chat_api: ${{ secrets.TOOLING_TEAM_CHAT_API }}
+          chat_api: ${{ secrets.MI_TEAM_CHAT_API }}
           repository: ${{ github.repository }}

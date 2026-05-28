@@ -15,7 +15,11 @@ runs:
     - name: Remove timestamp
       shell: bash
       run: |
-        cd workspaces/${{ inputs.path }}
+        targetPath="workspaces/${{ inputs.path }}"
+        if [ ! -d "$targetPath" ]; then
+          targetPath="${{ inputs.path }}"
+        fi
+        cd "$targetPath"
         currentVersion=$(node -p "require('./package.json').version")
         if [[ ${#currentVersion} -ge 8 ]]; then
           currentVersionWOPreId=${currentVersion%-*}
@@ -30,7 +34,11 @@ runs:
       if: ${{ inputs.version != 'N/A' }}
       shell: bash
       run: |
-        cd workspaces/${{ inputs.path }}
+        targetPath="workspaces/${{ inputs.path }}"
+        if [ ! -d "$targetPath" ]; then
+          targetPath="${{ inputs.path }}"
+        fi
+        cd "$targetPath"
         npm version ${{ inputs.version }} --preid beta --no-git-tag-version
 
     - name: Get timestamp
@@ -44,7 +52,11 @@ runs:
       shell: bash
       if: ${{ inputs.isPreRelease == 'true' }}
       run: |
-        cd workspaces/${{ inputs.path }}
+        targetPath="workspaces/${{ inputs.path }}"
+        if [ ! -d "$targetPath" ]; then
+          targetPath="${{ inputs.path }}"
+        fi
+        cd "$targetPath"
         currentVersion=$(node -p "require('./package.json').version")
         newVersion=${currentVersion}${{ steps.timestamp.outputs.timestamp }}
         echo $newVersion
