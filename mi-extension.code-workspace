@@ -1,19 +1,19 @@
 {
 	"folders": [
 		{
-			"path": "workspaces/mi/mi-core"
+			"path": "packages/mi-core"
 		},
 		{
-			"path": "workspaces/mi/mi-extension"
+			"path": "packages/mi-extension"
 		},
 		{
-			"path": "workspaces/mi/syntax-tree"
+			"path": "packages/syntax-tree"
 		},
 		{
-			"path": "workspaces/mi/mi-diagram"
+			"path": "packages/mi-diagram"
 		},
 		{
-			"path": "workspaces/mi/mi-visualizer"
+			"path": "packages/mi-visualizer"
 		},
 		{
 			"path": "submodules/vscode-extensions/workspaces/common-libs/ui-toolkit"
@@ -22,19 +22,19 @@
 			"path": "submodules/vscode-extensions/workspaces/common-libs/service-designer"
 		},
 		{
-			"path": "workspaces/mi/mi-component-diagram"
+			"path": "packages/mi-component-diagram"
 		},
 		{
 			"path": ".github"
 		},
 		{
-			"path": "workspaces/mi/mi-data-mapper"
+			"path": "packages/mi-data-mapper"
 		},
 		{
 			"path": "submodules/vscode-extensions/workspaces/common-libs/playwright-vscode-tester"
 		},
 		{
-			"path": "workspaces/mi/mi-rpc-client"
+			"path": "packages/mi-rpc-client"
 		}
 	]
 }

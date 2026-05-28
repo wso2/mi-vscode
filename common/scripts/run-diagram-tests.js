@@ -33,11 +33,11 @@ const colors = {
 };
 
 const diagram_packages = [
-    { name: 'bi-diagram', path: 'workspaces/ballerina/bi-diagram' },
-    { name: 'sequence-diagram', path: 'workspaces/ballerina/sequence-diagram' },
-    { name: 'component-diagram', path: 'workspaces/ballerina/component-diagram' },
-    { name: 'type-diagram', path: 'workspaces/ballerina/type-diagram' },
-    { name: 'mi-diagram', path: 'workspaces/mi/mi-diagram' },
+    { name: 'bi-diagram', path: 'packages/ballerina/bi-diagram' },
+    { name: 'sequence-diagram', path: 'packages/ballerina/sequence-diagram' },
+    { name: 'component-diagram', path: 'packages/ballerina/component-diagram' },
+    { name: 'type-diagram', path: 'packages/ballerina/type-diagram' },
+    { name: 'mi-diagram', path: 'packages/mi-diagram' },
 ];
 
 function parseTestResults(output) {

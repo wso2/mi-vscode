@@ -13,10 +13,10 @@
                 "WEB_VIEW_DEV_HOST": "http://localhost:9000"
             },
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/api-designer/api-designer-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/api-designer/api-designer-extension"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/api-designer/api-designer-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/api-designer/api-designer-extension/dist/**/*.js"
             ],
             "preLaunchTask": "npm: watch-api-designer"
         },
@@ -26,8 +26,8 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension",
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/bi/bi-extension",
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/ballerina/ballerina-extension",
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/bi/bi-extension",
             ],
             "env": {
                 "LS_EXTENSIONS_PATH": "",
@@ -38,11 +38,11 @@
                 "TRACE_WEB_VIEW_DEV_HOST": "http://localhost:9001"
             },
             "outFiles": [
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/dist/**/*.js",
-                "${workspaceFolder}/workspaces/bi/bi-extension/out/**/*.js"
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/dist/**/*.js",
+                "${workspaceFolder}/packages/bi/bi-extension/out/**/*.js"
             ],
             "preLaunchTask": "watch-ballerina-bi",
-            "envFile": "${workspaceFolder}/workspaces/ballerina/ballerina-extension/.env"
+            "envFile": "${workspaceFolder}/packages/ballerina/ballerina-extension/.env"
         },
          {
             "name": "Ballerina, BI & Platform Extensions",
@@ -50,9 +50,9 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension",
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/bi/bi-extension",
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/wso2-platform/wso2-platform-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/ballerina/ballerina-extension",
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/bi/bi-extension",
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/wso2-platform/wso2-platform-extension"
             ],
             "env": {
                 "LS_EXTENSIONS_PATH": "",
@@ -65,12 +65,12 @@
                 "PLATFORM_WEB_VIEW_DEV_HOST": "http://localhost:3000/main.js",
             },
             "outFiles": [
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/dist/**/*.js",
-                "${workspaceFolder}/workspaces/bi/bi-extension/out/**/*.js",
-                "${workspaceFolder}/workspaces/wso2-platform/wso2-platform-extension/dist/**/*.js",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/dist/**/*.js",
+                "${workspaceFolder}/packages/bi/bi-extension/out/**/*.js",
+                "${workspaceFolder}/packages/wso2-platform/wso2-platform-extension/dist/**/*.js",
             ],
             "preLaunchTask": "watch-ballerina-bi-platform",
-            "envFile": "${workspaceFolder}/workspaces/ballerina/ballerina-extension/.env"
+            "envFile": "${workspaceFolder}/packages/ballerina/ballerina-extension/.env"
         },
         {
             "name": "BI Extension",
@@ -78,7 +78,7 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/bi/bi-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/bi/bi-extension"
             ],
             "env": {
                 "LS_EXTENSIONS_PATH": "",
@@ -88,10 +88,10 @@
                 "BALLERINA_STAGE_CENTRAL": "false"
             },
             "outFiles": [
-                "${workspaceFolder}/workspaces/bi/bi-extension/out/**/*.js"
+                "${workspaceFolder}/packages/bi/bi-extension/out/**/*.js"
             ],
             "preLaunchTask": "watch-bi",
-            "envFile": "${workspaceFolder}/workspaces/bi/bi-extension/.env"
+            "envFile": "${workspaceFolder}/packages/bi/bi-extension/.env"
         },
         {
             "name": "Ballerina Extension",
@@ -99,7 +99,7 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/ballerina/ballerina-extension"
             ],
             "env": {
                 "LS_EXTENSIONS_PATH": "",
@@ -109,10 +109,10 @@
                 "BALLERINA_STAGE_CENTRAL": "false"
             },
             "outFiles": [
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/dist/**/*.js"
             ],
             "preLaunchTask": "watch-ballerina",
-            "envFile": "${workspaceFolder}/workspaces/ballerina/ballerina-extension/.env"
+            "envFile": "${workspaceFolder}/packages/ballerina/ballerina-extension/.env"
         },
         {
             "name": "Ballerina Extension Tests",
@@ -125,11 +125,11 @@
                 "WEB_VIEW_WATCH_MODE": "true"
             },
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension",
-                "--extensionTestsPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/test"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/ballerina/ballerina-extension",
+                "--extensionTestsPath=${workspaceFolder}/packages/ballerina/ballerina-extension/out/test"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/test/**/*.js"
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/out/test/**/*.js"
             ]
         },
         {
@@ -143,14 +143,14 @@
                 "CELL_VIEW_DEV_HOST": "http://localhost:3001/cellDiagram.js"
             },
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/wso2-platform/wso2-platform-extension",
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/wso2-platform/wso2-platform-extension",
                 "--enable-proposed-api=wso2.wso2-platform"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/wso2-platform/wso2-platform-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/wso2-platform/wso2-platform-extension/dist/**/*.js"
             ],
             "preLaunchTask": "npm: watch-wso2-platform",
-            "envFile": "${workspaceFolder}/workspaces/wso2-platform/wso2-platform-extension/.env"
+            "envFile": "${workspaceFolder}/packages/wso2-platform/wso2-platform-extension/.env"
         },
         {
             "name": "Choreo Extension",
@@ -163,26 +163,26 @@
                 "CELL_VIEW_DEV_HOST": "http://localhost:3001/cellDiagram.js"
             },
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/choreo/choreo-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/choreo/choreo-extension"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/choreo/choreo-extension/dist/**/*.js"
             ],
             "preLaunchTask": "npm: watch-choreo",
-            "envFile": "${workspaceFolder}/workspaces/choreo/choreo-extension/.env"
+            "envFile": "${workspaceFolder}/packages/choreo/choreo-extension/.env"
         },
         {
             "name": "Debug Ballerina UI Tests",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/workspaces/ballerina/ballerina-extension/node_modules/vscode-extension-tester/out/cli.js",
+            "program": "${workspaceFolder}/packages/ballerina/ballerina-extension/node_modules/vscode-extension-tester/out/cli.js",
             "args": [
                 "run-tests",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/ui-test/*.js",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/out/ui-test/*.js",
                 "--mocha_config",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/ui-test/.mocharc.js",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/ui-test/.mocharc.js",
                 "-o",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/ui-test/settings.json"
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/ui-test/settings.json"
             ],
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen",
@@ -196,16 +196,16 @@
             "name": "Debug Choreo UI Tests",
             "type": "node",
             "request": "launch",
-            "program": "${workspaceFolder}/workspaces/choreo/choreo-extension/node_modules/vscode-extension-tester/out/cli.js",
+            "program": "${workspaceFolder}/packages/choreo/choreo-extension/node_modules/vscode-extension-tester/out/cli.js",
             "args": [
                 "run-tests",
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/dist/src/tests/e2e-tests/*.js",
+                "${workspaceFolder}/packages/choreo/choreo-extension/dist/src/tests/e2e-tests/*.js",
                 "--mocha_config",
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/src/tests/e2e-tests/.mocharc.js",
+                "${workspaceFolder}/packages/choreo/choreo-extension/src/tests/e2e-tests/.mocharc.js",
                 "-o",
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/src/tests/e2e-tests/settings.json"
+                "${workspaceFolder}/packages/choreo/choreo-extension/src/tests/e2e-tests/settings.json"
             ],
-            "envFile": "${workspaceFolder}/workspaces/choreo/choreo-extension/.env",
+            "envFile": "${workspaceFolder}/packages/choreo/choreo-extension/.env",
             "env": {
                 "WEB_VIEW_DEV_MODE_CHOREO": "true",
                 "WEB_VIEW_DEV_HOST_CHOREO": "http://localhost:3001/main.js",
@@ -217,15 +217,15 @@
         {
             "name": "Debug Choreo Playwright-E2E Tests",
             "type": "node",
-            "program": "${workspaceFolder}/workspaces/choreo/choreo-extension/node_modules/mocha/bin/_mocha",
+            "program": "${workspaceFolder}/packages/choreo/choreo-extension/node_modules/mocha/bin/_mocha",
             "args": [
                 "--config",
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/src/tests/e2e-playwright/.mocharc.js",
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/dist/tests/e2e-playwright/suite/**/*.test.js"
+                "${workspaceFolder}/packages/choreo/choreo-extension/src/tests/e2e-playwright/.mocharc.js",
+                "${workspaceFolder}/packages/choreo/choreo-extension/dist/tests/e2e-playwright/suite/**/*.test.js"
             ],
             "request": "launch",
             "outFiles": [
-                "${workspaceFolder}/workspaces/choreo/choreo-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/choreo/choreo-extension/dist/**/*.js"
             ],
             "console": "integratedTerminal",
             "preLaunchTask": "compile:choreo-tests"
@@ -240,27 +240,27 @@
             },
             "debugWebviews": true,
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/mi/mi-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/mi-extension"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/mi/mi-extension/dist/**/*.js",
+                "${workspaceFolder}/packages/mi-extension/dist/**/*.js",
             ],
             "skipFiles": [
                 "**/node_modules/**"
             ],
             "preLaunchTask": "npm: watch-mi",
-            "envFile": "${workspaceFolder}/workspaces/mi/mi-extension/.env"
+            "envFile": "${workspaceFolder}/packages/mi-extension/.env"
         },
         {
             "name": "MI Extension Tests",
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/mi/mi-extension",
-                "--extensionTestsPath=${workspaceFolder}/workspaces/mi/mi-extension/dist/test/suite/index"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/mi-extension",
+                "--extensionTestsPath=${workspaceFolder}/packages/mi-extension/dist/test/suite/index"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/mi/mi-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/mi-extension/dist/**/*.js"
             ],
             "preLaunchTask": "watch-mi-tests"
         },
@@ -270,12 +270,12 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension",
-                "--extensionTestsPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/test",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/test/data/bi_empty_project",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/test/data/bi_init",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/test/data/simple_order_management_system",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/test/data/ai_datamapper"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/ballerina/ballerina-extension",
+                "--extensionTestsPath=${workspaceFolder}/packages/ballerina/ballerina-extension/out/test",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/test/data/bi_empty_project",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/test/data/bi_init",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/test/data/simple_order_management_system",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/test/data/ai_datamapper"
             ],
             "env": {
                 "LS_EXTENSIONS_PATH": "",
@@ -284,10 +284,10 @@
                 "AI_TEST_ENV": "true"
             },
             "outFiles": [
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/test/**/*.js"
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/out/test/**/*.js"
             ],
             "preLaunchTask": "clean-and-compile:ballerina-tests",
-            "envFile": "${workspaceFolder}/workspaces/ballerina/ballerina-extension/.env"
+            "envFile": "${workspaceFolder}/packages/ballerina/ballerina-extension/.env"
         },
         {
             "name": "Ballerina Extension AI Integration Tests - Libs",
@@ -295,9 +295,9 @@
             "request": "launch",
             "runtimeExecutable": "${execPath}",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension",
-                "--extensionTestsPath=${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/test/ai/integration_tests/libs",
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/test/data/bi_empty"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/ballerina/ballerina-extension",
+                "--extensionTestsPath=${workspaceFolder}/packages/ballerina/ballerina-extension/out/test/ai/integration_tests/libs",
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/test/data/bi_empty"
             ],
             "env": {
                 "LS_EXTENSIONS_PATH": "",
@@ -306,20 +306,20 @@
                 "AI_TEST_ENV": "true"
             },
             "outFiles": [
-                "${workspaceFolder}/workspaces/ballerina/ballerina-extension/out/test/**/*.js"
+                "${workspaceFolder}/packages/ballerina/ballerina-extension/out/test/**/*.js"
             ],
             "preLaunchTask": "clean-and-compile:ballerina-tests",
-            "envFile": "${workspaceFolder}/workspaces/ballerina/ballerina-extension/.env"
+            "envFile": "${workspaceFolder}/packages/ballerina/ballerina-extension/.env"
         },
         {
             "name": "APK Extension",
             "type": "extensionHost",
             "request": "launch",
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/apk/apk-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/apk/apk-extension"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/apk/apk-extension/out/**/*.js"
+                "${workspaceFolder}/packages/apk/apk-extension/out/**/*.js"
             ],
             "preLaunchTask": "npm: watch-apk"
         },
@@ -329,10 +329,10 @@
             "request": "launch",
             "debugWebviews": true,
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}/workspaces/hurl-client/hurl-client-extension"
+                "--extensionDevelopmentPath=${workspaceFolder}/packages/hurl-client/hurl-client-extension"
             ],
             "outFiles": [
-                "${workspaceFolder}/workspaces/hurl-client/hurl-client-extension/dist/**/*.js"
+                "${workspaceFolder}/packages/hurl-client/hurl-client-extension/dist/**/*.js"
             ],
             "skipFiles": [
                 "**/node_modules/**"

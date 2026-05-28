@@ -5,7 +5,7 @@
             "label": "ballerina-extension: test-compile",
             "type": "shell",
             "options": {
-                "cwd": "${workspaceFolder}/workspaces/ballerina/ballerina-extension"
+                "cwd": "${workspaceFolder}/packages/ballerina/ballerina-extension"
             },
             "command": "pnpm",
             "args": ["run", "test-compile"],
@@ -23,7 +23,7 @@
             "label": "watch-ballerina",
             "type": "npm",
             "script": "watch-ballerina",
-            "path": "workspaces/ballerina/ballerina-extension",
+            "path": "packages/ballerina/ballerina-extension",
             "problemMatcher": {
                 "owner": "typescript",
                 "source": "ts",
@@ -65,7 +65,7 @@
             "label": "watch-bi",
             "type": "npm",
             "script": "watch-bi",
-            "path": "workspaces/bi/bi-extension",
+            "path": "packages/bi/bi-extension",
             "problemMatcher": {
                 "owner": "typescript",
                 "source": "ts",
@@ -106,7 +106,7 @@
         {
             "type": "npm",
             "script": "watch-wso2-platform",
-            "path": "workspaces/wso2-platform/wso2-platform-extension",
+            "path": "packages/wso2-platform/wso2-platform-extension",
             "problemMatcher": {
                 "owner": "typescript",
                 "source": "ts",
@@ -147,7 +147,7 @@
         {
             "type": "npm",
             "script": "watch-choreo",
-            "path": "workspaces/choreo/choreo-extension",
+            "path": "packages/choreo/choreo-extension",
             "problemMatcher": {
                 "owner": "typescript",
                 "source": "ts",
@@ -188,7 +188,7 @@
         {
 			"type": "npm",
 			"script": "watch-apk",
-            "path": "workspaces/apk/apk-extension",
+            "path": "packages/apk/apk-extension",
 			"problemMatcher": "$tsc-watch",
 			"isBackground": true,
 			"presentation": {
@@ -205,19 +205,19 @@
             "command": "rm",
             "args": ["-rf", "out"],
             "options": {
-                "cwd": "${workspaceFolder}/workspaces/ballerina/ballerina-extension"
+                "cwd": "${workspaceFolder}/packages/ballerina/ballerina-extension"
             }
         },
         {
             "label": "compile:ballerina-tests",
             "type": "npm",
-            "path": "workspaces/ballerina/ballerina-extension",
+            "path": "packages/ballerina/ballerina-extension",
             "script": "test-compile",
         },
         {
             "label": "build:ballerina-extension",
             "type": "npm",
-            "path": "workspaces/ballerina/ballerina-extension",
+            "path": "packages/ballerina/ballerina-extension",
             "script": "compile"
         },
         {
@@ -232,20 +232,20 @@
         {
             "label": "compile:wso2-platform-tests",
             "type": "npm",
-            "path": "workspaces/wso2-platform/wso2-platform-extension",
+            "path": "packages/wso2-platform/wso2-platform-extension",
             "script": "compile-tests",
         },
         {
             "label": "compile:choreo-tests",
             "type": "npm",
-            "path": "workspaces/choreo/choreo-extension",
+            "path": "packages/choreo/choreo-extension",
             "script": "compile-tests",
         },
         {
             "label": "npm: watch-mi",
 			"type": "npm",
 			"script": "watch",
-            "path": "workspaces/mi/mi-extension",
+            "path": "packages/mi-extension",
             "problemMatcher": "$tsc-watch",
 			"isBackground": true,
 			"presentation": {
@@ -261,7 +261,7 @@
             "label": "watch-mi-tests",
 			"type": "npm",
 			"script": "watch-tests",
-            "path": "workspaces/mi/mi-extension",
+            "path": "packages/mi-extension",
 			"problemMatcher": "$tsc-watch",
 			"isBackground": true,
 			"presentation": {
@@ -274,7 +274,7 @@
             "label": "npm: watch-api-designer",
 			"type": "npm",
 			"script": "watch",
-            "path": "workspaces/api-designer/api-designer-extension",
+            "path": "packages/api-designer/api-designer-extension",
             "problemMatcher": "$tsc-watch",
 			"isBackground": true,
 			"presentation": {
@@ -297,7 +297,7 @@
             "label": "npm: watch-hurl-client-extension",
             "type": "npm",
             "script": "watch",
-            "path": "workspaces/hurl-client/hurl-client-extension",
+            "path": "packages/hurl-client/hurl-client-extension",
             "problemMatcher": {
                 "owner": "typescript",
                 "source": "ts",
@@ -335,7 +335,7 @@
         {
             "type": "npm",
             "script": "watch-fhir-tools",
-            "path": "workspaces/fhir-tools/fhir-tools-extension",
+            "path": "packages/fhir-tools/fhir-tools-extension",
             "problemMatcher": {
                 "owner": "typescript",
                 "source": "ts",

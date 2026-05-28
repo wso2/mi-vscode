@@ -64,7 +64,7 @@ node common/scripts/validate-package-versions.js path/to/package.json
 Or validate multiple files:
 
 ```bash
-node common/scripts/validate-package-versions.js workspaces/*/package.json
+node common/scripts/validate-package-versions.js packages/*/package.json
 ```
 
 ## Bypassing the Hook (Not Recommended)

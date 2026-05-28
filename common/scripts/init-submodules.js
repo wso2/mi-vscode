@@ -24,7 +24,6 @@ run('git', ['submodule', 'update', '--init', '--remote']);
 if (existsSync(submodulePath)) {
   const sparsePaths = [
     '/workspaces/common-libs',
-    '/workspaces/ballerina/syntax-tree',
     '/workspaces/wso2-platform/wso2-platform-core',
     '/workspaces/rush-config.json'
   ];
