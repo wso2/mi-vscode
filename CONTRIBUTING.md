@@ -1,6 +1,6 @@
-# Contributing to WSO2 VSCode Extensions Monorepo
+# Contributing to MI for VS Code
 
-Thank you for your interest in contributing! We welcome contributions from the community to improve our Visual Studio Code extensions and supporting libraries.
+Thank you for your interest in contributing. This repository is focused on Micro Integrator for VS Code and its supporting local packages.
 
 ---
 
@@ -15,29 +15,40 @@ Thank you for your interest in contributing! We welcome contributions from the c
    git checkout -b my-feature-branch
    ```
 
-3. **Install Dependencies**  
+3. **Initialize Submodules**  
+   This repository uses the `vscode-extensions` git submodule for shared packages:
+   ```bash
+   pnpm run init-submodules
+   ```
+
+4. **Install Dependencies**  
    Use [Rush](https://rushjs.io/) for dependency management:
    ```bash
    rush install
    ```
 
-4. **Set Up Environment Variables**  
-   Some extensions require a `.env` file. Copy `.env.example` to `.env` in the relevant extension directory and fill in the required values.
+5. **Set Up Environment Variables**  
+   `mi-extension` requires a `.env` file:
+   ```bash
+   cp packages/mi-extension/.env.example packages/mi-extension/.env
+   ```
+   Fill in the required values before running the extension locally.
 
-5. **Make Your Changes**  
+6. **Make Your Changes**  
    Follow the code style and structure of the project. Add tests if applicable.
 
-6. **Build and Test**  
-   Build and test your changes using Rush:
+7. **Build and Test**  
+   Build the language server or the full MI extension using Rush:
    ```bash
-   rush build
-   rush test
+   rush build --to language-server
+   rush build --to micro-integrator
    ```
+   Run package-specific tests when your changes affect those areas.
 
-7. **Commit and Push**  
+8. **Commit and Push**  
    Commit your changes with a clear message and push your branch to your fork.
 
-8. **Open a Pull Request**  
+9. **Open a Pull Request**  
    Go to the main repository and open a pull request from your branch. Describe your changes and reference any related issues.
 
 ---
@@ -45,7 +56,10 @@ Thank you for your interest in contributing! We welcome contributions from the c
 ## Guidelines
 
 - **Follow the directory structure** as described in `SOURCE_ORG.md`.
+- **Keep local MI source under `packages/`** and do not reintroduce the old `workspaces/mi/...` structure.
+- **Use shared packages from the `submodules/vscode-extensions` git submodule** instead of copying them into this repository.
 - **Use Rush commands** for all dependency and build operations.
+- **Preserve the language server flow** so `packages/mi-language-server` builds before artifacts are copied into `packages/mi-extension/ls`.
 - **Write clear commit messages** and PR descriptions.
 - **Add or update tests** for your changes.
 - **Ensure your code passes linting and CI checks.**
@@ -67,4 +81,4 @@ Thank you for your interest in contributing! We welcome contributions from the c
 
 ---
 
-Thank you for helping us make WSO2 VSCode Extensions better!
+Thank you for helping us improve MI for VS Code.
