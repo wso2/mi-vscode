@@ -43,10 +43,6 @@
     "init-submodules": "node common/scripts/init-submodules.js",
     "build": "rush build",
     "build:mi": "rush build --to micro-integrator",
-    "build:ls": "rush build --to language-server",
-    "prepare": "husky"
-  },
-  "devDependencies": {
-    "husky": "9.1.7"
+    "build:ls": "rush build --to language-server"
   }
 }

@@ -6,9 +6,6 @@
   "projectFolderMinDepth": 2,
   "projectFolderMaxDepth": 5,
   "eventHooks": {
-    "postRushInstall": [
-      "node common/scripts/install-git-hooks.js"
-    ],
     "preRushBuild": [
       "npm run init-submodules"
     ],
