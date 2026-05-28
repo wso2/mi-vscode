@@ -43,7 +43,7 @@
     "init-submodules": "node common/scripts/init-submodules.js",
     "build": "rush build",
     "build:mi": "rush build --to micro-integrator",
-    "build:ls": "rush build --to @wso2/mi-language-server-build",
+    "build:ls": "rush build --to language-server",
     "prepare": "husky"
   },
   "devDependencies": {
