@@ -1,49 +1,58 @@
 # Source Organization
 
-This document describes the structure and organization of the `vscode-extensions` monorepo.
+This document describes the structure and organization of the `mi-vscode` repository.
 
 ---
 
 ## Overview
 
-This monorepo contains all Visual Studio Code extensions, shared libraries, and supporting tools developed and maintained by WSO2 for the Choreo, Ballerina, MI, and related platforms. It is managed using [Rush](https://rushjs.io/) for consistent dependency management and builds.
+This repository contains the Micro Integrator for VS Code extension, its supporting MI packages, and the MI language server build integration. It is managed using [Rush](https://rushjs.io/) for consistent dependency management and builds.
 
 ---
 
 ## Directory Structure
 
-```
-vscode-extensions/
-│
-├── workspaces/
-│   ├── ballerina/                # Contains the Ballerina extension packages
-│   │  
-│   ├── mi/                       # Contains the MI extension packages
-│   │  
-│   ├── wso2-platform/            # Contains the WSO2 Platform extension packages
-│   │
-│   ├── choreo/                   # Contains the Choreo extension packages
-│   │
-│   └── common-libs/              # Shared libraries and utilities used by multiple extensions
+```text
+mi-vscode/
+|
++-- packages/
+|   +-- mi-component-diagram/
+|   +-- mi-core/
+|   +-- mi-data-mapper/
+|   +-- mi-data-mapper-utils/
+|   +-- mi-diagram/
+|   +-- mi-extension/
+|   +-- mi-language-server/
+|   +-- mi-rpc-client/
+|   +-- mi-visualizer/
+|   +-- syntax-tree/
+|
++-- submodules/
+|   +-- vscode-extensions/
+|
++-- common/
++-- .github/
++-- rush.json
++-- pnpm-workspace.yaml
 ```
 
 ---
 
 ## Key Components
 
-- **Extensions**: Each extension (e.g., `ballerina-extension`, `mi-extension`, `wso2-platform-extension`, `choreo-extension`) resides in its own folder under `workspaces/`.
-- **Shared Libraries**: Common code and utilities are placed in `workspaces/common-libs/`.
+- **Local MI packages**: Each MI package resides in its own folder under `packages/`.
+- **VS Code extension**: `packages/mi-extension` contains the MI extension source and packaging logic.
+- **Language server build**: `packages/mi-language-server` builds the MI language server and copies artifacts into `packages/mi-extension/ls`.
+- **Shared dependencies**: Shared packages are sourced from the `submodules/vscode-extensions` git submodule.
 ---
 
 ## Environment Variables
 
-A `.env` file is **required** for the following extensions:
-- `workspaces/mi/mi-extension`
-- `workspaces/ballerina/ballerina-extension`
-- `workspaces/wso2-platform/wso2-platform-extension`
+A `.env` file is **required** for the following extension:
+- `packages/mi-extension`
 
-Please refer to the corresponding `.env.example` file in each extension directory for the required variables and structure.  
-**You must copy `.env.example` to `.env` and fill in the necessary values before building or running these extensions.**
+Please refer to `packages/mi-extension/.env.example` for the required variables and structure.  
+**You must copy `.env.example` to `.env` and fill in the necessary values before building or running the extension.**
 
 ---
 
@@ -58,9 +67,11 @@ Make sure you are using a compatible Node.js version for development and builds.
 
 ## Development Workflow
 
+- **Submodule Setup**: Run `pnpm run init-submodules` before the first install and whenever the shared submodule paths need to be refreshed.
 - **Dependency Management**: Use Rush commands (`rush install`, `rush build`, etc.) for all dependency and build operations.
-- **Environment Setup**: Ensure required `.env` files are present for extensions that need them. Use the provided `.env.example` files as templates.
-- **Code Generation**: Use the code generators (such as `rpc-generator` and `syntax-tree/generator`) as needed to automate repetitive code tasks.
+- **Environment Setup**: Ensure `packages/mi-extension/.env` exists when the extension requires environment variables.
+- **Build Targets**: Use `rush build --to language-server` to build only the language server, or `rush build --to micro-integrator` to build the full MI extension flow.
+- **Language Server Packaging**: The default build path compiles the language server locally and copies the generated artifacts into `packages/mi-extension/ls`. Set `MI_DOWNLOAD_LS=true` to use the download flow instead.
 - **Code Review**: Submit pull requests for all changes and follow the repository’s contribution guidelines for code quality and review.
 
 ---
@@ -75,6 +86,6 @@ Make sure you are using a compatible Node.js version for development and builds.
 
 ## Contact
 
-For questions or support, please open an issue in the [GitHub repository](https://github.com/wso2/vscode-extensions) or contact the WSO2 developer team.
+For questions or support, please open an issue in the [GitHub repository](https://github.com/wso2/mi-vscode) or contact the WSO2 developer team.
 
 ---
