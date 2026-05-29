@@ -9,7 +9,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<lsp4j.version>0.20.1</lsp4j.version>
-		<commons.io.version>2.11.0</commons.io.version>
+		<commons.io.version>2.14.0</commons.io.version>
 		<junit.version>5.11.1</junit.version>
 		<axiom.version>1.2.11-wso2v22</axiom.version>
 		<synapse.version>4.0.0-wso2v103</synapse.version>
