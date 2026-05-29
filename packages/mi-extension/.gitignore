@@ -1,4 +1,7 @@
-resources
+resources/*
+!resources/images/
+resources/images/*
+!resources/images/wso2-micro-integrator-icon.png
 synapse-schemas/mediators/connectors.xsd
 
 # test resources
