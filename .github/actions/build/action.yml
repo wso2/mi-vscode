@@ -52,10 +52,15 @@ runs:
         cache-rush: ${{ inputs.enableCache }}
         cache-pnpm: ${{ inputs.enableCache }}
         set-env: ${{ inputs.enableCache }}
+        rush-install: false
 
     - name: Init submodules
       shell: bash
       run: pnpm run init-submodules
+
+    - name: Install dependencies
+      shell: bash
+      run: node common/scripts/install-run-rush.js install
 
     - name: Update version - MI
       if: ${{ inputs.mi == 'true' }}
