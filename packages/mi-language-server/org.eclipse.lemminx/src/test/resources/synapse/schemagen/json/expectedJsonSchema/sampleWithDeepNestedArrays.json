@@ -1,0 +1,60 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "levels": {
+            "id": "http://wso2jsonschema.org/levels",
+            "type": "array",
+            "items": [
+                {
+                    "id": "http://wso2jsonschema.org/levels/0",
+                    "type": "array",
+                    "items": [
+                        {
+                            "id": "http://wso2jsonschema.org/levels/0/0",
+                            "type": "array",
+                            "items": [
+                                {
+                                    "id": "http://wso2jsonschema.org/levels/0/0/0",
+                                    "type": "array",
+                                    "items": [
+                                        {
+                                            "id": "http://wso2jsonschema.org/levels/0/0/0/0",
+                                            "type": "array",
+                                            "items": [
+                                                {
+                                                    "id": "http://wso2jsonschema.org/levels/0/0/0/0/0",
+                                                    "type": "array",
+                                                    "items": [
+                                                        {
+                                                            "id": "http://wso2jsonschema.org/levels/0/0/0/0/0/0",
+                                                            "type": "array",
+                                                            "items": [
+                                                                {
+                                                                    "id": "http://wso2jsonschema.org/levels/0/0/0/0/0/0/0",
+                                                                    "type": "array",
+                                                                    "items": [
+                                                                        {
+                                                                            "id": "http://wso2jsonschema.org/levels/0/0/0/0/0/0/0/0",
+                                                                            "type": "string"
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "title": "root"
+}

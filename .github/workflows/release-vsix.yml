@@ -1,0 +1,110 @@
+name: Release VSIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      isPreRelease:
+        required: true
+        type: boolean 
+      mi:
+        description: Release MI extension
+        type: boolean
+        required: true
+        default: true
+      version:
+        type: choice
+        description: 'Enter the version type'
+        required: true
+        default: 'N/A'
+        options:
+          - 'patch'
+          - 'minor'
+          - 'major'    
+          - 'N/A'     
+
+jobs:
+  Build:
+    name: Build branch - ${{ github.ref_name }}
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      runOnAWS: true
+      isPreRelease: ${{ inputs.isPreRelease }}
+      enableCache: false
+      mi:  ${{ inputs.mi }}
+      version: ${{ inputs.version }}
+      isReleaseBuild: true
+
+  Release:
+    name: Release VSIX
+    needs: Build
+    timeout-minutes: 45
+    runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Restore build
+        uses: actions/download-artifact@v4
+        with:
+          name: ExtBuild
+          path: ./
+
+      - name: Set up workspace
+        run: |
+          unzip build.zip
+          rm build.zip
+
+      - name: Setup Rush
+        uses: gigara/setup-rush@v1.2.0
+        with:
+          pnpm: 10.10.0
+          node: 22.x
+          cache-rush: false
+          cache-pnpm: false
+          set-env: false
+          rush-install: true
+
+      - name: Get version
+        id: vsix
+        run: |
+          file=$(ls micro-integrator*.vsix)
+          version=$(basename "$file" .vsix)
+          echo $version
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Set Chat API
+        id: chat
+        run: |
+          echo "chatAPI=${{ secrets.MI_TEAM_CHAT_API }}" >> $GITHUB_OUTPUT
+ 
+      - name: Create a release in wso2/mi-vscode repo
+        if: ${{ github.event.inputs.mi == 'true' }}
+        uses: ./.github/actions/release
+        with:
+          repo: wso2/mi-vscode
+          token: ${{ secrets.CHOREO_BOT_TOKEN }}
+          name: micro-integrator
+          chatAPI: ${{ steps.chat.outputs.chatAPI }}
+
+      - name: Create PR and notify
+        uses: ./.github/actions/pr
+        with:
+          version: ${{ steps.vsix.outputs.version }}
+          isPreRelease: ${{ github.event.inputs.isPreRelease }}
+          bot_username: ${{ secrets.CHOREO_BOT_USERNAME }}
+          bot_email: ${{ secrets.CHOREO_BOT_EMAIL }}
+          bot_token: ${{ secrets.CHOREO_BOT_TOKEN }}
+          mi: ${{ inputs.mi }}
+          chatAPI: ${{ steps.chat.outputs.chatAPI }}
+
+  Notify:
+    needs: [Release]
+    if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode'}}
+    runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: "Failure Notification"
+        uses: ./.github/actions/failure-notification
+        with:
+          title: "Release Build Failed"
+          run_id: ${{ github.run_id }}
+          chat_api: ${{ secrets.MI_TEAM_CHAT_API }}
+          repository: ${{ github.repository }}

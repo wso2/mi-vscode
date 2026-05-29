@@ -1,0 +1,377 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "ballerina-extension: test-compile",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceFolder}/packages/ballerina/ballerina-extension"
+            },
+            "command": "pnpm",
+            "args": ["run", "test-compile"],
+            "problemMatcher": ["$tsc"]
+        },
+        {
+            "label": "watch-ballerina-bi",
+            "dependsOn": ["watch-ballerina", "watch-bi"]
+        },
+        {
+            "label": "watch-ballerina-bi-platform",
+            "dependsOn": ["watch-ballerina", "watch-bi", "npm: watch-wso2-platform"]
+        },
+        {
+            "label": "watch-ballerina",
+            "type": "npm",
+            "script": "watch-ballerina",
+            "path": "packages/ballerina/ballerina-extension",
+            "problemMatcher": {
+                "owner": "typescript",
+                "source": "ts",
+                "applyTo": "closedDocuments",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": [
+                    {
+                        "regexp": "\\[tsl\\] ERROR in (.*)?\\((\\d+),(\\d+)\\)",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    },
+                    {
+                        "regexp": "\\s*TS\\d+:\\s*(.*)",
+                        "message": 1
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": {
+                        "regexp": "webpack --mode (.*?) --watch"
+                    },
+                    "endsPattern": {
+                        "regexp": "webpack (.*?) compiled (.*?)"
+                    }
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "watch-bi",
+            "type": "npm",
+            "script": "watch-bi",
+            "path": "packages/bi/bi-extension",
+            "problemMatcher": {
+                "owner": "typescript",
+                "source": "ts",
+                "applyTo": "closedDocuments",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": [
+                    {
+                        "regexp": "\\[tsl\\] ERROR in (.*)?\\((\\d+),(\\d+)\\)",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    },
+                    {
+                        "regexp": "\\s*TS\\d+:\\s*(.*)",
+                        "message": 1
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": {
+                        "regexp": "webpack --mode (.*?) --watch"
+                    },
+                    "endsPattern": {
+                        "regexp": "webpack (.*?) compiled (.*?)"
+                    }
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "npm",
+            "script": "watch-wso2-platform",
+            "path": "packages/wso2-platform/wso2-platform-extension",
+            "problemMatcher": {
+                "owner": "typescript",
+                "source": "ts",
+                "applyTo": "closedDocuments",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": [
+                    {
+                        "regexp": "\\[tsl\\] ERROR in (.*)?\\((\\d+),(\\d+)\\)",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    },
+                    {
+                        "regexp": "\\s*TS\\d+:\\s*(.*)",
+                        "message": 1
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": {
+                        "regexp": "webpack --mode (.*?) --watch"
+                    },
+                    "endsPattern": {
+                        "regexp": "webpack (.*?) compiled (.*?)"
+                    }
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "npm",
+            "script": "watch-choreo",
+            "path": "packages/choreo/choreo-extension",
+            "problemMatcher": {
+                "owner": "typescript",
+                "source": "ts",
+                "applyTo": "closedDocuments",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": [
+                    {
+                        "regexp": "\\[tsl\\] ERROR in (.*)?\\((\\d+),(\\d+)\\)",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    },
+                    {
+                        "regexp": "\\s*TS\\d+:\\s*(.*)",
+                        "message": 1
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": {
+                        "regexp": "webpack --mode (.*?) --watch"
+                    },
+                    "endsPattern": {
+                        "regexp": "webpack (.*?) compiled (.*?)"
+                    }
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+			"type": "npm",
+			"script": "watch-apk",
+            "path": "packages/apk/apk-extension",
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+        {
+            "label": "clean:ballerina-test-output",
+            "type": "shell",
+            "command": "rm",
+            "args": ["-rf", "out"],
+            "options": {
+                "cwd": "${workspaceFolder}/packages/ballerina/ballerina-extension"
+            }
+        },
+        {
+            "label": "compile:ballerina-tests",
+            "type": "npm",
+            "path": "packages/ballerina/ballerina-extension",
+            "script": "test-compile",
+        },
+        {
+            "label": "build:ballerina-extension",
+            "type": "npm",
+            "path": "packages/ballerina/ballerina-extension",
+            "script": "compile"
+        },
+        {
+            "label": "clean-and-compile:ballerina-tests",
+            "dependsOn": [
+                "clean:ballerina-test-output",
+                "build:ballerina-extension",
+                "compile:ballerina-tests"
+            ],
+            "dependsOrder": "sequence"
+        },
+        {
+            "label": "compile:wso2-platform-tests",
+            "type": "npm",
+            "path": "packages/wso2-platform/wso2-platform-extension",
+            "script": "compile-tests",
+        },
+        {
+            "label": "compile:choreo-tests",
+            "type": "npm",
+            "path": "packages/choreo/choreo-extension",
+            "script": "compile-tests",
+        },
+        {
+            "label": "npm: watch-mi",
+			"type": "npm",
+			"script": "watch",
+            "path": "packages/mi-extension",
+            "problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never",
+				"group": "watchers"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+            "label": "watch-mi-tests",
+			"type": "npm",
+			"script": "watch-tests",
+            "path": "packages/mi-extension",
+			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never",
+				"group": "watchers"
+			},
+			"group": "build"
+		},
+        {
+            "label": "npm: watch-api-designer",
+			"type": "npm",
+			"script": "watch",
+            "path": "packages/api-designer/api-designer-extension",
+            "problemMatcher": "$tsc-watch",
+			"isBackground": true,
+			"presentation": {
+				"reveal": "never",
+				"group": "watchers"
+			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+        {
+            "label": "npm: watch-hurl-client",
+            "dependsOn": [
+                "npm: watch-hurl-client-extension"
+            ],
+            "dependsOrder": "parallel"
+        },
+        {
+            "label": "npm: watch-hurl-client-extension",
+            "type": "npm",
+            "script": "watch",
+            "path": "packages/hurl-client/hurl-client-extension",
+            "problemMatcher": {
+                "owner": "typescript",
+                "source": "ts",
+                "applyTo": "closedDocuments",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": [
+                    {
+                        "regexp": "\\[tsl\\] ERROR in (.*)?\\((\\d+),(\\d+)\\)",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    },
+                    {
+                        "regexp": "\\s*TS\\d+:\\s*(.*)",
+                        "message": 1
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": {
+                        "regexp": "webpack"
+                    },
+                    "endsPattern": {
+                        "regexp": "webpack .* compiled"
+                    }
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never",
+                "group": "watchers"
+            }
+        },
+        {
+            "type": "npm",
+            "script": "watch-fhir-tools",
+            "path": "packages/fhir-tools/fhir-tools-extension",
+            "problemMatcher": {
+                "owner": "typescript",
+                "source": "ts",
+                "applyTo": "closedDocuments",
+                "fileLocation": "absolute",
+                "severity": "error",
+                "pattern": [
+                    {
+                        "regexp": "\\[tsl\\] ERROR in (.*)?\\((\\d+),(\\d+)\\)",
+                        "file": 1,
+                        "line": 2,
+                        "column": 3
+                    },
+                    {
+                        "regexp": "\\s*TS\\d+:\\s*(.*)",
+                        "message": 1
+                    }
+                ],
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": {
+                        "regexp": "webpack --mode (.*?) --watch"
+                    },
+                    "endsPattern": {
+                        "regexp": "webpack (.*?) compiled (.*?)"
+                    }
+                }
+            },
+            "isBackground": true,
+            "presentation": {
+                "reveal": "never"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+    ]
+}

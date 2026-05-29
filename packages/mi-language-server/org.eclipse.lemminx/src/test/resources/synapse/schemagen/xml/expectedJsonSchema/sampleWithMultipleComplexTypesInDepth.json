@@ -1,0 +1,64 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "attr_companyID": {
+            "id": "http://wso2jsonschema.org/attr_companyID",
+            "type": "number"
+        },
+        "CompanyName": {
+            "id": "http://wso2jsonschema.org/CompanyName",
+            "type": "string"
+        },
+        "Department": {
+            "id": "http://wso2jsonschema.org/Department",
+            "type": "array",
+            "items": [
+                {
+                    "id": "http://wso2jsonschema.org/Department/0",
+                    "type": "object",
+                    "properties": {
+                        "attr_deptID": {
+                            "id": "http://wso2jsonschema.org/Department/0/attr_deptID",
+                            "type": "number"
+                        },
+                        "departmentName": {
+                            "id": "http://wso2jsonschema.org/Department/0/departmentName",
+                            "type": "string"
+                        },
+                        "Employee": {
+                            "id": "http://wso2jsonschema.org/Department/0/Employee",
+                            "type": "array",
+                            "items": [
+                                {
+                                    "id": "http://wso2jsonschema.org/Department/0/Employee/0",
+                                    "type": "object",
+                                    "properties": {
+                                        "attr_employeeID": {
+                                            "id": "http://wso2jsonschema.org/Department/0/Employee/0/attr_employeeID",
+                                            "type": "number"
+                                        },
+                                        "firstName": {
+                                            "id": "http://wso2jsonschema.org/Department/0/Employee/0/firstName",
+                                            "type": "string"
+                                        },
+                                        "lastName": {
+                                            "id": "http://wso2jsonschema.org/Department/0/Employee/0/lastName",
+                                            "type": "string"
+                                        },
+                                        "position": {
+                                            "id": "http://wso2jsonschema.org/Department/0/Employee/0/position",
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "title": "Company"
+}

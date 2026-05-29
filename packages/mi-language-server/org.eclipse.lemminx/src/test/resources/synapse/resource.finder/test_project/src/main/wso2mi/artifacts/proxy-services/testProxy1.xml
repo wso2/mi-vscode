@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<proxy name="testProxy1" startOnLoad="true" transports="http https" xmlns="http://ws.apache.org/ns/synapse">
+	<target>
+		<inSequence>
+		</inSequence>
+		<outSequence>
+		</outSequence>
+		<faultSequence/>
+	</target>
+</proxy>

@@ -1,0 +1,9 @@
+    <makefault {{#serializeResponse}}response="{{markAsResponse}}"{{/serializeResponse}} description="{{description}}" version="{{soapVersion}}" >
+        {{^isPox}}<code value="{{soapVersion}}Env:{{code}}" xmlns:{{soapVersion}}Env="{{soapUri}}" />{{/isPox}}
+        {{#hasReason}}<reason {{#reasonValue}}value="{{reasonValue}}"{{/reasonValue}} {{#reasonExpression}}expression="{{value}}"{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}{{/reasonExpression}} />{{/hasReason}}
+        {{#actor}}<role>{{actor}}</role>{{/actor}}
+        {{#node}}<node>{{node}}</node>{{/node}}
+        {{#Role}}<role>{{Role}}</role>{{/Role}}
+        {{#detailValue}}<detail>{{detailValue}}</detail>{{/detailValue}}
+        {{#detailExpression}}<detail expression="{{value}}" {{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}} />{{/detailExpression}}
+    </makefault>

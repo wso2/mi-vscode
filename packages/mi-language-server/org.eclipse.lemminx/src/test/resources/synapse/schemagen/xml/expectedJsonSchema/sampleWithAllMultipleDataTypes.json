@@ -1,0 +1,80 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "StringValue": {
+            "id": "http://wso2jsonschema.org/StringValue",
+            "type": "string"
+        },
+        "NormalizedStringValue": {
+            "id": "http://wso2jsonschema.org/NormalizedStringValue",
+            "type": "string"
+        },
+        "TokenValue": {
+            "id": "http://wso2jsonschema.org/TokenValue",
+            "type": "string"
+        },
+        "IDValue": {
+            "id": "http://wso2jsonschema.org/IDValue",
+            "type": "string"
+        },
+        "IDREFValue": {
+            "id": "http://wso2jsonschema.org/IDREFValue",
+            "type": "string"
+        },
+        "NCNameValue": {
+            "id": "http://wso2jsonschema.org/NCNameValue",
+            "type": "string"
+        },
+        "NMTOKENValue": {
+            "id": "http://wso2jsonschema.org/NMTOKENValue",
+            "type": "string"
+        },
+        "IntegerValue": {
+            "id": "http://wso2jsonschema.org/IntegerValue",
+            "type": "number"
+        },
+        "UnsignedIntValue": {
+            "id": "http://wso2jsonschema.org/UnsignedIntValue",
+            "type": "number"
+        },
+        "LongValue": {
+            "id": "http://wso2jsonschema.org/LongValue",
+            "type": "number"
+        },
+        "BooleanValue": {
+            "id": "http://wso2jsonschema.org/BooleanValue",
+            "type": "boolean"
+        },
+        "DecimalValue": {
+            "id": "http://wso2jsonschema.org/DecimalValue",
+            "type": "number"
+        },
+        "FloatValue": {
+            "id": "http://wso2jsonschema.org/FloatValue",
+            "type": "number"
+        },
+        "DoubleValue": {
+            "id": "http://wso2jsonschema.org/DoubleValue",
+            "type": "number"
+        },
+        "DateValue": {
+            "id": "http://wso2jsonschema.org/DateValue",
+            "type": "string"
+        },
+        "TimeValue": {
+            "id": "http://wso2jsonschema.org/TimeValue",
+            "type": "string"
+        },
+        "DateTimeValue": {
+            "id": "http://wso2jsonschema.org/DateTimeValue",
+            "type": "string"
+        },
+        "DurationValue": {
+            "id": "http://wso2jsonschema.org/DurationValue",
+            "type": "string"
+        }
+    },
+    "title": "SampleData"
+}

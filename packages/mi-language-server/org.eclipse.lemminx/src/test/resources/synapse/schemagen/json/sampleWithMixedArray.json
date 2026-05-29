@@ -1,0 +1,11 @@
+{
+    "array": [
+        "string",
+        123,
+        true,
+        null,
+        {
+            "key": "value"
+        }
+    ]
+}

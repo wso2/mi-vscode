@@ -1,0 +1,7 @@
+packages:
+  - 'packages/*'
+  - 'submodules/vscode-extensions/workspaces/common-libs/font-wso2-vscode'
+  - 'submodules/vscode-extensions/workspaces/common-libs/ui-toolkit'
+  - 'submodules/vscode-extensions/workspaces/common-libs/service-designer'
+  - 'submodules/vscode-extensions/workspaces/common-libs/playwright-vscode-tester'
+  - 'submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core'

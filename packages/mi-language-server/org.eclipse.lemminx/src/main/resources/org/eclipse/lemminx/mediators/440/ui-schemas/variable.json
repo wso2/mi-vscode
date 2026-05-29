@@ -1,0 +1,87 @@
+{
+  "name": "variable",
+  "type": "mediator",
+  "title": "Variable Mediator",
+  "canTryOut": true,
+  "help": "Set a variable to the message",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "variableName",
+        "displayName": "Name",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": true,
+        "helpTip": "The name of the variable"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "variableDataType",
+        "displayName": "Data Type",
+        "inputType": "combo",
+        "defaultValue": "STRING",
+        "comboValues": [
+          "STRING",
+          "BOOLEAN",
+          "INTEGER",
+          "LONG",
+          "DOUBLE",
+          "XML",
+          "JSON"
+        ],
+        "required": true,
+        "helpTip": "Data type of the variable",
+        "enableCondition": [
+          "NOT",
+          {
+            "variableAction": "remove"
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "variableValue",
+        "displayName": "Value",
+        "inputType": "stringOrExpression",
+        "defaultValue": "",
+        "required": true,
+        "helpTip": "Value of the variable. This can be a static value or an expression.",
+        "enableCondition": [
+          "NOT",
+          [
+            {
+              "variableAction": "remove"
+            }
+          ]
+        ]
+      }
+    },
+    {
+        "type": "attribute",
+        "value": {
+          "name": "traceFilter",
+          "displayName": "Enable Trace Filter",
+          "inputType": "checkbox",
+          "defaultValue": "false",
+          "helpTip": "Enable Trace Filter",
+          "required": "false"
+        }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": "Description"
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "oneOf": [
+        {
+            "id": "http://wso2jsonschema.org/IsEmployed",
+            "type": "boolean",
+            "title": "IsEmployed"
+        },
+        {
+            "id": "http://wso2jsonschema.org/Age",
+            "type": "number",
+            "title": "Age"
+        },
+        {
+            "id": "http://wso2jsonschema.org/JoinDate",
+            "type": "string",
+            "title": "JoinDate"
+        },
+        {
+            "id": "http://wso2jsonschema.org/FirstName",
+            "type": "string",
+            "title": "FirstName"
+        },
+        {
+            "id": "http://wso2jsonschema.org/Salary",
+            "type": "number",
+            "title": "Salary"
+        }
+    ]
+}

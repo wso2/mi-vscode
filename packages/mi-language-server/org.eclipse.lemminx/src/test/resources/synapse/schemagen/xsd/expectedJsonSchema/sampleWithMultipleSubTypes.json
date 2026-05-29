@@ -1,0 +1,83 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "CompanyName": {
+            "id": "http://wso2jsonschema.org/CompanyName",
+            "type": "string"
+        },
+        "Address": {
+            "id": "http://wso2jsonschema.org/Address",
+            "type": "object",
+            "properties": {
+                "Street": {
+                    "id": "http://wso2jsonschema.org/Address/Street",
+                    "type": "string"
+                },
+                "City": {
+                    "id": "http://wso2jsonschema.org/Address/City",
+                    "type": "string"
+                },
+                "ZipCode": {
+                    "id": "http://wso2jsonschema.org/Address/ZipCode",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "Street",
+                "City",
+                "ZipCode"
+            ]
+        },
+        "Employees": {
+            "id": "http://wso2jsonschema.org/Employees",
+            "type": "object",
+            "properties": {
+                "Employee": {
+                    "id": "http://wso2jsonschema.org/Employees/Employee",
+                    "type": "array",
+                    "items": [
+                        {
+                            "id": "http://wso2jsonschema.org/Employees/Employee/0",
+                            "type": "object",
+                            "properties": {
+                                "ID": {
+                                    "id": "http://wso2jsonschema.org/Employees/Employee/0/ID",
+                                    "type": "number"
+                                },
+                                "Name": {
+                                    "id": "http://wso2jsonschema.org/Employees/Employee/0/Name",
+                                    "type": "string"
+                                },
+                                "Position": {
+                                    "id": "http://wso2jsonschema.org/Employees/Employee/0/Position",
+                                    "type": "string"
+                                },
+                                "Salary": {
+                                    "id": "http://wso2jsonschema.org/Employees/Employee/0/Salary",
+                                    "type": "number"
+                                }
+                            },
+                            "required": [
+                                "ID",
+                                "Name",
+                                "Position",
+                                "Salary"
+                            ]
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "Employee"
+            ]
+        }
+    },
+    "required": [
+        "CompanyName",
+        "Address",
+        "Employees"
+    ],
+    "title": "Company"
+}

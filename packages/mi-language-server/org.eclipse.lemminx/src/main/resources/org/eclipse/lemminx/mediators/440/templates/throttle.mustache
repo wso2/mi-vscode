@@ -1,0 +1,98 @@
+    {{#newMediator}}
+        <throttle {{#traceFilter}}traceFilter="enable" {{/traceFilter}}description="{{description}}" id="{{groupId}}" {{#onAcceptBranchsequenceKey}}onAccept="{{onAcceptBranchsequenceKey}}"{{/onAcceptBranchsequenceKey}} {{#onRejectBranchsequenceKey}}onReject="{{onRejectBranchsequenceKey}}"{{/onRejectBranchsequenceKey}} >
+            {{#policyKey}}<policy key="{{policyKey}}"/>{{/policyKey}}
+            {{#hasPolicyEntries}}
+            <policy>
+                <wsp:Policy wsu:id="WSO2MediatorThrottlingPolicy" xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+                    <throttle:MediatorThrottleAssertion xmlns:throttle="http://www.wso2.org/products/wso2commons/throttle">
+                        <throttle:MaximumConcurrentAccess>{{maximumConcurrentAccess}}</throttle:MaximumConcurrentAccess>
+                        {{#policyEntries}}
+                        <wsp:Policy>
+                            <throttle:ID throttle:type="{{throttleType}}">{{throttleRange}}</throttle:ID>
+                            <wsp:Policy>
+                                {{#isControl}}
+                                <throttle:Control>
+                                    <wsp:Policy>
+                                        <throttle:MaximumCount>{{maxRequestCount}}</throttle:MaximumCount>
+                                        <throttle:UnitTime>{{unitTime}}</throttle:UnitTime>
+                                        <throttle:ProhibitTimePeriod>{{prohibitPeriod}}</throttle:ProhibitTimePeriod>
+                                    </wsp:Policy>
+                                </throttle:Control>
+                                {{/isControl}}
+                                {{#isAllow}}
+                                <throttle:Allow/>
+                                {{/isAllow}}
+                                {{#isDeny}}
+                                <throttle:Deny/>
+                                {{/isDeny}}
+                            </wsp:Policy>
+                        </wsp:Policy>
+                        {{/policyEntries}}
+                    </throttle:MediatorThrottleAssertion>
+                </wsp:Policy>
+            </policy>
+            {{/hasPolicyEntries}}
+            {{^onAcceptBranchsequenceKey}}
+            <onAccept></onAccept>
+            {{/onAcceptBranchsequenceKey}}
+            {{^onRejectBranchsequenceKey}}
+            <onReject></onReject>
+            {{/onRejectBranchsequenceKey}}
+        </throttle>
+    {{/newMediator}}
+    {{^newMediator}}
+        {{#editThrottle}}
+            {{#selfClosed}}
+                <throttle {{#traceFilter}}traceFilter="enable" {{/traceFilter}}description="{{description}}" id="{{groupId}}" {{#onAcceptBranchsequenceKey}}onAccept="{{onAcceptBranchsequenceKey}}"{{/onAcceptBranchsequenceKey}} {{#onRejectBranchsequenceKey}}onReject="{{onRejectBranchsequenceKey}}"{{/onRejectBranchsequenceKey}} />
+            {{/selfClosed}}
+            {{^selfClosed}}
+                <throttle {{#traceFilter}}traceFilter="enable" {{/traceFilter}}description="{{description}}" id="{{groupId}}" {{#onAcceptBranchsequenceKey}}onAccept="{{onAcceptBranchsequenceKey}}"{{/onAcceptBranchsequenceKey}} {{#onRejectBranchsequenceKey}}onReject="{{onRejectBranchsequenceKey}}"{{/onRejectBranchsequenceKey}} >
+            {{/selfClosed}}
+            {{/editThrottle}}
+        {{#editPolicy}}
+            {{#policyKey}}<policy key="{{policyKey}}" />{{/policyKey}}
+            {{^policyKey}}
+            {{#hasPolicyEntries}}
+                <policy>
+                    <wsp:Policy wsu:id="WSO2MediatorThrottlingPolicy" xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy" xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+                        <throttle:MediatorThrottleAssertion xmlns:throttle="http://www.wso2.org/products/wso2commons/throttle">
+                            <throttle:MaximumConcurrentAccess>{{maximumConcurrentAccess}}</throttle:MaximumConcurrentAccess>
+                            {{#policyEntries}}
+                            <wsp:Policy>
+                                <throttle:ID throttle:type="{{throttleType}}">{{throttleRange}}</throttle:ID>
+                                <wsp:Policy>
+                                    {{#isControl}}
+                                    <throttle:Control>
+                                        <wsp:Policy>
+                                            <throttle:MaximumCount>{{maxRequestCount}}</throttle:MaximumCount>
+                                            <throttle:UnitTime>{{unitTime}}</throttle:UnitTime>
+                                            <throttle:ProhibitTimePeriod>{{prohibitPeriod}}</throttle:ProhibitTimePeriod>
+                                        </wsp:Policy>
+                                    </throttle:Control>
+                                    {{/isControl}}
+                                    {{#isAllow}}
+                                    <throttle:Allow/>
+                                    {{/isAllow}}
+                                    {{#isDeny}}
+                                    <throttle:Deny/>
+                                    {{/isDeny}}
+                                </wsp:Policy>
+                            </wsp:Policy>
+                            {{/policyEntries}}
+                        </throttle:MediatorThrottleAssertion>
+                    </wsp:Policy>
+                </policy>
+            {{/hasPolicyEntries}}
+            {{/policyKey}}
+        {{/editPolicy}}
+        {{#editOnAccept}}
+            {{^onAcceptBranchsequenceKey}}
+                <onAccept></onAccept>
+            {{/onAcceptBranchsequenceKey}}
+        {{/editOnAccept}}
+        {{#editOnReject}}
+            {{^onRejectBranchsequenceKey}}
+                <onReject></onReject>
+            {{/onRejectBranchsequenceKey}}
+        {{/editOnReject}}
+    {{/newMediator}}

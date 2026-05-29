@@ -1,0 +1,19 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "fixedElement1": {
+            "id": "http://wso2jsonschema.org/fixedElement1",
+            "type": "string"
+        },
+        "fixedElement2": {
+            "id": "http://wso2jsonschema.org/fixedElement2",
+            "type": "string"
+        }
+    },
+    "required": [
+        "fixedElement1"
+    ],
+    "title": "root"
+}

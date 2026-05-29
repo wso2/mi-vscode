@@ -1,0 +1,122 @@
+name: "Build repo and upload artifacts"
+inputs:
+  isPreRelease:
+    default: true
+    type: boolean
+  enableCache:
+    default: true
+    type: boolean
+  enableLSCache:
+    default: false
+    type: boolean
+  mi:
+    description: Update MI extension version
+    type: boolean
+    required: false
+    default: false
+  version:
+    default: "N/A"
+    type: string
+    required: false
+  COPILOT_ROOT_URL:
+    type: string
+  COPILOT_DEV_ROOT_URL:
+    type: string
+  APPINSIGHTS_INSTRUMENTATION_KEY:
+    type: string
+  MI_AUTH_ORG:
+    type: string
+  MI_AUTH_CLIENT_ID:
+    type: string
+  PLATFORM_DEFAULT_GHAPP_CLIENT_ID:
+    type: string
+  PLATFORM_DEFAULT_DEVANT_ASGARDEO_CLIENT_ID:
+    type: string
+  PLATFORM_STAGE_GHAPP_CLIENT_ID:
+    type: string
+  PLATFORM_STAGE_DEVANT_ASGARDEO_CLIENT_ID:
+    type: string
+  PLATFORM_DEV_GHAPP_CLIENT_ID:
+    type: string
+  PLATFORM_DEV_DEVANT_ASGARDEO_CLIENT_ID:
+    type: string
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Rush
+      uses: gigara/setup-rush@v1.2.0
+      with:
+        pnpm: 10.10.0
+        node: 22.x
+        cache-rush: ${{ inputs.enableCache }}
+        cache-pnpm: ${{ inputs.enableCache }}
+        set-env: ${{ inputs.enableCache }}
+
+    - name: Init submodules
+      shell: bash
+      run: pnpm run init-submodules
+
+    - name: Update version - MI
+      if: ${{ inputs.mi == 'true' }}
+      uses: ./.github/actions/updateVersion
+      with:
+        path: "packages/mi-extension"
+        isPreRelease: ${{ inputs.isPreRelease }}
+        version: ${{ inputs.version }}
+
+    - name: Copy .env.example to .env
+      shell: bash
+      run: |
+        find . -type f -name ".env.example" | while read example; do
+          envfile="$(dirname "$example")/.env"
+          cp "$example" "$envfile"
+        done
+
+    - name: Restore MI LS from cache
+      id: mi-ls-cache
+      if: ${{ inputs.enableLSCache == 'true' }}
+      uses: actions/cache@v4
+      with:
+        path: packages/mi-extension/ls
+        key: mi-ls
+        retention-days: 1
+
+    - name: Build repo
+      shell: bash
+      id: build
+      run: |
+        node common/scripts/install-run-rush.js build --verbose
+      env:
+        NODE_OPTIONS: --max-old-space-size=6144
+        isPreRelease: ${{ inputs.isPreRelease == 'true' }}
+        COPILOT_ROOT_URL: ${{ inputs.COPILOT_ROOT_URL }}
+        COPILOT_DEV_ROOT_URL: ${{ inputs.COPILOT_DEV_ROOT_URL }}
+        APPINSIGHTS_INSTRUMENTATION_KEY: ${{ inputs.APPINSIGHTS_INSTRUMENTATION_KEY }}
+        MI_AUTH_ORG: ${{ inputs.MI_AUTH_ORG }}
+        MI_AUTH_CLIENT_ID: ${{ inputs.MI_AUTH_CLIENT_ID }}
+        PLATFORM_DEFAULT_GHAPP_CLIENT_ID: ${{ inputs.PLATFORM_DEFAULT_GHAPP_CLIENT_ID }}
+        PLATFORM_DEFAULT_DEVANT_ASGARDEO_CLIENT_ID: ${{ inputs.PLATFORM_DEFAULT_DEVANT_ASGARDEO_CLIENT_ID }}
+        PLATFORM_STAGE_GHAPP_CLIENT_ID: ${{ inputs.PLATFORM_STAGE_GHAPP_CLIENT_ID }}
+        PLATFORM_STAGE_DEVANT_ASGARDEO_CLIENT_ID: ${{ inputs.PLATFORM_STAGE_DEVANT_ASGARDEO_CLIENT_ID }}
+        PLATFORM_DEV_GHAPP_CLIENT_ID: ${{ inputs.PLATFORM_DEV_GHAPP_CLIENT_ID }}
+        PLATFORM_DEV_DEVANT_ASGARDEO_CLIENT_ID: ${{ inputs.PLATFORM_DEV_DEVANT_ASGARDEO_CLIENT_ID }}
+
+    - name: Compress build
+      shell: bash
+      run: |
+        zip -rq build.zip ./ -x 'common/temp*' -x '**/node_modules/*'
+        zip VSIX.zip *.vsix
+
+    - name: Save build
+      uses: actions/upload-artifact@v4
+      with:
+        path: build.zip
+        name: ExtBuild
+        retention-days: 1
+
+    - name: Save VSIX
+      uses: actions/upload-artifact@v4
+      with:
+        path: VSIX.zip
+        name: VSIX

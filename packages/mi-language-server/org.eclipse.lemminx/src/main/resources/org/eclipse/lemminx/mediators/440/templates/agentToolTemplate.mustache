@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<template name="{{name}}" xmlns="http://ws.apache.org/ns/synapse">
+    <description>{{description}}</description>
+    {{#parameters}}
+    <parameter isMandatory="{{isMandatory}}" name="{{name}}" description="{{description}}"/>
+    {{/parameters}}
+    <sequence>
+        {{{mediatorXml}}}
+    </sequence>
+</template>

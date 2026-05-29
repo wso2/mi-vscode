@@ -1,0 +1,36 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "level1": {
+            "id": "http://wso2jsonschema.org/level1",
+            "type": "object",
+            "properties": {
+                "level2": {
+                    "id": "http://wso2jsonschema.org/level1/level2",
+                    "type": "object",
+                    "properties": {
+                        "level3": {
+                            "id": "http://wso2jsonschema.org/level1/level2/level3",
+                            "type": "object",
+                            "properties": {
+                                "level4": {
+                                    "id": "http://wso2jsonschema.org/level1/level2/level3/level4",
+                                    "type": "object",
+                                    "properties": {
+                                        "level5": {
+                                            "id": "http://wso2jsonschema.org/level1/level2/level3/level4/level5",
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "title": "root"
+}

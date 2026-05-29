@@ -1,0 +1,20 @@
+{
+    "company": {
+        "name": "TechCorp",
+        "address": {
+            "street": "123 Tech St",
+            "city": "Techville",
+            "zip": "12345"
+        },
+        "employees": [
+            {
+                "name": "John Doe",
+                "role": "Developer"
+            },
+            {
+                "name": "Jane Smith",
+                "role": "Manager"
+            }
+        ]
+    }
+}

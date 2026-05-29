@@ -1,0 +1,171 @@
+{
+  "name": "Script",
+  "type": "mediator",
+  "title": "Script Mediator",
+  "canTryOut": true,
+  "help": "Invokes scripting language functions with embedded or stored script files.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "scriptLanguage",
+        "displayName": "Script Language",
+        "inputType": "combo",
+        "defaultValue": "js",
+        "comboValues": [
+          "js",
+          "graalJs",
+          "rb",
+          "groovy",
+          "nashornJs",
+          "rhinoJs"
+        ],
+        "required": false,
+        "helpTip": ""
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "scriptType",
+        "displayName": "Script Type",
+        "inputType": "combo",
+        "defaultValue": "INLINE",
+        "comboValues": [
+          "INLINE",
+          "RESOURCE_REFERENCE"
+        ],
+        "required": false,
+        "helpTip": ""
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "scriptBody",
+        "displayName": "Script Body",
+        "inputType": "codeTextArea",
+        "required": false,
+        "helpTip": "",
+        "enableCondition": [
+          {
+            "scriptType": "INLINE"
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "scriptKey",
+        "displayName": "Script Key",
+        "inputType": "resourceOrExpression",
+        "keyType": {
+          "conditionField": "scriptLanguage",
+          "values": [
+            {
+              "js": "js"
+            },
+            {
+              "graalJs": "graalJs"
+            },
+            {
+              "rb": "rb"
+            },
+            {
+              "groovy": "groovy"
+            },
+            {
+              "nashornJs": "js"
+            },
+            {
+              "rhinoJs": "js"
+            }
+          ]
+        },
+        "required": false,
+        "helpTip": "",
+        "enableCondition": [
+          {
+            "scriptType": "RESOURCE_REFERENCE"
+          }
+        ],
+        "canAddNew": true
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "mediateFunction",
+        "displayName": "Mediate Function",
+        "inputType": "string",
+        "required": false,
+        "helpTip": "",
+        "enableCondition": [
+          {
+            "scriptType": "RESOURCE_REFERENCE"
+          }
+        ]
+      }
+    },
+    {
+      "type": "table",
+      "value": {
+        "name": "scriptKeys",
+        "displayName": "Script Keys",
+        "title": "Registry Key Property",
+        "description": "Editing of the properties of an object Registry Key Property",
+        "tableKey": "keyName",
+        "tableValue": "keyValue",
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "keyName",
+              "displayName": "Key Name",
+              "inputType": "string",
+              "required": false,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "keyValue",
+              "displayName": "Key Value",
+              "inputType": "string",
+              "required": false,
+              "helpTip": ""
+            }
+          }
+        ],
+        "enableCondition": [
+          {
+            "scriptType": "RESOURCE_REFERENCE"
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

@@ -1,0 +1,69 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "transactionID": {
+            "id": "http://wso2jsonschema.org/transactionID",
+            "type": "string"
+        },
+        "PaymentDetails": {
+            "oneOf": [
+                {
+                    "id": "http://wso2jsonschema.org/PaymentDetails",
+                    "type": "object",
+                    "properties": {
+                        "CreditCard": {
+                            "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard",
+                            "type": "object",
+                            "properties": {
+                                "cardNumber": {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/cardNumber",
+                                    "type": "string"
+                                },
+                                "expiryDate": {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/CreditCard/expiryDate",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "cardNumber",
+                                "expiryDate"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "CreditCard"
+                    ]
+                },
+                {
+                    "id": "http://wso2jsonschema.org/PaymentDetails",
+                    "type": "object",
+                    "properties": {
+                        "PayPal": {
+                            "id": "http://wso2jsonschema.org/PaymentDetails/PayPal",
+                            "type": "object",
+                            "properties": {
+                                "paypalEmail": {
+                                    "id": "http://wso2jsonschema.org/PaymentDetails/PayPal/paypalEmail",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "paypalEmail"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "PayPal"
+                    ]
+                }
+            ]
+        }
+    },
+    "required": [
+        "transactionID",
+        "PaymentDetails"
+    ],
+    "title": "Transaction"
+}

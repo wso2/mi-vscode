@@ -2,6 +2,42 @@
 
 WSO2 Micro Integrator (MI) offers an extension for Visual Studio Code (VS Code) that simplifies the development of integration solutions.
 
+## Repository Development
+
+This repository is focused on MI only. Local source packages live under `packages/`, and shared libraries are consumed directly from the `submodules/vscode-extensions` git submodule.
+
+Important locations:
+
+- `packages/mi-extension`: VS Code extension source.
+- `packages/mi-language-server`: MI language server build project.
+- `packages/*`: local MI packages used by the extension.
+- `submodules/vscode-extensions`: shared packages used during Rush builds.
+
+First-time setup from the repository root:
+
+```bash
+pnpm run init-submodules
+rush install
+```
+
+Common build commands:
+
+```bash
+rush build
+rush build --to language-server
+rush build --to micro-integrator
+```
+
+Helpful shortcuts:
+
+```bash
+pnpm run build
+pnpm run build:ls
+pnpm run build:mi
+```
+
+By default, the language server is built from `packages/mi-language-server`, and the generated artifacts are copied into `packages/mi-extension/ls` before the extension build runs. To use the download flow instead of the local language server build, set `MI_DOWNLOAD_LS=true`.
+
 ## Prerequisites
 
 You need the following to work with the MI for VS Code extension.

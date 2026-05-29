@@ -1,0 +1,38 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "Department": {
+            "id": "http://wso2jsonschema.org/Department",
+            "type": "object",
+            "properties": {
+                "attr_name": {
+                    "id": "http://wso2jsonschema.org/Department/attr_name",
+                    "type": "string"
+                },
+                "Employee": {
+                    "id": "http://wso2jsonschema.org/Department/Employee",
+                    "type": "array",
+                    "items": [
+                        {
+                            "id": "http://wso2jsonschema.org/Department/Employee/0",
+                            "type": "object",
+                            "properties": {
+                                "Name": {
+                                    "id": "http://wso2jsonschema.org/Department/Employee/0/Name",
+                                    "type": "string"
+                                },
+                                "Title": {
+                                    "id": "http://wso2jsonschema.org/Department/Employee/0/Title",
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "title": "Company"
+}

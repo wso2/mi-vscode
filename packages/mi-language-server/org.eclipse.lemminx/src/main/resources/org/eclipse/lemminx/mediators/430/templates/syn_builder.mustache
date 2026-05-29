@@ -1,0 +1,5 @@
+    <syn:builder{{#description}} description="{{description}}" {{/description}} xmlns:syn="http://ws.apache.org/ns/synapse">
+        {{#messageBuilders}}
+        <messageBuilder class="{{builderClass}}" contentType="{{contentType}}" formatterClass="{{formatterClass}}"/>
+        {{/messageBuilders}}
+    </syn:builder>

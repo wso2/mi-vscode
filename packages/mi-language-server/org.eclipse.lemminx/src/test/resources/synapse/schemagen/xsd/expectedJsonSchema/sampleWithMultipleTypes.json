@@ -1,0 +1,50 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "UserID": {
+            "id": "http://wso2jsonschema.org/UserID",
+            "type": "string"
+        },
+        "Age": {
+            "id": "http://wso2jsonschema.org/Age",
+            "type": "number"
+        },
+        "IsActive": {
+            "id": "http://wso2jsonschema.org/IsActive",
+            "type": "boolean"
+        },
+        "Salary": {
+            "id": "http://wso2jsonschema.org/Salary",
+            "type": "number"
+        },
+        "LoginTime": {
+            "id": "http://wso2jsonschema.org/LoginTime",
+            "type": "string"
+        },
+        "MembershipDuration": {
+            "id": "http://wso2jsonschema.org/MembershipDuration",
+            "type": "string"
+        },
+        "BirthDate": {
+            "id": "http://wso2jsonschema.org/BirthDate",
+            "type": "string"
+        },
+        "LastLogin": {
+            "id": "http://wso2jsonschema.org/LastLogin",
+            "type": "string"
+        }
+    },
+    "required": [
+        "UserID",
+        "Age",
+        "IsActive",
+        "Salary",
+        "LoginTime",
+        "MembershipDuration",
+        "BirthDate",
+        "LastLogin"
+    ],
+    "title": "Person"
+}

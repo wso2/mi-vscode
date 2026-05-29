@@ -1,0 +1,78 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/rush/v5/rush.schema.json",
+  "rushVersion": "5.155.1",
+  "pnpmVersion": "10.11.0",
+  "nodeSupportedVersionRange": ">=20.6.0 <23.0.0",
+  "projectFolderMinDepth": 2,
+  "projectFolderMaxDepth": 5,
+  "eventHooks": {
+    "preRushBuild": [
+      "npm run init-submodules"
+    ],
+    "postRushBuild": [
+      "cd packages/mi-extension && pnpm run copyVSIXToRoot"
+    ]
+  },
+  "projects": [
+    {
+      "packageName": "@wso2/font-wso2-vscode",
+      "projectFolder": "submodules/vscode-extensions/workspaces/common-libs/font-wso2-vscode"
+    },
+    {
+      "packageName": "@wso2/ui-toolkit",
+      "projectFolder": "submodules/vscode-extensions/workspaces/common-libs/ui-toolkit"
+    },
+    {
+      "packageName": "@wso2/service-designer",
+      "projectFolder": "submodules/vscode-extensions/workspaces/common-libs/service-designer"
+    },
+    {
+      "packageName": "@wso2/playwright-vscode-tester",
+      "projectFolder": "submodules/vscode-extensions/workspaces/common-libs/playwright-vscode-tester"
+    },
+    {
+      "packageName": "@wso2/wso2-platform-core",
+      "projectFolder": "submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core"
+    },
+    {
+      "packageName": "language-server",
+      "projectFolder": "packages/mi-language-server"
+    },
+    {
+      "packageName": "micro-integrator",
+      "projectFolder": "packages/mi-extension"
+    },
+    {
+      "packageName": "@wso2/mi-diagram",
+      "projectFolder": "packages/mi-diagram"
+    },
+    {
+      "packageName": "@wso2/mi-core",
+      "projectFolder": "packages/mi-core"
+    },
+    {
+      "packageName": "@wso2/syntax-tree",
+      "projectFolder": "packages/syntax-tree"
+    },
+    {
+      "packageName": "@wso2/mi-visualizer",
+      "projectFolder": "packages/mi-visualizer"
+    },
+    {
+      "packageName": "@wso2/mi-rpc-client",
+      "projectFolder": "packages/mi-rpc-client"
+    },
+    {
+      "packageName": "@wso2/mi-data-mapper",
+      "projectFolder": "packages/mi-data-mapper"
+    },
+    {
+      "packageName": "@wso2/mi-data-mapper-utils",
+      "projectFolder": "packages/mi-data-mapper-utils"
+    },
+    {
+      "packageName": "@wso2/mi-component-diagram",
+      "projectFolder": "packages/mi-component-diagram"
+    }
+  ]
+}

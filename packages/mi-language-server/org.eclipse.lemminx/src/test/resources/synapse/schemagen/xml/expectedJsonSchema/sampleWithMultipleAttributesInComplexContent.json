@@ -1,0 +1,28 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "attr_id": {
+            "id": "http://wso2jsonschema.org/attr_id",
+            "type": "number"
+        },
+        "attr_status": {
+            "id": "http://wso2jsonschema.org/attr_status",
+            "type": "string"
+        },
+        "firstName": {
+            "id": "http://wso2jsonschema.org/firstName",
+            "type": "string"
+        },
+        "lastName": {
+            "id": "http://wso2jsonschema.org/lastName",
+            "type": "string"
+        },
+        "email": {
+            "id": "http://wso2jsonschema.org/email",
+            "type": "string"
+        }
+    },
+    "title": "person"
+}

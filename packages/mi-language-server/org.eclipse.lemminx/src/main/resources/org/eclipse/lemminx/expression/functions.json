@@ -1,0 +1,559 @@
+{
+  "array": {
+    "sortText": "0_array",
+    "items": [
+      {
+        "label": "length(value:array)",
+        "insertText": "length($1)",
+        "details": "Returns the length of the JSON array",
+        "signature": {
+          "value": "array"
+        },
+        "category": 1
+      }
+    ]
+  },
+  "string": {
+    "sortText": "1_string",
+    "items": [
+      {
+        "label": "length(value:string)",
+        "insertText": "length($1)",
+        "details": "Returns the length of the string or length of the array when the value is a JSON array",
+        "signature": {
+          "value": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "toUpper(value:string)",
+        "insertText": "toUpper($1)",
+        "details": "Converts the string to uppercase",
+        "signature": {
+          "value": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "toLower(value:string)",
+        "insertText": "toLower($1)",
+        "details": "Converts the string to lowercase",
+        "signature": {
+          "value": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "subString(value:string, beginIndex:integer)",
+        "insertText": "subString($1, $2)",
+        "details": "Extracts a substring from beginIndex",
+        "signature": {
+          "value": "string",
+          "beginIndex": "integer"
+        },
+        "category": 1
+      },
+      {
+        "label": "subString(value:string, beginIndex:integer, endIndex:integer)",
+        "insertText": "subString($1, $2, $3)",
+        "details": "Extracts a substring from beginIndex to endIndex",
+        "signature": {
+          "value": "string",
+          "beginIndex": "integer",
+          "endIndex": "integer"
+        },
+        "category": 1
+      },
+      {
+        "label": "startsWith(value:string, prefix:string)",
+        "insertText": "startsWith($1, $2)",
+        "details": "Checks if the string starts with a prefix",
+        "signature": {
+          "value": "string",
+          "prefix": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "endsWith(value:string, suffix:string)",
+        "insertText": "endsWith($1, $2)",
+        "details": "Checks if the string ends with a suffix",
+        "signature": {
+          "value": "string",
+          "suffix": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "contains(value:string, substring:string)",
+        "insertText": "contains($1, $2)",
+        "details": "Checks if the string contains a substring",
+        "signature": {
+          "value": "string",
+          "substring": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "trim(value:string)",
+        "insertText": "trim($1)",
+        "details": "Removes leading and trailing whitespace",
+        "signature": {
+          "value": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "replace(sourceText: string, textToReplace: string, replacementText: string)",
+        "insertText": "replace($1, $2, $3)",
+        "details": "Replaces occurrences of old with new",
+        "signature": {
+          "sourceText": "string",
+          "textToReplace": "string",
+          "replacementText": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "split(value:string, delimiter:string)",
+        "insertText": "split($1, $2)",
+        "details": "Splits the string into an array using delimiter",
+        "signature": {
+          "value": "string",
+          "delimiter": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "charAt(value:string, index:integer)",
+        "insertText": "charAt($1, $2)",
+        "details": "Return the char at given index.",
+        "signature": {
+          "value": "string",
+          "index": "integer"
+        },
+        "category": 1
+      },
+      {
+        "label": "indexOf(text:string, target:string)",
+        "insertText": "indexOf($1, $2)",
+        "details": "Return the position of the first occurrence of target in text",
+        "signature": {
+          "text": "string",
+          "target": "string"
+        },
+        "category": 1
+      },
+      {
+        "label": "indexOf(text:string, target:string, fromIndex:integer)",
+        "insertText": "indexOf($1, $2, $3)",
+        "details": "Return the position of the first occurrence of target in text after fromIndex",
+        "signature": {
+          "text": "string",
+          "target": "string",
+          "fromIndex": "integer"
+        },
+        "category": 1
+      }
+    ]
+  },
+  "math": {
+    "sortText": "2_math",
+    "items": [
+      {
+        "label": "abs(value:number)",
+        "insertText": "abs($1)",
+        "details": "Returns the absolute value",
+        "signature": {
+          "value": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "floor(value:number)",
+        "insertText": "floor($1)",
+        "details": "Returns the largest integer less than or equal to the value",
+        "signature": {
+          "value": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "ceil(value:number)",
+        "insertText": "ceil($1)",
+        "details": "Returns the smallest integer greater than or equal to the value",
+        "signature": {
+          "value": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "sqrt(value:number)",
+        "insertText": "sqrt($1)",
+        "details": "Returns the square root",
+        "signature": {
+          "value": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "log(value:number)",
+        "insertText": "log($1)",
+        "details": "Returns the natural logarithm (base e)",
+        "signature": {
+          "value": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "log(value:number, base:number)",
+        "insertText": "log($1, $2)",
+        "details": "Returns the logarithm with specified base",
+        "signature": {
+          "value": "number",
+          "base": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "round(value:number)",
+        "insertText": "round($1)",
+        "details": "Rounds a number to the nearest integer",
+        "signature": {
+          "value": "number"
+        },
+        "category": 2
+      },
+      {
+        "label": "round(value:number, decimalPlaces:integer)",
+        "insertText": "round($1, $2)",
+        "details": "Rounds a number to specified decimal places",
+        "signature": {
+          "value": "number",
+          "decimalPlaces": "integer"
+        },
+        "category": 2
+      },
+      {
+        "label": "pow(base:integer, exponent:integer)",
+        "insertText": "pow($1, $2)",
+        "details": "Returns the result of raising base to the power of exponent",
+        "signature": {
+          "base": "integer",
+          "exponent": "integer"
+        },
+        "category": 2
+      }
+    ]
+  },
+  "boolean": {
+    "sortText": "3_boolean",
+    "items": [
+      {
+        "label": "not(value:boolean)",
+        "insertText": "not($1)",
+        "details": "Negate the boolean value",
+        "signature": {
+          "value": "boolean"
+        },
+        "category": 3
+      }
+    ]
+  },
+  "registry": {
+    "sortText": "4_registry",
+    "items": [
+      {
+        "label": "registry(path:string)",
+        "insertText": "registry($1)",
+        "details": "Retrieve the registry value at the specified path",
+        "signature": {
+          "path": "string"
+        },
+        "category": 4
+      },
+      {
+        "label": "registry(path:string, propertyKey:string)",
+        "insertText": "registry($1, $2)",
+        "details": "Retrieve the registry value with property key",
+        "signature": {
+          "path": "string",
+          "propertyKey": "string"
+        },
+        "category": 4
+      }
+    ]
+  },
+  "secret": {
+    "sortText": "5_secret",
+    "items": [
+      {
+        "label": "wso2-vault(alias:string)",
+        "insertText": "wso2-vault($1)",
+        "details": "Retrieves the secret associated with the given alias from WSO2 secure vault",
+        "signature": {
+          "alias": "string"
+        },
+        "category": 5
+      },
+      {
+        "label": "hashicorp-vault(pathName:string, fieldName:string)",
+        "insertText": "hashicorp-vault($1, $2)",
+        "details": "Retrieves a secret from HashiCorp Vault using the specified path and field name",
+        "signature": {
+          "pathName": "string",
+          "fieldName": "string"
+        },
+        "category": 5
+      },
+      {
+        "label": "hashicorp-vault(namespace:string, pathName:string, fieldName:string)",
+        "insertText": "hashicorp-vault($1, $2, $3)",
+        "details": "Retrieves a secret from HashiCorp Vault using the specified namespace, path, and field name",
+        "signature": {
+          "namespace": "string",
+          "pathName": "string",
+          "fieldName": "string"
+        },
+        "category": 5
+      }
+    ]
+  },
+  "encode": {
+    "sortText": "6_encode",
+    "items": [
+      {
+        "label": "base64encode(value:string)",
+        "insertText": "base64encode($1)",
+        "details": "Encodes the value using Base64",
+        "signature": {
+          "value": "string"
+        },
+        "category": 6
+      },
+      {
+        "label": "base64encode(value:string, charset:string)",
+        "insertText": "base64encode($1, $2)",
+        "details": "Encodes the value using Base64 with the specified charset",
+        "signature": {
+          "value": "string",
+          "charset": "string"
+        },
+        "category": 6
+      },
+      {
+        "label": "urlEncode(value:string)",
+        "insertText": "urlEncode($1)",
+        "details": "Encodes a string for safe inclusion in a URL",
+        "signature": {
+          "value": "string"
+        },
+        "category": 7
+      },
+      {
+        "label": "urlEncode(value:string, charset:string)",
+        "insertText": "urlEncode($1, $2)",
+        "details": "Encodes a string for safe inclusion in a URL with charset",
+        "signature": {
+          "value": "string",
+          "charset": "string"
+        },
+        "category": 7
+      }
+    ]
+  },
+  "decode": {
+    "sortText": "7_decode",
+    "items": [
+      {
+        "label": "base64decode(value:string)",
+        "insertText": "base64decode($1)",
+        "details": "Decodes a Base64-encoded value",
+        "signature": {
+          "value": "string"
+        },
+        "category": 7
+      },
+      {
+        "label": "urlDecode(value:string)",
+        "insertText": "urlDecode($1)",
+        "details": "Decodes a URL-encoded string",
+        "signature": {
+          "value": "string"
+        },
+        "category": 7
+      }
+    ]
+  },
+  "typeCheck": {
+    "sortText": "8_typeCheck",
+    "items": [
+      {
+        "label": "isNumber(value:any)",
+        "insertText": "isNumber($1)",
+        "details": "Checks if the value is a number",
+        "signature": {
+          "value": "any"
+        },
+        "category": 8
+      },
+      {
+        "label": "isString(value:any)",
+        "insertText": "isString($1)",
+        "details": "Checks if the value is a string",
+        "signature": {
+          "value": "any"
+        },
+        "category": 8
+      },
+      {
+        "label": "isArray(value:any)",
+        "insertText": "isArray($1)",
+        "details": "Checks if the value is an array",
+        "signature": {
+          "value": "any"
+        },
+        "category": 8
+      },
+      {
+        "label": "isObject(value:any)",
+        "insertText": "isObject($1)",
+        "details": "Checks if the value is an object",
+        "signature": {
+          "value": "any"
+        },
+        "category": 8
+      }
+    ]
+  },
+  "typeConversion": {
+    "sortText": "9_typeConversion",
+    "items": [
+      {
+        "label": "integer(value:string)",
+        "insertText": "integer($1)",
+        "details": "Converts the value to an integer",
+        "signature": {
+          "value": "string"
+        },
+        "category": 9
+      },
+      {
+        "label": "float(value:string)",
+        "insertText": "float($1)",
+        "details": "Converts the value to a floating-point number",
+        "signature": {
+          "value": "string"
+        },
+        "category": 9
+      },
+      {
+        "label": "string(value:any)",
+        "insertText": "string($1)",
+        "details": "Converts the value to a string",
+        "signature": {
+          "value": "any"
+        },
+        "category": 9
+      },
+      {
+        "label": "boolean(value:any)",
+        "insertText": "boolean($1)",
+        "details": "Converts the value to a boolean",
+        "signature": {
+          "value": "any"
+        },
+        "category": 9
+      },
+      {
+        "label": "object(value:string)",
+        "insertText": "object($1)",
+        "details": "Convert string representation of JSON object to a JSON object",
+        "signature": {
+          "value": "string"
+        },
+        "category": 9
+      },
+      {
+        "label": "array(value:string)",
+        "insertText": "array($1)",
+        "details": "Convert string representation of JSON array to a JSON array",
+        "signature": {
+          "value": "string"
+        },
+        "category": 9
+      }
+    ]
+  },
+  "existenceCheck": {
+    "sortText": "10_existenceCheck",
+    "items": [
+      {
+        "label": "exists(value:any)",
+        "insertText": "exists($1)",
+        "details": "Check if the value exists",
+        "signature": {
+          "value": "any"
+        },
+        "category": 10
+      }
+    ]
+  },
+  "dateTime": {
+    "sortText": "11_dateTime",
+    "items": [
+      {
+        "label": "now()",
+        "insertText": "now()",
+        "details": "Current time",
+        "signature": {},
+        "category": 11
+      },
+      {
+        "label": "formatDateTime(input:string, newFormat:string)",
+        "insertText": "formatDateTime($1, $2)",
+        "details": "Format the given time/date to a new format",
+        "signature": {
+          "input": "string",
+          "newFormat": "string"
+        },
+        "category": 11
+      },
+      {
+        "label": "formatDateTime(input:string, oldFormat:string, newFormat:string)",
+        "insertText": "formatDateTime($1, $2, $3)",
+        "details": "Transform the given time/date from old format to new format",
+        "signature": {
+          "input": "string",
+          "oldFormat": "string",
+          "newFormat": "string"
+        },
+        "category": 11
+      }
+    ]
+  },
+  "xpath": {
+    "sortText": "12_xpath",
+    "items": [
+      {
+        "label": "xpath(xpath:string)",
+        "insertText": "xpath($1)",
+        "details": "Evaluate XPATH expression",
+        "signature": {
+          "xpath": "string"
+        },
+        "category": 12
+      },
+      {
+        "label": "xpath(xpath:string, variableName:string)",
+        "insertText": "xpath($1, $2)",
+        "details": "Evaluate XPATH expression with variable name",
+        "signature": {
+          "xpath": "string",
+          "variableName": "string"
+        },
+        "category": 12
+      }
+    ]
+  }
+}

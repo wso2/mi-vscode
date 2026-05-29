@@ -1,0 +1,39 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "image": {
+            "id": "http://wso2jsonschema.org/image",
+            "type": "array",
+            "items": [
+                {
+                    "id": "http://wso2jsonschema.org/image/0",
+                    "type": "object",
+                    "properties": {
+                        "attr_file": {
+                            "id": "http://wso2jsonschema.org/image/0/attr_file",
+                            "type": "string"
+                        },
+                        "attr_type": {
+                            "id": "http://wso2jsonschema.org/image/0/attr_type",
+                            "type": "string",
+                            "enum": [
+                                "jpeg",
+                                "png"
+                            ]
+                        },
+                        "_ELEMVAL": {
+                            "id": "http://wso2jsonschema.org/image/0/_ELEMVAL",
+                            "type": "string"
+                        }
+                    }
+                }
+            ]
+        }
+    },
+    "required": [
+        "image"
+    ],
+    "title": "images"
+}

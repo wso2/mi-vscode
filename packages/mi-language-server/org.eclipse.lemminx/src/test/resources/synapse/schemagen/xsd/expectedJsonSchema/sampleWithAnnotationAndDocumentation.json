@@ -1,0 +1,44 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "product": {
+            "id": "http://wso2jsonschema.org/product",
+            "type": "array",
+            "items": [
+                {
+                    "id": "http://wso2jsonschema.org/product/0",
+                    "type": "object",
+                    "properties": {
+                        "attr_id": {
+                            "id": "http://wso2jsonschema.org/product/0/attr_id",
+                            "type": "string"
+                        },
+                        "name": {
+                            "id": "http://wso2jsonschema.org/product/0/name",
+                            "type": "string"
+                        },
+                        "category": {
+                            "id": "http://wso2jsonschema.org/product/0/category",
+                            "type": "string"
+                        },
+                        "price": {
+                            "id": "http://wso2jsonschema.org/product/0/price",
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "name",
+                        "category",
+                        "price"
+                    ]
+                }
+            ]
+        }
+    },
+    "required": [
+        "product"
+    ],
+    "title": "inventory"
+}

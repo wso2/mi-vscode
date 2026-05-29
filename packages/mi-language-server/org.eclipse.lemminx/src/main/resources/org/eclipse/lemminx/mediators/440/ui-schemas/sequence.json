@@ -1,0 +1,42 @@
+{
+  "name": "sequence",
+  "type": "mediator",
+  "title": "Sequence Mediator",
+  "canTryOut": true,
+  "help": "Inserts reference to a sequence.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "referringSequence",
+        "displayName": "Referring Sequence",
+        "inputType": "keyOrExpression",
+        "required": true,
+        "helpTip": "",
+        "keyType": "sequence"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": false,
+        "helpTip": ""
+      }
+    }
+  ]
+}

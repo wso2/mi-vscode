@@ -1,0 +1,15 @@
+{
+    "id": 12345,
+    "name": "Alice",
+    "active": true,
+    "address": {
+        "street": "456 Oak St",
+        "city": "Oakland",
+        "zipcode": "54321"
+    },
+    "tags": [
+        "technology",
+        "innovation"
+    ],
+    "meta": null
+}

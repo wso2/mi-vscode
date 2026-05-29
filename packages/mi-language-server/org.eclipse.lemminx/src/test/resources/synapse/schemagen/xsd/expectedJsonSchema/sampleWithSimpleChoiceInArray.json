@@ -1,0 +1,60 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "Item": {
+            "id": "http://wso2jsonschema.org/Item",
+            "type": "array",
+            "items": [
+                {
+                    "oneOf": [
+                        {
+                            "id": "http://wso2jsonschema.org/Item/0",
+                            "type": "object",
+                            "properties": {
+                                "Book": {
+                                    "id": "http://wso2jsonschema.org/Item/0/Book",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "Book"
+                            ]
+                        },
+                        {
+                            "id": "http://wso2jsonschema.org/Item/0",
+                            "type": "object",
+                            "properties": {
+                                "Electronics": {
+                                    "id": "http://wso2jsonschema.org/Item/0/Electronics",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "Electronics"
+                            ]
+                        },
+                        {
+                            "id": "http://wso2jsonschema.org/Item/0",
+                            "type": "object",
+                            "properties": {
+                                "Clothing": {
+                                    "id": "http://wso2jsonschema.org/Item/0/Clothing",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "Clothing"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "required": [
+        "Item"
+    ],
+    "title": "Items"
+}

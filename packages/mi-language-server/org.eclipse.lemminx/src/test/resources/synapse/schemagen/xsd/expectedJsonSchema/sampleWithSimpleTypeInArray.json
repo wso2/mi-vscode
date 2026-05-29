@@ -1,0 +1,41 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "UserID": {
+            "id": "http://wso2jsonschema.org/UserID",
+            "type": "number"
+        },
+        "UserName": {
+            "id": "http://wso2jsonschema.org/UserName",
+            "type": "string"
+        },
+        "Age": {
+            "id": "http://wso2jsonschema.org/Age",
+            "type": "number"
+        },
+        "IsVerified": {
+            "id": "http://wso2jsonschema.org/IsVerified",
+            "type": "boolean"
+        },
+        "Tags": {
+            "id": "http://wso2jsonschema.org/Tags",
+            "type": "array",
+            "items": [
+                {
+                    "id": "http://wso2jsonschema.org/Tags/0",
+                    "type": "string"
+                }
+            ]
+        }
+    },
+    "required": [
+        "UserID",
+        "UserName",
+        "Age",
+        "IsVerified",
+        "Tags"
+    ],
+    "title": "UserProfile"
+}

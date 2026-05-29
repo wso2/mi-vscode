@@ -1,0 +1,40 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "StringValue": {
+            "id": "http://wso2jsonschema.org/StringValue",
+            "type": "string"
+        },
+        "DecimalValue": {
+            "id": "http://wso2jsonschema.org/DecimalValue",
+            "type": "number"
+        },
+        "IntegerValue": {
+            "id": "http://wso2jsonschema.org/IntegerValue",
+            "type": "number"
+        },
+        "BooleanValue": {
+            "id": "http://wso2jsonschema.org/BooleanValue",
+            "type": "boolean"
+        },
+        "DateValue": {
+            "id": "http://wso2jsonschema.org/DateValue",
+            "type": "string"
+        },
+        "TimeValue": {
+            "id": "http://wso2jsonschema.org/TimeValue",
+            "type": "string"
+        }
+    },
+    "required": [
+        "StringValue",
+        "DecimalValue",
+        "IntegerValue",
+        "BooleanValue",
+        "DateValue",
+        "TimeValue"
+    ],
+    "title": "SampleData"
+}
