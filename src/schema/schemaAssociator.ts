@@ -1,8 +1,9 @@
 import fs from "fs";
+import path from "path";
 import { fileURLToPath } from "url";
 
 export interface SchemaAssociation {
-  pattern: string;     // glob-like: 'pom.xml' or '**/*.xml'
+  pattern: string;     // glob-like: 'project-430/**/*.xml' or '**/*.xml'
   namespace?: string;  // xmlns namespace URI
   xsdPath: string;     // absolute path to XSD file
   isBuiltIn: boolean;  // true for bundled schemas
@@ -14,6 +15,23 @@ export interface ResolvedSchema {
   source: "builtin" | "custom";
 }
 
+// Resolve schemas root for both production bundle (dist/server.js) and test environment.
+// In the production esbuild bundle import.meta.url points to dist/server.js, so one
+// level up reaches the project root.  In tests import.meta.url points to the TypeScript
+// source file (src/schema/schemaAssociator.ts), so two levels up are needed.
+function resolveSchemaRoot(): string {
+  try {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const prod = path.join(dir, "..", "resources", "schemas");
+    if (fs.existsSync(prod)) return prod;
+    return path.join(dir, "..", "..", "resources", "schemas");
+  } catch {
+    return path.join(process.cwd(), "resources", "schemas");
+  }
+}
+
+const SCHEMAS_ROOT = resolveSchemaRoot();
+
 export class SchemaAssociator {
   private builtInAssociations: SchemaAssociation[];
   private userAssociations: SchemaAssociation[];
@@ -21,15 +39,9 @@ export class SchemaAssociator {
   constructor() {
     this.builtInAssociations = [
       {
-        pattern: "pom.xml",
-        namespace: "http://maven.apache.org/POM/4.0.0",
-        xsdPath: fileURLToPath(new URL("../resources/default/maven-4.0.0.xsd", import.meta.url)),
-        isBuiltIn: true,
-      },
-      {
-        pattern: "web.xml",
-        namespace: "http://xmlns.jcp.org/xml/ns/javaee",
-        xsdPath: fileURLToPath(new URL("../resources/default/web-app_3_1.xsd", import.meta.url)),
+        namespace: "http://ws.apache.org/ns/synapse",
+        xsdPath: path.join(SCHEMAS_ROOT, "440", "synapse_config.xsd"),
+        pattern: "**/*.xml",
         isBuiltIn: true,
       },
     ];
@@ -46,12 +58,12 @@ export class SchemaAssociator {
 
   /**
    * Finds and reads the XSD schema for the given file name and optional xmlns namespace.
-   * User associations are checked first and short-circuit built-in lookup on match.
+   * Priority: user associations (pattern match) > built-in associations (namespace match).
    * Returns null if no matching schema is found.
    */
   findSchema(fileName: string, xmlns?: string, documentPath?: string): ResolvedSchema | null {
 
-    // user associations checked FIRST
+    // user associations checked FIRST (pattern match)
     for (const assoc of this.userAssociations) {
       if (this.matchesPattern(fileName, assoc.pattern, documentPath)) {
         const xsdText = this.readXsdFile(assoc.xsdPath);
@@ -60,12 +72,9 @@ export class SchemaAssociator {
       }
     }
 
-    // built-ins checked only if no user pattern matched
+    // built-ins matched by namespace only
     for (const assoc of this.builtInAssociations) {
-      if (
-        this.matchesPattern(fileName, assoc.pattern, documentPath) ||
-        (xmlns !== undefined && assoc.namespace === xmlns)
-      ) {
+      if (xmlns !== undefined && assoc.namespace === xmlns) {
         const xsdText = this.readXsdFile(assoc.xsdPath);
         if (xsdText === null) return null;
         return { xsdText, xsdPath: assoc.xsdPath, source: "builtin" };
