@@ -3,7 +3,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "../../src/xmlLanguageService.js";
 import { DiagnosticsHandler } from "../../src/diagnosticsHandler.js";
 
 const tempDirs: string[] = [];

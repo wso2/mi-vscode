@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "../src/xmlLanguageService.js";
 import { toXMLDocument, toXMLPosition } from "../src/textDocumentUtils.js";
 
 const sampleXml = `<root>\n  <child name="test"/>\n</root>`;

@@ -4,7 +4,7 @@ import {
   DiagnosticSeverity,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "./xmlLanguageService.js";
 import * as fs from "fs";
 import * as path from "path";
 

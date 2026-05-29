@@ -8,11 +8,11 @@ import {
   DidChangeConfigurationParams,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "./xmlLanguageService.js";
 import { DiagnosticsHandler } from "./diagnosticsHandler.js";
 import { SchemaConfig, applySchemaSettings } from "./configuration.js";
 import { registerRequestHandlers } from "./requestHandlers.js";
-import { formatError } from "./utils.js";
+import { formatError } from "./lspUtils.js";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);

@@ -7,12 +7,10 @@ import {
   Hover,
   MarkupKind,
 } from "vscode-languageserver/node.js";
-import {
-  CompletionItem as XmlCompletionItem,
-  DocumentSymbol as XmlDocumentSymbol,
-  HoverResult,
-  FoldingRange as XmlFoldingRange,
-} from "xml-language-service";
+import { CompletionItem as XmlCompletionItem } from "./services/xmlCompletion.js";
+import { DocumentSymbol as XmlDocumentSymbol } from "./services/xmlSymbols.js";
+import { HoverResult } from "./services/xmlHover.js";
+import { FoldingRange as XmlFoldingRange } from "./services/xmlFolding.js";
 
 // ── String utilities ─────────────────────────────────────────────────────────
 
