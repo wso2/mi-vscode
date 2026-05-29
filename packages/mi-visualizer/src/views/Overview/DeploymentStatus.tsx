@@ -40,7 +40,7 @@ interface DeploymentOptionProps {
 }
 
 const Title = styled(Typography)`
-    margin: 10px 0;
+    margin: 8px 0;
 `;
 
 const DeploymentOptionContainer = styled.div<{ isExpanded: boolean }>`
