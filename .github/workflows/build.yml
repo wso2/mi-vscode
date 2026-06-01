@@ -204,6 +204,37 @@ jobs:
           node: 22.x
           rush-install: true
 
+      - name: Restore MI runtime cache
+        id: mi-runtime-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.wso2-mi/micro-integrator
+          key: mi-runtime-${{ runner.os }}-4.4.0-4.3.0
+
+      - name: Seed MI runtime cache
+        if: steps.mi-runtime-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          MI_CACHE_DIR="$HOME/.wso2-mi/micro-integrator"
+          mkdir -p "$MI_CACHE_DIR"
+
+          download_and_extract() {
+            local version="$1"
+            local archive="$MI_CACHE_DIR/wso2mi-$version.zip"
+            local url="https://mi-distribution.wso2.com/$version/wso2mi-$version.zip"
+
+            curl -L --fail "$url" -o "$archive"
+
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              7z x -aoa "$archive" "-o$MI_CACHE_DIR"
+            else
+              unzip -oq "$archive" -d "$MI_CACHE_DIR"
+            fi
+          }
+
+          download_and_extract "4.4.0"
+          download_and_extract "4.3.0"
+
       - name: Check for previous test results
         shell: bash
         if: github.run_attempt > 1
