@@ -232,12 +232,12 @@ export async function isMISetup(projectUri: string, miVersion: string): Promise<
                 showMIPathChangePrompt();
             }
         }
-    }
 
-    const miCachedPathInfo = getLatestMIPathFromCache(miVersion);
-    if (miCachedPathInfo && miCachedPathInfo.path) {
-        await config.update(SELECTED_SERVER_PATH, miCachedPathInfo.path, vscode.ConfigurationTarget.WorkspaceFolder);
-        return true;
+        const miCachedPathInfo = getLatestMIPathFromCache(miVersion);
+        if (miCachedPathInfo && miCachedPathInfo.path) {
+            await config.update(SELECTED_SERVER_PATH, miCachedPathInfo.path, vscode.ConfigurationTarget.WorkspaceFolder);
+            return true;
+        }
     }
 
     return false;
