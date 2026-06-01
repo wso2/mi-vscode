@@ -3262,13 +3262,13 @@ ${endpointAttributes}
                             workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri: folderUri });
                         }
                     } else {
-                        await commands.executeCommand('vscode.openFolder', Uri.file(path.join(directory, name)), true);
-                        return resolve({ filePath: path.join(directory, name) });
+                        commands.executeCommand('vscode.openFolder', Uri.file(path.join(directory, name)));
+                        resolve({ filePath: path.join(directory, name) });
                     }
 
                 } else {
-                    await commands.executeCommand('vscode.openFolder', Uri.file(path.join(directory, name)), false);
-                    return resolve({ filePath: path.join(directory, name) });
+                    commands.executeCommand('vscode.openFolder', Uri.file(path.join(directory, name)));
+                    resolve({ filePath: path.join(directory, name) });
                 }
             }
             resolve({ filePath: path.join(directory, name) });
