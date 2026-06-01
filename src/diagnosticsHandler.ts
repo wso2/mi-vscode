@@ -4,9 +4,11 @@ import {
   DiagnosticSeverity,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "./xmlLanguageService.js";
 import * as fs from "fs";
 import * as path from "path";
+// @ts-ignore — local CJS bundle, no ESM wrapper
+import { createProjectValidator } from "../synapse-validator/dist/index.js";
 
 type LanguageService = ReturnType<typeof getLanguageService>;
 
@@ -26,6 +28,7 @@ export class DiagnosticsHandler {
   private connection: Connection;
   private service: LanguageService;
   private diagnosticsByUri = new Map<string, Diagnostic[]>(); //Keeps errors/warnings per file.
+  private projectValidators = new Map<string, any>(); // schemaUri → ProjectValidator (reuses locked grammar pool)
 
   constructor(connection: Connection, service: LanguageService) {
     this.connection = connection;
@@ -57,6 +60,8 @@ export class DiagnosticsHandler {
     const resolved = this.service.resolveSchemaForDocument(fileName, xmlns, documentPath);
     if (resolved) {
       const autoUri = `auto://${documentPath ?? fileName}`;
+
+      // Register schema for completions/hover (unchanged from before).
       if (!this.service.hasSchema(autoUri)) {
         const imports = resolved.xsdPath
           ? this.loadReferencedXsds(resolved.xsdPath, resolved.xsdText)
@@ -75,11 +80,49 @@ export class DiagnosticsHandler {
           `[DiagnosticsHandler] Schema registered at ${autoUri}`
         );
       }
+
+      // Use ProjectValidator for diagnostics when we have an absolute XSD path.
+      const schemaFolder = resolved.xsdPath
+        ? path.dirname(path.resolve(resolved.xsdPath))
+        : undefined;
+
+      if (schemaFolder && this.isXmlDocument(xmlDoc)) {
+        this.connection.console.log(
+          `[DiagnosticsHandler] Validating ${document.uri} with ProjectValidator`
+        );
+        try {
+          const validator = await this.getOrCreateValidator(autoUri, schemaFolder, resolved.xsdPath);
+          const result = await validator.validate(text);
+          const allErrors = [...result.parseErrors, ...result.schemaErrors];
+          const xmlLines = text.split("\n");
+          const diagnostics: Diagnostic[] = allErrors.map((e: any) => {
+            const line = e.line > 0 ? e.line - 1 : 0;
+            const col = e.column > 0 ? e.column - 1 : 0;
+            const lineText = xmlLines[line] ?? "";
+            const tagStart = lineText.lastIndexOf("<", col);
+            const start = tagStart >= 0 ? { line, character: tagStart } : { line, character: col };
+            return {
+              range: { start, end: { line, character: col + 1 } },
+              message: e.message,
+              severity: DiagnosticSeverity.Error,
+              source: "xml-language-service",
+            };
+          });
+          this.send(document.uri, filterDiagnostics(diagnostics));
+          return;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          this.warn(`[DiagnosticsHandler] ProjectValidator failed for ${document.uri}; falling back to schema provider validation: ${message}`);
+        }
+      }
+
+      // Fallback: service.validate() when no absolute xsdPath is available.
       this.connection.console.log(
         `[DiagnosticsHandler] Validating ${document.uri} against auto schema`
       );
       const raw = await this.service.validate(autoUri, xmlDoc);
-      this.send(document.uri, this.toDiagnostics(raw));
+      const converted = this.toDiagnostics(raw);
+      this.send(document.uri, filterDiagnostics(converted));
       return;
     }
 
@@ -96,6 +139,21 @@ export class DiagnosticsHandler {
     this.send(uri, []);
   }
 
+  /** Destroys all cached ProjectValidators and releases their grammar pools. */
+  dispose(): void {
+    for (const validator of this.projectValidators.values()) {
+      try {
+        validator.destroy();
+      } catch {
+        // ignore errors during teardown
+      }
+    }
+    this.projectValidators.clear();
+    this.connection.console.log("[validator] All ProjectValidators destroyed");
+  }
+
+  // ── Private helpers ──────────────────────────────────────────────────────────
+
   private send(uri: string, diagnostics: Diagnostic[]): void {
     this.diagnosticsByUri.set(uri, diagnostics);
     this.connection.sendDiagnostics({ uri, diagnostics });
@@ -108,6 +166,73 @@ export class DiagnosticsHandler {
     } else {
       this.connection.console.log(message);
     }
+  }
+
+  /** Recursively reads all .xsd and .dtd files from schemaFolder.
+   *  Keys are paths relative to schemaFolder using forward slashes,
+   *  e.g. "synapse_config.xsd", "mediators/mediators.xsd". */
+  private async buildFilesMap(schemaFolder: string): Promise<Record<string, string>> {
+    const result: Record<string, string> = {};
+
+    const walk = (dir: string, prefix: string) => {
+      let entries: fs.Dirent[];
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full, rel);
+        } else if (entry.isFile()) {
+          const lower = entry.name.toLowerCase();
+          if (lower.endsWith(".xsd") || lower.endsWith(".dtd")) {
+            try {
+              result[rel] = fs.readFileSync(full, "utf-8");
+            } catch {
+              // skip unreadable files
+            }
+          }
+        }
+      }
+    };
+
+    walk(schemaFolder, "");
+    return result;
+  }
+
+  /** Returns a cached ProjectValidator for schemaUri, creating one if needed.
+   *  Each validator compiles the grammar once and reuses the locked pool on
+   *  subsequent validate() calls. */
+  private async getOrCreateValidator(schemaUri: string, schemaFolder: string, entryPath?: string): Promise<any> {
+    const existing = this.projectValidators.get(schemaUri);
+    if (existing) return existing;
+
+    const filesMap = await this.buildFilesMap(schemaFolder);
+
+    const requestedEntry = entryPath
+      ? this.toImportKey(schemaFolder, path.resolve(entryPath))
+      : undefined;
+
+    // Prefer the resolved XSD path as the entry point, then the built-in Synapse
+    // entry name, otherwise use the first root-level XSD.
+    let entry = "";
+    if (requestedEntry && requestedEntry in filesMap) {
+      entry = requestedEntry;
+    } else if ("synapse_config.xsd" in filesMap) {
+      entry = "synapse_config.xsd";
+    } else {
+      entry = Object.keys(filesMap).find((k) => !k.includes("/") && k.endsWith(".xsd")) ?? "";
+    }
+
+    const validator = await createProjectValidator({ entry, files: filesMap });
+    this.projectValidators.set(schemaUri, validator);
+    this.connection.console.log(
+      `[validator] Created ProjectValidator for ${schemaUri} (entry: ${entry}, files: ${Object.keys(filesMap).length})`
+    );
+    return validator;
   }
 
   /** Recursively loads referenced XSD files from xs:include/xs:import/xs:redefine schemaLocation values,
@@ -267,6 +392,10 @@ export class DiagnosticsHandler {
     return path.relative(rootDir, fullPath).split(path.sep).join("/");
   }
 
+  private isXmlDocument(document: unknown): boolean {
+    return typeof document === "object" && document !== null && Array.isArray((document as any).syntaxErrors);
+  }
+
   private toDiagnostics(raw: Awaited<ReturnType<LanguageService["validate"]>>): Diagnostic[] {
     return raw.map((d) => ({
       range: d.range,
@@ -275,4 +404,50 @@ export class DiagnosticsHandler {
       source: "xml-language-service",
     }));
   }
+}
+
+/**
+ * Removes redundant attribute and content-model diagnostics for elements that
+ * are already reported as unknown ("no declaration found for element 'X'").
+ * Keeping only the single "unknown element" error avoids noisy cascades like:
+ *   - "attribute 'name' is not declared for element 'variable'"
+ *   - "element 'variable' is not allowed for content model '(...)'"
+ */
+function filterDiagnostics(diagnostics: Diagnostic[]): Diagnostic[] {
+  // Step 1: collect element names that are outright unknown
+  const unknownElements = new Set<string>();
+  for (const d of diagnostics) {
+    const m = d.message.match(/no declaration found for element '([^']+)'/);
+    if (m) unknownElements.add(m[1]);
+  }
+
+  if (unknownElements.size === 0) return diagnostics;
+
+  // Step 2: drop attribute and content-model noise for those elements
+  const filtered = diagnostics.filter((d) => {
+    const msg = d.message;
+
+    // "attribute 'X' is not declared for element 'name'" — redundant when element is unknown
+    if (msg.includes("is not declared for element '") && msg.includes("attribute")) {
+      const m = msg.match(/is not declared for element '([^']+)'/);
+      if (m && unknownElements.has(m[1])) return false;
+    }
+
+    // "element 'name' is not allowed for content model '(...)'" — redundant when element is unknown
+    if (msg.includes("is not allowed for content model")) {
+      const m = msg.match(/element '([^']+)' is not allowed for content model/);
+      if (m && unknownElements.has(m[1])) return false;
+    }
+
+    return true;
+  });
+
+  // Step 3: deduplicate — Xerces can emit the same message twice for the same position
+  const seen = new Set<string>();
+  return filtered.filter((d) => {
+    const key = `${d.message}|${d.range.start.line}|${d.range.start.character}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

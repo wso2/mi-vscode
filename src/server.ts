@@ -8,16 +8,28 @@ import {
   DidChangeConfigurationParams,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import * as path from "path";
+import * as fs from "fs";
+import { fileURLToPath } from "url";
+import { getLanguageService } from "./xmlLanguageService.js";
 import { DiagnosticsHandler } from "./diagnosticsHandler.js";
 import { SchemaConfig, applySchemaSettings } from "./configuration.js";
 import { registerRequestHandlers } from "./requestHandlers.js";
-import { formatError } from "./utils.js";
+import { formatError } from "./lspUtils.js";
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 const service = getLanguageService();
 const diagnosticsHandler = new DiagnosticsHandler(connection, service);
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const SCHEMAS_ROOT = path.join(__dirname, "..", "resources", "schemas");
+
+const SCHEMA_FOLDER_MAP: Record<string, string> = {
+  "430": path.join(SCHEMAS_ROOT, "430"),
+  "440": path.join(SCHEMAS_ROOT, "440"),
+};
 
 let workspaceRoots: string[] = [];
 let initialConfigurationLoaded = false;
@@ -39,6 +51,42 @@ async function validateOpenDocumentsSafely(reason: string): Promise<void> {
   await Promise.all(documents.all().map((doc) => validateAndSendSafely(doc, reason)));
 }
 
+// ── Schema registration ──────────────────────────────────────────────────────
+
+function registerSchemas(schemas: any[]): void {
+  for (const schema of schemas) {
+    const pattern: string = schema.pattern;
+    const schemaFolder: string = schema.schema;
+
+    const folderPath = SCHEMA_FOLDER_MAP[schemaFolder];
+    if (!folderPath) {
+      connection.console.warn(`[server] Unknown schema folder: ${schemaFolder}`);
+      continue;
+    }
+
+    let xsdFile: string | undefined;
+    try {
+      // prefer synapse_config.xsd as the main entry point, fall back to first .xsd
+      const files = fs.readdirSync(folderPath);
+      const main = files.find((f) => f === "synapse_config.xsd");
+      const first = files.find((f) => f.endsWith(".xsd"));
+      xsdFile = main ?? first;
+    } catch (e) {
+      connection.console.warn(`[server] Cannot read schema folder ${folderPath}: ${e}`);
+      continue;
+    }
+
+    if (!xsdFile) {
+      connection.console.warn(`[server] No XSD found in: ${folderPath}`);
+      continue;
+    }
+
+    const xsdPath = path.join(folderPath, xsdFile);
+    service.addUserAssociation({ pattern, xsdPath, isBuiltIn: false, namespace: "" });
+    connection.console.log(`[server] Registered: ${pattern} → ${schemaFolder}`);
+  }
+}
+
 // ── LSP lifecycle ────────────────────────────────────────────────────────────
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
@@ -51,8 +99,14 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   connection.console.log(`initalize options:\n${JSON.stringify(params.initializationOptions, null, 2)}`);
   connection.console.log("======");
 
-  const schemas: SchemaConfig[] = (params.initializationOptions as any)?.schemas ?? [];
-  if (schemas.length > 0) applySchemaSettings(schemas, connection, service, workspaceRoots);
+  const options = params.initializationOptions ?? {};
+  const initialSchemas = options.schemas ?? [];
+
+  connection.console.log(`[server] Received ${initialSchemas.length} initial schema(s)`);
+
+  if (initialSchemas.length > 0) {
+    registerSchemas(initialSchemas);
+  }
 
   return {
     capabilities: {
@@ -65,7 +119,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       definitionProvider: true,
       referencesProvider: true,
       documentFormattingProvider: true,
-      workspace: { workspaceFolders: { supported: true } },
+      workspace: {
+        workspaceFolders: { supported: true },
+        fileOperations: {},
+      },
     },
   };
 });
@@ -84,11 +141,17 @@ connection.onInitialized(async () => {
 });
 
 connection.onDidChangeConfiguration((params: DidChangeConfigurationParams) => {
-  connection.console.log(
-    `[config] onDidChangeConfiguration fired: ${JSON.stringify(params.settings?.xmlLanguageServer)}`
-  );
-  const schemas: SchemaConfig[] = params.settings?.xmlLanguageServer?.schemas ?? [];
-  applySchemaSettings(schemas, connection, service, workspaceRoots, true);
+  connection.console.log("[server] Configuration changed");
+
+  const settings = params.settings?.xmlLanguageServer ?? params.settings ?? {};
+  const schemas = settings.schemas ?? [];
+
+  connection.console.log(`[server] Updating with ${schemas.length} schema(s)`);
+
+  if (schemas.length > 0) {
+    registerSchemas(schemas);
+  }
+
   if (!initialConfigurationLoaded) {
     connection.console.log("[config] Deferring configuration-change validation until initial configuration is loaded");
     return;
@@ -108,6 +171,7 @@ documents.onDidChangeContent(async (change) => {
 });
 
 connection.onShutdown(() => {
+  diagnosticsHandler.dispose();
   service.dispose();
 });
 

@@ -12,7 +12,7 @@ import {
   MarkupKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "./xmlLanguageService.js";
 import { DiagnosticsHandler } from "./diagnosticsHandler.js";
 import {
   getFileName,
@@ -22,7 +22,7 @@ import {
   toLSPDocumentSymbol,
   toLSPHover,
   toLSPFoldingRange,
-} from "./utils.js";
+} from "./lspUtils.js";
 
 type LanguageService = ReturnType<typeof getLanguageService>;
 

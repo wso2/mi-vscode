@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as path from "path";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { getLanguageService } from "xml-language-service";
+import { getLanguageService } from "../src/xmlLanguageService.js";
 import { DiagnosticsHandler } from "../src/diagnosticsHandler.js";
 import {
   createConnection,
