@@ -1,5 +1,6 @@
-import { validate } from "xerces-wasm";
-import type { ValidationResult, Diagnostic as XercesDiagnostic, SchemaBundle as XercesSchemaBundle, XmlInput as XercesXmlInput, XsdInput as XercesXsdInput } from "xerces-wasm";
+// @ts-ignore
+import { validate } from "../../synapse-validator/dist/index.js";
+import type { ValidationResult, Diagnostic as XercesDiagnostic, SchemaBundle as XercesSchemaBundle, XmlInput as XercesXmlInput, XsdInput as XercesXsdInput } from "../../synapse-validator/dist/types.js";
 import { Range } from "../utils/rangeUtils.js";
 import { Position } from "../utils/positionUtils.js";
 
@@ -158,7 +159,7 @@ export class XsdValidatorService {
   async validate(xmlText: string): Promise<Diagnostic[]> {
     let result: ValidationResult;
 
-    // We do this if/else check simply because the xerces-wasm package requires the 
+    // We do this if/else check simply because the Xerces validator requires the 
     // `targetNamespace` as the 3rd parameter. We need to extract it via Regex, and 
     // the text is located in a different property depending on if it's a Bundle or a String.
     // Notice that `this.xsd` is passed directly as the 2nd parameter in both cases.

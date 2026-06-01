@@ -171,6 +171,7 @@ documents.onDidChangeContent(async (change) => {
 });
 
 connection.onShutdown(() => {
+  diagnosticsHandler.dispose();
   service.dispose();
 });
 

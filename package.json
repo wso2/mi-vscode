@@ -4,8 +4,8 @@
   "description": "LSP wrapper for xml-language-service",
   "main": "dist/server.js",
   "scripts": {
-    "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl && cp node_modules/xerces-wasm/wasm/xerces_validator.wasm dist/xerces_validator.wasm",
-    "bundle": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl && cp node_modules/xerces-wasm/wasm/xerces_validator.wasm dist/xerces_validator.wasm && cp -r resources dist/resources",
+    "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl",
+    "bundle": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl && cp synapse-validator/wasm/xerces_validator.wasm dist/xerces_validator.wasm && cp -r resources dist/resources",
     "build:watch": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run"
@@ -13,8 +13,7 @@
   "dependencies": {
     "@xml-tools/parser": "^1.0.11",
     "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.12",
-    "xerces-wasm": "^1.0.0"
+    "vscode-languageserver-textdocument": "^1.0.12"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
