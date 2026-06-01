@@ -200,6 +200,7 @@ export class Welcome {
         } catch (error) {
             console.log('No, Don\'t Ask Again button not found, proceeding without clicking');
         }
+        await this.waitUntilDeattached();
         console.log('Environment setup done');
     }
 }
