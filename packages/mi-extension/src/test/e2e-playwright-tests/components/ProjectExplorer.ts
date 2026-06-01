@@ -70,7 +70,7 @@ export class ProjectExplorer {
             try {
                 // Click sidebar and select WSO2 Integrator: MI to refresh the explorer
                 await this.page.waitForSelector(`a[aria-label="WSO2 Integrator"]`);
-                await this.page.click(`a[aria-label="WSO2 Integrator"]`);
+                return await this.page.click(`a[aria-label="WSO2 Integrator"]`);
             } catch (error) {
                 console.error(`Failed to select sidebar item: ${error}`);
             }
