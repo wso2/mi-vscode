@@ -3,3 +3,4 @@ synapse-schemas/mediators/connectors.xsd
 # test resources
 src/test/e2e-playwright-tests/data/new-project/**/*
 test-results/**/*
+!src/test/e2e-playwright-tests/data/bookservice-1.0.0.zip
