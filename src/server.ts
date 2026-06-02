@@ -24,7 +24,7 @@ const diagnosticsHandler = new DiagnosticsHandler(connection, service);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SCHEMAS_ROOT = path.join(__dirname, "..", "resources", "schemas");
+const SCHEMAS_ROOT = path.join(__dirname, "resources", "schemas");
 
 const SCHEMA_FOLDER_MAP: Record<string, string> = {
   "430": path.join(SCHEMAS_ROOT, "430"),
