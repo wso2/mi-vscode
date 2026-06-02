@@ -9,7 +9,6 @@ import {
   RenameParams,
   DefinitionParams,
   ReferenceParams,
-  MarkupKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getLanguageService } from "./xmlLanguageService.js";
@@ -17,7 +16,6 @@ import { DiagnosticsHandler } from "./diagnosticsHandler.js";
 import {
   getFileName,
   getDocumentPath,
-  escapeMd,
   toLSPCompletionList,
   toLSPDocumentSymbol,
   toLSPHover,
@@ -30,7 +28,7 @@ export function registerRequestHandlers(
   connection: Connection,
   documents: TextDocuments<TextDocument>,
   service: LanguageService,
-  diagnosticsHandler: DiagnosticsHandler
+  diagnosticsHandler: DiagnosticsHandler,
 ): void {
   connection.onCompletion((params: CompletionParams) => {
     connection.console.log(
@@ -52,14 +50,10 @@ export function registerRequestHandlers(
     if (!document) return null;
     const { line, character } = params.position;
 
-    const errors = diagnosticsHandler.getDiagnosticsAt(document.uri, line, character);
-    if (errors.length > 0) {
-      const isError = (d: typeof errors[number]) => d.severity === undefined || d.severity === 1;
-      const value = errors
-        .map((d) => `${isError(d) ? "**ERROR**" : "**WARNING**"} — ${escapeMd(d.message)}`)
-        .join("\n\n");
-      return { contents: { kind: MarkupKind.Markdown, value } };
-    }
+    // Don't show schema hover for elements that Xerces has already flagged as invalid.
+    // VS Code displays the diagnostic natively; returning null avoids misleading hover
+    // content from local-only XSD element definitions (e.g. xquery's <variable>).
+    if (diagnosticsHandler.hasErrorAt(document.uri, line, character)) return null;
 
     const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
     const result = service.doHover(xmlDoc, params.position, getFileName(document.uri), getDocumentPath(document.uri));
