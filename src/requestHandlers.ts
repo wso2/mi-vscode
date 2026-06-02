@@ -6,6 +6,7 @@ import {
   DocumentSymbolParams,
   FoldingRangeParams,
   DocumentFormattingParams,
+  DocumentRangeFormattingParams,
   RenameParams,
   DefinitionParams,
   ReferenceParams,
@@ -141,6 +142,25 @@ export function registerRequestHandlers(
     if (!document) return [];
     const xmlDoc = getParsedDoc(document);
     return service.format(xmlDoc, {
+      tabSize: params.options.tabSize,
+      insertSpaces: params.options.insertSpaces,
+    }).map((edit) => ({
+      range: {
+        start: document.positionAt(edit.startOffset),
+        end: document.positionAt(edit.endOffset),
+      },
+      newText: edit.newText,
+    }));
+  });
+
+  connection.onDocumentRangeFormatting((params: DocumentRangeFormattingParams) => {
+    connection.console.log(`[onDocumentRangeFormatting] Triggered for ${params.textDocument.uri}`);
+    const document = documents.get(params.textDocument.uri);
+    if (!document) return [];
+    const xmlDoc = getParsedDoc(document);
+    const startOffset = document.offsetAt(params.range.start);
+    const endOffset = document.offsetAt(params.range.end);
+    return service.formatRange(xmlDoc, startOffset, endOffset, {
       tabSize: params.options.tabSize,
       insertSpaces: params.options.insertSpaces,
     }).map((edit) => ({

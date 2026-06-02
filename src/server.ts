@@ -119,6 +119,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       definitionProvider: true,
       referencesProvider: true,
       documentFormattingProvider: true,
+      documentRangeFormattingProvider: true,
       workspace: {
         workspaceFolders: { supported: true },
         fileOperations: {},
