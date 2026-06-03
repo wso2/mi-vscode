@@ -128,7 +128,6 @@ jobs:
           PLATFORM_DEV_DEVANT_ASGARDEO_CLIENT_ID: ${{ secrets.PLATFORM_DEV_DEVANT_ASGARDEO_CLIENT_ID }}
 
       - name: Run Trivy vulnerability scanner
-        if: ${{ false }}
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: 'fs'
@@ -136,7 +135,7 @@ jobs:
           format: 'table'
           exit-code: '1'
           timeout: '10m'
-          skip-dirs: 'common/temp'
+          skip-dirs: 'common/temp,packages/mi-language-server'
           ignore-unfixed: true
 
   ExtTest_MI:
