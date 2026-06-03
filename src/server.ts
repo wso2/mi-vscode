@@ -33,6 +33,7 @@ const SCHEMA_FOLDER_MAP: Record<string, string> = {
 
 let workspaceRoots: string[] = [];
 let initialConfigurationLoaded = false;
+let initializationSchemas: any[] = [];
 
 // ── Validation helpers ───────────────────────────────────────────────────────
 
@@ -100,12 +101,12 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   connection.console.log("======");
 
   const options = params.initializationOptions ?? {};
-  const initialSchemas = options.schemas ?? [];
+  initializationSchemas = options.schemas ?? [];
 
-  connection.console.log(`[server] Received ${initialSchemas.length} initial schema(s)`);
+  connection.console.log(`[server] Received ${initializationSchemas.length} initial schema(s)`);
 
-  if (initialSchemas.length > 0) {
-    registerSchemas(initialSchemas);
+  if (initializationSchemas.length > 0) {
+    registerSchemas(initializationSchemas);
   }
 
   return {
@@ -155,8 +156,19 @@ connection.onDidChangeConfiguration((params: DidChangeConfigurationParams) => {
   service.invalidateAutoSchemas();
   diagnosticsHandler.dispose();
 
+  // Clear all user associations so updated settings replace rather than
+  // accumulate on top of the previous ones.
+  service.clearUserAssociations();
+
+  // Re-apply the extension's built-in schema mappings (sent at initialise time
+  // via initializationOptions) that were lost when we cleared associations.
+  if (initializationSchemas.length > 0) {
+    registerSchemas(initializationSchemas);
+  }
+
+  // Apply the updated workspace config schemas ({ pattern, xsdPath } shape).
   if (schemas.length > 0) {
-    registerSchemas(schemas);
+    applySchemaSettings(schemas, connection, service, workspaceRoots);
   }
 
   if (!initialConfigurationLoaded) {

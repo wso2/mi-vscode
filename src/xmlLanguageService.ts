@@ -106,6 +106,11 @@ export function getLanguageService() {
       schemaProvider.addUserAssociation(association);
     },
 
+    /** Removes all user-registered associations so a fresh set can be applied. */
+    clearUserAssociations(): void {
+      schemaProvider.clearUserAssociations();
+    },
+
     /** Clears all auto-registered schemas so they are re-loaded from disk on next validation. */
     invalidateAutoSchemas(): void {
       schemaProvider.invalidateAutoSchemas();
