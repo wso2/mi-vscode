@@ -46,7 +46,7 @@ runs:
   steps:
     - name: Init submodules
       shell: bash
-      run: pnpm run init-submodules
+      run: node common/scripts/init-submodules.js
 
     - name: Setup Rush
       uses: gigara/setup-rush@v1.2.0
