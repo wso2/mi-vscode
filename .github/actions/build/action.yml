@@ -44,6 +44,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Init submodules
+      shell: bash
+      run: node common/scripts/init-submodules.js
+
     - name: Setup Rush
       uses: gigara/setup-rush@v1.2.0
       with:
@@ -52,10 +56,6 @@ runs:
         cache-rush: ${{ inputs.enableCache }}
         cache-pnpm: ${{ inputs.enableCache }}
         set-env: ${{ inputs.enableCache }}
-
-    - name: Init submodules
-      shell: bash
-      run: pnpm run init-submodules
 
     - name: Update version - MI
       if: ${{ inputs.mi == 'true' }}
