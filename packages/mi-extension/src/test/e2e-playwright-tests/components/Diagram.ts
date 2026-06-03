@@ -486,12 +486,18 @@ export class SidePanel {
     }
 
     public async goToConnectionsPage() {
-        const resourceView = await switchToIFrame("Resource View", this.container.page());
-        if (!resourceView) {
-            throw new Error("Failed to switch to Resource View iframe");
+        const connectionsPageBtn = this.sidePanel.getByRole('button', { name: /^Connections$/i });
+
+        try {
+            await connectionsPageBtn.waitFor({ state: 'visible', timeout: 10000 });
+            await connectionsPageBtn.click();
+        } catch {
+            const fallbackConnectionsPageBtn = this.sidePanel.locator(`vscode-button:text("Connections") >> ..`).first();
+            await fallbackConnectionsPageBtn.waitFor();
+            await fallbackConnectionsPageBtn.click();
         }
-        await resourceView.getByRole('button', { name: ' Connections' }).waitFor();
-        await resourceView.getByRole('button', { name: ' Connections' }).click();
+
+        await this.sidePanel.getByText('Available Connections').waitFor();
     }
 
     public async addNewConnection() {
