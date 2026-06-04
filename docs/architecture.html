@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Architecture — MI XML Language Server</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">MI</div>
+        <div>
+          <div class="title">MI XML Language Server</div>
+          <div class="subtitle">Architecture &amp; Flow Docs</div>
+        </div>
+      </div>
+      <nav>
+        <div class="group-label">Getting Started</div>
+        <a href="index.html">Overview</a>
+
+        <div class="group-label">Deep Dive</div>
+        <a href="architecture.html" class="active">Architecture</a>
+        <a href="architecture.html#layers">The layers</a>
+        <a href="architecture.html#schema">Schema subsystem</a>
+        <a href="architecture.html#dual">The two-engine model</a>
+        <a href="architecture.html#caches">Caches &amp; keys</a>
+        <a href="architecture.html#tradeoffs">Trade-offs &amp; smells</a>
+        <a href="components.html">Component Reference</a>
+        <a href="flows.html">Flows &amp; Sequences</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="inner">
+        <span class="kicker">Deep Dive</span>
+        <h1>Architecture</h1>
+        <p class="lead">How the pieces fit, why the schema subsystem is shaped the way it is, and
+          where the design tensions live.</p>
+
+        <h2 id="layers">The layers</h2>
+        <p>The macro-structure is a clean, idiomatic LSP stack. Each layer only talks to the one
+          beneath it, with two exceptions noted later (diagnostics and the WASM module).</p>
+
+        <table>
+          <thead><tr><th>Layer</th><th>Responsibility</th><th>Key files</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Transport</strong></td><td>Own the LSP connection, lifecycle events, capability advertisement, and config.</td><td><span class="file-ref">server.ts</span></td></tr>
+            <tr><td><strong>Request routing</strong></td><td>Translate each LSP request into a service call; cache the parsed document per version.</td><td><span class="file-ref">requestHandlers.ts</span></td></tr>
+            <tr><td><strong>Service façade</strong></td><td>A single object exposing every capability; the seam the rest of the app depends on.</td><td><span class="file-ref">xmlLanguageService.ts</span></td></tr>
+            <tr><td><strong>Parsing</strong></td><td>Turn text into a concrete syntax tree (@xml-tools) then a friendly AST.</td><td><span class="file-ref">parser/</span></td></tr>
+            <tr><td><strong>Features</strong></td><td>Stateless functions, one per LSP feature, operating on the AST + a completion provider.</td><td><span class="file-ref">services/</span></td></tr>
+            <tr><td><strong>Schema</strong></td><td>Decide which XSD applies, compile/cache validators, build completion models.</td><td><span class="file-ref">schema/</span></td></tr>
+            <tr><td><strong>Diagnostics</strong></td><td>Orchestrate validation: resolve schema, load the schema graph, run Xerces, map errors.</td><td><span class="file-ref">diagnosticsHandler.ts</span></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          <p><span class="label">Why this is good:</span> feature providers are small and
+          single-purpose, the façade is a real seam (you could swap the transport without touching
+          features), and request handlers are thin. The bones are right.</p>
+        </div>
+
+        <h2 id="schema">The schema subsystem</h2>
+        <p>This is where the interesting design decisions live. Three collaborators:</p>
+
+        <figure class="mermaid">
+flowchart LR
+    subgraph SP["SchemaProvider — the registry"]
+      V["validators&nbsp;Map<br/><i>xsdKey → XsdValidatorService</i>"]
+      D2S["documentToSchema&nbsp;Map<br/><i>docUri → xsdKey</i>"]
+      CPS["completionProviders&nbsp;Map<br/><i>uri/key → XsdCompletionProvider</i>"]
+    end
+    SA["SchemaAssociator<br/><i>findSchema(file, ns, path)</i>"]
+    CP["XsdCompletionProvider<br/><i>parses XSD → element model</i>"]
+    XV["XsdValidatorService<br/><i>wraps WASM validate()</i>"]
+
+    SP --> SA
+    SP --> CP
+    SP --> XV
+    style SP fill:#161b22,stroke:#ff7300,color:#f0f6fc
+        </figure>
+
+        <h4>SchemaAssociator — "which XSD?"</h4>
+        <p>Maps a document to an XSD by two rules, in strict priority:</p>
+        <ol>
+          <li><strong>User associations</strong> (from settings / init options) matched by <em>glob pattern</em> on the file path. Init options use bundled 430/440 schemas but are still registered as user associations.</li>
+          <li><strong>Built-in associations</strong> matched by <em>XML namespace</em> (the Synapse namespace → bundled <code>synapse_config.xsd</code>) only when no user pattern matched.</li>
+        </ol>
+        <p>In the usual MI setup, path patterns choose the schema version. Namespace matching is a fallback/default route, not the primary 430/440 selection mechanism.</p>
+
+        <h4>SchemaProvider — the registry</h4>
+        <p>Holds three maps (see <a href="#caches">Caches &amp; keys</a>). It keeps one
+          <code>XsdValidatorService</code> wrapper per unique XSD key and reuses it across every document
+          that resolves to the same schema, and it builds the completion model from the fully-inlined XSD
+          (via <code>inlineIncludes()</code>) so <code>xs:include</code>d types are available. (The heavy
+          grammar compilation actually happens later, inside the WASM <code>ProjectValidator</code> that
+          <code>DiagnosticsHandler</code> owns — the wrapper itself just stores the XSD text.)</p>
+
+        <h4>XsdCompletionProvider — the completion brain</h4>
+        <p>A hand-written XSD reader (462 lines) that parses element/attribute declarations out of the
+          XSD text and answers "what can go here?" for completion and hover.</p>
+
+        <h2 id="dual">The two-engine model <span class="tag orange">important</span></h2>
+        <p>This is the single most important thing to internalise. <strong>XSD semantics are
+          interpreted twice, by two unrelated implementations</strong>, on two different paths:</p>
+
+        <figure class="mermaid">
+flowchart TB
+    DOC["📄 open .xml document"]
+
+    DOC --> R["resolveSchemaForDocument()"]
+
+    R --> PATHA
+    R --> PATHB
+
+    subgraph PATHA["① Diagnostics path"]
+      direction TB
+      BFM["buildFilesMap()<br/><i>walk whole folder,<br/>grab every .xsd/.dtd</i>"]
+      PV["ProjectValidator<br/>(Xerces WASM)"]
+      DG["diagnostics"]
+      BFM --> PV --> DG
+    end
+
+    subgraph PATHB["② Completion / hover path"]
+      direction TB
+      LRX["loadReferencedXsds()<br/><i>follow schemaLocation<br/>references recursively</i>"]
+      XCP["XsdCompletionProvider<br/>(hand-written reader)"]
+      CO["completions / hover"]
+      LRX --> XCP --> CO
+    end
+
+    style PATHA fill:#13241a,stroke:#3fb950,color:#f0f6fc
+    style PATHB fill:#1a1726,stroke:#bc8cff,color:#f0f6fc
+    style PV fill:#161b22,stroke:#3fb950
+    style XCP fill:#161b22,stroke:#bc8cff
+        </figure>
+        <figcaption>Same document, two engines, two different file-gathering strategies.</figcaption>
+
+        <table>
+          <thead><tr><th></th><th>Diagnostics</th><th>Completion / hover</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Engine</strong></td><td>Xerces (WASM) <code>ProjectValidator</code></td><td>hand-written <code>XsdCompletionProvider</code></td></tr>
+            <tr><td><strong>Schema files from</strong></td><td><code>buildFilesMap()</code> — whole folder</td><td><code>loadReferencedXsds()</code> — follows refs</td></tr>
+            <tr><td><strong>Source of truth?</strong></td><td>yes, for correctness</td><td>independent model</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout warn">
+          <p><span class="label">Consequence:</span> the two engines can disagree — completion may
+          offer an element Xerces then flags as invalid. The hover handler papers over this with a
+          <code>hasErrorAt()</code> check that suppresses hover wherever a diagnostic already exists
+          (<span class="file-ref">requestHandlers.ts:72</span>). That check is a <em>symptom</em> of
+          the dual-engine split, not a feature.</p>
+        </div>
+
+        <div class="callout info">
+          <p><span class="label">Why it exists:</span> Xerces gives authoritative validation but no
+          ergonomic API for "what completions are valid here?". The hand-written reader fills that
+          gap. The pragmatic split works — but it's the place future bugs will concentrate.</p>
+        </div>
+
+        <h2 id="caches">Caches &amp; keys</h2>
+        <p>Four caches exist, keyed differently. Knowing the keys explains most of the behaviour.</p>
+        <table>
+          <thead><tr><th>Cache</th><th>Key</th><th>Lives in</th><th>Cleared by</th></tr></thead>
+          <tbody>
+            <tr><td>Parsed AST</td><td><code>uri</code> + version</td><td>requestHandlers</td><td>document close</td></tr>
+            <tr><td><code>projectValidators</code> (WASM)</td><td><code>xsdPath</code></td><td>DiagnosticsHandler</td><td><code>dispose()</code></td></tr>
+            <tr><td><code>validators</code> (XsdValidatorService)</td><td><code>xsdPath ?? uri</code></td><td>SchemaProvider</td><td>invalidate / dispose</td></tr>
+            <tr><td><code>completionProviders</code></td><td><code>auto://uri</code> <em>or</em> <code>path|ns</code></td><td>SchemaProvider</td><td>invalidateAutoSchemas</td></tr>
+          </tbody>
+        </table>
+        <div class="callout warn">
+          <p><span class="label">Fragility:</span> the <code>auto://&lt;path&gt;</code> URI is a
+          synthetic key invented by <code>DiagnosticsHandler</code> purely to register completion
+          schemas inside <code>SchemaProvider</code>. The completion cache is keyed inconsistently
+          (<code>auto://</code> sometimes, <code>path|ns</code> other times), so the layers are
+          coupled by a string convention rather than a typed contract.</p>
+        </div>
+
+        <h2 id="tradeoffs">Trade-offs &amp; known smells</h2>
+        <p>The architecture ships and all tests pass. These are the spots to watch, in rough priority:</p>
+        <ol>
+          <li><strong>Dual engine &amp; dual schema-loading</strong> (above) — one <code>SchemaResolver</code> feeding both paths would collapse this.</li>
+          <li><strong>DiagnosticsHandler does too much</strong> — ~half of its 453 lines (<code>loadReferencedXsds</code>, <code>buildFilesMap</code>, <code>findSchemaLocations</code>, <code>resolveLocalReference</code>) is schema-graph crawling that belongs in <code>schema/</code>.</li>
+          <li><strong>Dead-weight validator</strong> — an <code>XsdValidatorService</code> is instantiated for every registered schema in <code>registerSchema</code>, but its <code>validate()</code> is only reached on a fallback path that almost never fires (built-ins/user schemas always carry an <code>xsdPath</code>, so diagnostics go through the WASM <code>ProjectValidator</code> instead). Cheap to create, but it's an unused branch carrying its own re-parsing cost if ever hit.</li>
+          <li><strong>No-fallback resolution</strong> — if a user association matches but its XSD can't be read, <code>findSchema</code> returns <code>null</code> instead of falling through to the built-in schema, killing all validation for that file.</li>
+          <li><strong>Namespace fallback depends on parser support</strong> — diagnostics asks for <code>getNamespace?.()</code>, but the current <code>XMLDocumentImpl</code> does not expose that method. Pattern-based associations still work.</li>
+          <li><strong>Two config shapes</strong> — <code>{pattern, schema:"430"}</code> (init options) and <code>{pattern, xsdPath}</code> (settings) take two code paths to the same destination.</li>
+        </ol>
+
+        <div class="footer-nav">
+          <a class="prev" href="index.html">
+            <span class="dir">← Prev</span>
+            <span class="lbl">Overview</span>
+          </a>
+          <a class="next" href="components.html">
+            <span class="dir">Next →</span>
+            <span class="lbl">Component Reference</span>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true, theme: 'dark',
+      themeVariables: { primaryColor:'#1c2128', primaryBorderColor:'#ff7300', primaryTextColor:'#f0f6fc', lineColor:'#8b949e', fontSize:'14px' },
+      flowchart: { curve: 'basis', htmlLabels: true }
+    });
+  </script>
+</body>
+</html>

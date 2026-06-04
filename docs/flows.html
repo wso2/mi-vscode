@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flows &amp; Sequences — MI XML Language Server</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">MI</div>
+        <div>
+          <div class="title">MI XML Language Server</div>
+          <div class="subtitle">Architecture &amp; Flow Docs</div>
+        </div>
+      </div>
+      <nav>
+        <div class="group-label">Getting Started</div>
+        <a href="index.html">Overview</a>
+        <div class="group-label">Deep Dive</div>
+        <a href="architecture.html">Architecture</a>
+        <a href="components.html">Component Reference</a>
+        <a href="flows.html" class="active">Flows &amp; Sequences</a>
+        <a href="flows.html#startup">1 · Startup</a>
+        <a href="flows.html#validate">2 · Validation</a>
+        <a href="flows.html#resolve">3 · Schema resolution</a>
+        <a href="flows.html#complete">4 · Completion</a>
+        <a href="flows.html#hover">5 · Hover</a>
+        <a href="flows.html#config">6 · Config reload</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="inner">
+        <span class="kicker">Deep Dive</span>
+        <h1>Flows &amp; Sequences</h1>
+        <p class="lead">How things actually happen at runtime — the six flows that cover almost
+          everything the server does.</p>
+
+        <!-- ── 1 ────────────────────────────────────────────────────────── -->
+        <h2 id="startup">1 · Startup &amp; initialization</h2>
+        <p>Two-phase handshake. Init-option schema mappings are registered during
+          <code>initialize</code>; workspace settings are pulled afterwards during
+          <code>initialized</code>. Validation is deferred until both are in place.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as VS Code Client
+    participant S as server.ts
+    participant SA as SchemaAssociator
+
+    C->>S: initialize(params)
+    Note over S: read workspaceFolders<br/>read initializationOptions.schemas
+    S->>SA: registerSchemas() — pattern → bundled 430/440
+    S-->>C: capabilities (completion, hover, …)
+    C->>S: initialized
+    S->>C: workspace/configuration("xmlLanguageServer")
+    C-->>S: { schemas: [{pattern, xsdPath}] }
+    S->>SA: applySchemaSettings() — workspace schemas
+    Note over S: initialConfigurationLoaded = true
+    S->>S: validateOpenDocumentsSafely()
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Why the deferral?</span> If a document change arrived before the
+          workspace config was pulled, it would validate against the wrong (or no) schema. The
+          <code>initialConfigurationLoaded</code> flag gates all validation until phase two completes.</p>
+        </div>
+
+        <!-- ── 2 ────────────────────────────────────────────────────────── -->
+        <h2 id="validate">2 · Document change → diagnostics</h2>
+        <p>The main loop. Every edit runs this. Note both engines are touched: the completion schema is
+          registered <em>and</em> the WASM validator runs.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as server.ts
+    participant DH as DiagnosticsHandler
+    participant SP as SchemaProvider
+    participant W as Xerces WASM
+
+    C->>S: textDocument/didChangeContent
+    S->>DH: validateAndSend(document)
+    DH->>DH: parseXMLDocument(); ns = getNamespace?.()
+    DH->>SP: resolveSchemaForDocument(file, ns, path)
+
+    alt schema resolved
+        opt first time for this document (!hasSchema)
+            Note over DH,SP: register completion schema (engine ②)
+            DH->>DH: loadReferencedXsds() — follow refs
+            DH->>SP: registerSchema(auto://path, imports)
+        end
+
+        Note over DH,W: run diagnostics (engine ①)
+        DH->>DH: getOrCreateValidator(xsdPath)<br/>buildFilesMap() — whole folder
+        DH->>W: validator.validate(text)
+        W-->>DH: parseErrors + schemaErrors
+        DH->>DH: map ranges + filterDiagnostics()
+        DH-->>C: publishDiagnostics(uri, [...])
+    else no schema
+        DH-->>C: publishDiagnostics(uri, []) — clear stale
+    end
+        </figure>
+
+        <h4>Step by step</h4>
+        <ol class="steps">
+          <li><span class="st">Parse</span> The document text becomes an AST; a namespace is used only if the parsed document exposes one.</li>
+          <li><span class="st">Resolve</span> <code>SchemaAssociator</code> picks an XSD by user/init pattern first, then by built-in namespace fallback.</li>
+          <li><span class="st">Register completion schema</span> <em>(once per document)</em> The referenced XSD graph is loaded and registered under an <code>auto://&lt;path&gt;</code> URI so completion/hover have a model. Skipped on later edits via <code>hasSchema()</code>.</li>
+          <li><span class="st">Get validator</span> A <code>ProjectValidator</code> is created (or reused) for that <code>xsdPath</code>, fed every <code>.xsd/.dtd</code> in the folder.</li>
+          <li><span class="st">Validate</span> Xerces runs syntax + schema validation in one SAX pass.</li>
+          <li><span class="st">Map &amp; filter</span> Raw errors → LSP ranges; noisy cascades collapsed and de-duplicated.</li>
+          <li><span class="st">Publish</span> Diagnostics are sent; if no schema matched, any stale diagnostics are cleared.</li>
+        </ol>
+
+        <!-- ── 3 ────────────────────────────────────────────────────────── -->
+        <h2 id="resolve">3 · Schema resolution priority</h2>
+        <p>The decision <code>SchemaAssociator.findSchema()</code> makes. User patterns always win over
+          built-in namespace matches.</p>
+
+        <figure class="mermaid">
+flowchart TD
+    A["findSchema(file, xmlns, path)"] --> B{user association<br/>pattern matches?}
+    B -- yes --> C["read XSD file"]
+    C --> D{readable?}
+    D -- yes --> E["✅ return custom schema"]
+    D -- no --> F["⚠️ return null<br/><i>no built-in fallback!</i>"]
+    B -- no --> G{built-in namespace<br/>matches xmlns?}
+    G -- yes --> H["✅ return built-in schema"]
+    G -- no --> I["return null → clear diagnostics"]
+
+    style E fill:#13241a,stroke:#3fb950,color:#f0f6fc
+    style H fill:#13241a,stroke:#3fb950,color:#f0f6fc
+    style F fill:#2a1416,stroke:#f85149,color:#f0f6fc
+        </figure>
+
+        <div class="callout warn">
+          <p><span class="label">The red branch:</span> a user association that matches but points at an
+          unreadable XSD returns <code>null</code> rather than falling through to the built-in schema —
+          so a single bad <code>xsdPath</code> in settings silently disables validation for those files.
+          See <a href="architecture.html#tradeoffs">trade-offs</a>.</p>
+        </div>
+
+        <!-- ── 4 ────────────────────────────────────────────────────────── -->
+        <h2 id="complete">4 · Completion request</h2>
+        <p>Read-only and fast — served entirely by engine ②. It prefers the rich <code>auto://</code>
+          provider built during validation; if that isn't ready yet it builds a partial one on the fly.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant RH as requestHandlers
+    participant LS as languageService
+    participant SP as SchemaProvider
+    participant CP as XsdCompletionProvider
+
+    C->>RH: textDocument/completion(pos)
+    RH->>RH: getParsedDoc() — version cache
+    RH->>LS: doComplete(doc, pos, file, path)
+    LS->>SP: resolveSchemaForDocument(file, ns, path)
+    alt auto:// provider exists
+        SP-->>LS: cached full provider
+    else not yet registered
+        SP->>CP: new provider from raw XSD (partial, uncached)
+        CP-->>SP: provider
+    end
+    LS-->>RH: CompletionList
+    RH-->>C: items
+        </figure>
+
+        <!-- ── 5 ────────────────────────────────────────────────────────── -->
+        <h2 id="hover">5 · Hover (with diagnostic suppression)</h2>
+        <p>Hover is where the two engines meet. To avoid showing misleading hover content for something
+          Xerces flagged as invalid, the handler checks the diagnostics first.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant RH as requestHandlers
+    participant DH as DiagnosticsHandler
+    participant LS as languageService
+
+    C->>RH: textDocument/hover(pos)
+    RH->>DH: hasErrorAt(uri, line, char)
+    alt diagnostic covers this position
+        DH-->>RH: true
+        RH-->>C: null — let the diagnostic speak
+    else clean
+        DH-->>RH: false
+        RH->>LS: doHover(doc, pos, file, path)
+        LS-->>RH: hover content
+        RH-->>C: hover
+    end
+        </figure>
+
+        <div class="callout">
+          <p><span class="label">Reconciliation point:</span> this <code>hasErrorAt()</code> gate is how
+          the two engines are kept from contradicting each other in the UI — engine ① (Xerces) gets the
+          last word over engine ② (completion model).</p>
+        </div>
+
+        <!-- ── 6 ────────────────────────────────────────────────────────── -->
+        <h2 id="config">6 · Configuration reload</h2>
+        <p>When settings change, everything schema-related is rebuilt from scratch so updated settings
+          <em>replace</em> rather than accumulate on top of the old ones.</p>
+
+        <figure class="mermaid">
+flowchart TD
+    A["onDidChangeConfiguration"] --> B["invalidateAutoSchemas()<br/><i>drop auto:// validators + providers</i>"]
+    B --> C["diagnosticsHandler.dispose()<br/><i>destroy ProjectValidators</i>"]
+    C --> D["clearUserAssociations()<br/><i>wipe the slate</i>"]
+    D --> E["re-register initializationSchemas<br/><i>pattern → bundled 430/440</i>"]
+    E --> F["applySchemaSettings(workspace)<br/><i>{pattern, xsdPath}</i>"]
+    F --> G{initialConfigurationLoaded?}
+    G -- yes --> H["re-validate all open docs"]
+    G -- no --> I["defer"]
+
+    style D fill:#2a1f10,stroke:#d29922,color:#f0f6fc
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">The fix this encodes:</span> earlier code re-registered schemas on every
+          change <em>without</em> clearing first, so associations piled up. Clearing then re-applying
+          both the init-option and workspace sets (in that order) keeps resolution priority identical to a
+          fresh startup.</p>
+        </div>
+
+        <hr />
+        <h3>All six flows at a glance</h3>
+        <table>
+          <thead><tr><th>#</th><th>Trigger</th><th>Engine(s)</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><code>initialize</code> / <code>initialized</code></td><td>—</td><td>schemas registered, capabilities advertised</td></tr>
+            <tr><td>2</td><td><code>didChangeContent</code></td><td>① + ②</td><td>diagnostics published</td></tr>
+            <tr><td>3</td><td>(internal) <code>findSchema</code></td><td>—</td><td>an XSD chosen, or none</td></tr>
+            <tr><td>4</td><td><code>completion</code></td><td>②</td><td>completion list</td></tr>
+            <tr><td>5</td><td><code>hover</code></td><td>① gates ②</td><td>hover or null</td></tr>
+            <tr><td>6</td><td><code>didChangeConfiguration</code></td><td>—</td><td>caches rebuilt, docs re-validated</td></tr>
+          </tbody>
+        </table>
+
+        <div class="footer-nav">
+          <a class="prev" href="components.html">
+            <span class="dir">← Prev</span>
+            <span class="lbl">Component Reference</span>
+          </a>
+          <a class="next" href="index.html">
+            <span class="dir">Back to →</span>
+            <span class="lbl">Overview</span>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({ startOnLoad: true, theme: 'dark',
+      themeVariables: { primaryColor:'#1c2128', primaryBorderColor:'#ff7300', primaryTextColor:'#f0f6fc', lineColor:'#8b949e', fontSize:'14px', actorBkg:'#1c2128', actorBorder:'#ff7300', actorTextColor:'#f0f6fc', signalColor:'#8b949e', signalTextColor:'#c9d1d9', noteBkgColor:'#1f2a18', noteTextColor:'#c9d1d9', noteBorderColor:'#3fb950' },
+      flowchart: { curve: 'basis', htmlLabels: true },
+      sequence: { actorMargin: 50, mirrorActors: false, messageFontSize: 13 } });
+  </script>
+</body>
+</html>

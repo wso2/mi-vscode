@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WSO2 MI XML Language Server — Documentation</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="logo">MI</div>
+        <div>
+          <div class="title">MI XML Language Server</div>
+          <div class="subtitle">Architecture &amp; Flow Docs</div>
+        </div>
+      </div>
+      <nav>
+        <div class="group-label">Getting Started</div>
+        <a href="index.html" class="active">Overview</a>
+        <a href="index.html#what">What it does</a>
+        <a href="index.html#stack">Tech stack</a>
+        <a href="index.html#bigpicture">The big picture</a>
+
+        <div class="group-label">Deep Dive</div>
+        <a href="architecture.html">Architecture <span class="sub">Layers, modules, the dual engine</span></a>
+        <a href="components.html">Component Reference <span class="sub">File-by-file</span></a>
+        <a href="flows.html">Flows &amp; Sequences <span class="sub">How things happen</span></a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="inner">
+        <span class="kicker">Documentation</span>
+        <h1>WSO2 MI XML Language Server</h1>
+        <p class="lead">An LSP server that brings validation, completion, hover, and navigation to
+          WSO2 Micro Integrator (Synapse) XML configuration files — backed by a real Xerces
+          schema validator compiled to WebAssembly.</p>
+
+        <div class="badge-row">
+          <span class="tag orange">LSP / vscode-languageserver</span>
+          <span class="tag blue">TypeScript</span>
+          <span class="tag green">Xerces WASM</span>
+          <span class="tag purple">@xml-tools/parser</span>
+          <span class="tag">esbuild bundle</span>
+        </div>
+
+        <div class="card-grid">
+          <a class="card" href="architecture.html">
+            <span class="ico">🏛️</span>
+            <h3>Architecture</h3>
+            <p>The layered design, the schema subsystem, and the two-engine model explained.</p>
+          </a>
+          <a class="card" href="flows.html">
+            <span class="ico">🔀</span>
+            <h3>Flows &amp; Sequences</h3>
+            <p>Step-by-step diagrams: startup, validation, completion, config reload.</p>
+          </a>
+          <a class="card" href="components.html">
+            <span class="ico">🧩</span>
+            <h3>Component Reference</h3>
+            <p>Every source file, what it owns, and who calls it.</p>
+          </a>
+        </div>
+
+        <h2 id="what">What it does</h2>
+        <p>The server speaks the <strong>Language Server Protocol</strong> over stdio with a VS Code
+          client. For each open <code>.xml</code> document it figures out which XSD applies, then
+          provides:</p>
+        <ul>
+          <li><strong>Diagnostics</strong> — real XSD validation through Xerces (WASM), with syntax + schema errors in one pass.</li>
+          <li><strong>Completion &amp; Hover</strong> — element/attribute suggestions from a hand-written XSD model.</li>
+          <li><strong>Structure</strong> — document symbols, folding ranges.</li>
+          <li><strong>Navigation &amp; edits</strong> — go-to-definition, find-references, rename, formatting (full + range).</li>
+        </ul>
+
+        <h2 id="stack">Tech stack</h2>
+        <table>
+          <thead><tr><th>Concern</th><th>Choice</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>LSP transport</td><td><code>vscode-languageserver/node</code></td><td><span class="file-ref">src/server.ts</span></td></tr>
+            <tr><td>XML parsing</td><td><code>@xml-tools/parser</code> → custom AST</td><td><span class="file-ref">src/parser/</span></td></tr>
+            <tr><td>Schema validation</td><td>Apache Xerces-C compiled to WASM</td><td><span class="file-ref">xerces-wasm/</span></td></tr>
+            <tr><td>Completion model</td><td>Hand-written XSD reader</td><td><span class="file-ref">src/schema/xsdCompletionProvider.ts</span></td></tr>
+            <tr><td>Bundling</td><td>esbuild → single CJS file</td><td><span class="file-ref">dist/server.js</span></td></tr>
+            <tr><td>Tests</td><td>Vitest (328 tests)</td><td><span class="file-ref">tests/</span></td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="bigpicture">The big picture</h2>
+        <p>At the highest level, requests flow from the editor through a thin transport layer into a
+          service façade, which fans out to feature providers and a schema subsystem. Diagnostics take
+          a separate path straight to the WASM validator.</p>
+
+        <figure class="mermaid">
+flowchart TB
+    Client["🖥️ VS Code / LSP Client"]
+
+    subgraph T["Transport layer"]
+      Server["server.ts<br/><i>lifecycle + config</i>"]
+      RH["requestHandlers.ts<br/><i>request → service</i>"]
+    end
+
+    subgraph F["Service façade"]
+      LS["xmlLanguageService.ts"]
+    end
+
+    subgraph Feat["Feature providers (services/)"]
+      direction LR
+      FX["hover · completion · folding<br/>symbols · rename · definition<br/>references · formatter"]
+    end
+
+    Parse["parser/<br/><i>@xml-tools → xmlNode AST</i>"]
+
+    subgraph Sch["Schema subsystem (schema/)"]
+      SA["SchemaAssociator<br/><i>file → XSD</i>"]
+      SP["SchemaProvider<br/><i>registry + caches</i>"]
+      CP["XsdCompletionProvider"]
+    end
+
+    DH["DiagnosticsHandler"]
+    WASM["⚙️ Xerces WASM"]
+
+    Client <-->|stdio JSON-RPC| Server
+    Server --> RH
+    Server --> DH
+    RH --> LS
+    LS --> Feat
+    LS --> Parse
+    LS --> SP
+    SP --> SA
+    SP --> CP
+    DH --> SP
+    DH -->|validate| WASM
+
+    style Client fill:#1c2128,stroke:#ff7300,color:#f0f6fc
+    style WASM fill:#1c2128,stroke:#3fb950,color:#f0f6fc
+    style DH fill:#1c2128,stroke:#58a6ff,color:#f0f6fc
+        </figure>
+        <figcaption>High-level component map. Solid arrows show "calls / depends on".</figcaption>
+
+        <div class="callout info">
+          <p><span class="label">Heads up:</span> diagnostics and completions are served by
+          <em>two different</em> schema engines (Xerces WASM vs. the hand-written
+          <code>XsdCompletionProvider</code>). That deliberate split is the most important thing to
+          understand about this codebase — it's explained in detail on the
+          <a href="architecture.html#dual">Architecture</a> page.</p>
+        </div>
+
+        <h3>Repository at a glance</h3>
+        <pre><code>src/
+├─ server.ts              LSP entry: lifecycle, schema registration
+├─ requestHandlers.ts     maps LSP requests → service calls (+ parse cache)
+├─ xmlLanguageService.ts  façade returning one service object
+├─ diagnosticsHandler.ts  validation orchestration + schema-graph loading
+├─ configuration.ts       workspace {pattern, xsdPath} → associations
+├─ parser/                @xml-tools CST → xmlNode AST
+├─ services/              one file per LSP feature
+└─ schema/
+   ├─ schemaAssociator.ts   file/namespace → XSD path
+   ├─ schemaProvider.ts     validator + completion-provider registry
+   ├─ xsdCompletionProvider.ts   hand-written XSD reader (completion/hover)
+   └─ xsdValidator.ts       thin wrapper over the WASM validate()
+xerces-wasm/              Apache Xerces-C compiled to WebAssembly
+resources/schemas/        bundled Synapse XSDs (versions 430, 440)</code></pre>
+
+        <div class="footer-nav">
+          <span></span>
+          <a class="next" href="architecture.html">
+            <span class="dir">Next →</span>
+            <span class="lbl">Architecture</span>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        primaryColor: '#1c2128', primaryBorderColor: '#ff7300', primaryTextColor: '#f0f6fc',
+        lineColor: '#8b949e', fontSize: '14px', fontFamily: 'ui-sans-serif, system-ui'
+      },
+      flowchart: { curve: 'basis', htmlLabels: true },
+      sequence: { actorMargin: 40, mirrorActors: false }
+    });
+  </script>
+</body>
+</html>
