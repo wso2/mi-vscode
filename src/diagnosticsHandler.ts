@@ -27,24 +27,12 @@ const SEVERITY_MAP: Record<"error" | "warning" | "info", DiagnosticSeverity> =
 export class DiagnosticsHandler {
   private connection: Connection;
   private service: LanguageService;
-  private diagnosticsByUri = new Map<string, Diagnostic[]>(); //Keeps errors/warnings per file.
+  private diagnosticsByUri = new Map<string, Diagnostic[]>();
   private projectValidators = new Map<string, any>(); // schemaUri → ProjectValidator (reuses locked grammar pool)
 
   constructor(connection: Connection, service: LanguageService) {
     this.connection = connection;
     this.service = service;
-  }
-
-  /** Returns all diagnostics at the given position for a document. */
-  getDiagnosticsAt(uri: string, line: number, character: number): Diagnostic[] {
-    const all = this.diagnosticsByUri.get(uri) ?? [];
-    return all.filter((d) => {
-      const { start, end } = d.range;
-      if (line < start.line || line > end.line) return false;
-      if (line === start.line && character < start.character) return false;
-      if (line === end.line && character > end.character) return false;
-      return true;
-    });
   }
 
   async validateAndSend(document: TextDocument): Promise<void> {
@@ -153,6 +141,18 @@ export class DiagnosticsHandler {
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────────
+
+  /** Returns true if there is any XSD or syntax diagnostic covering the given position. */
+  hasErrorAt(uri: string, line: number, character: number): boolean {
+    const all = this.diagnosticsByUri.get(uri) ?? [];
+    return all.some((d) => {
+      const { start, end } = d.range;
+      if (line < start.line || line > end.line) return false;
+      if (line === start.line && character < start.character) return false;
+      if (line === end.line && character > end.character) return false;
+      return true;
+    });
+  }
 
   private send(uri: string, diagnostics: Diagnostic[]): void {
     this.diagnosticsByUri.set(uri, diagnostics);

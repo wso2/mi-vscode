@@ -9,7 +9,6 @@ import {
   RenameParams,
   DefinitionParams,
   ReferenceParams,
-  MarkupKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { getLanguageService } from "./xmlLanguageService.js";
@@ -17,7 +16,6 @@ import { DiagnosticsHandler } from "./diagnosticsHandler.js";
 import {
   getFileName,
   getDocumentPath,
-  escapeMd,
   toLSPCompletionList,
   toLSPDocumentSymbol,
   toLSPHover,
@@ -25,20 +23,35 @@ import {
 } from "./lspUtils.js";
 
 type LanguageService = ReturnType<typeof getLanguageService>;
+type ParsedXMLDoc = ReturnType<LanguageService["parseXMLDocument"]>;
 
 export function registerRequestHandlers(
   connection: Connection,
   documents: TextDocuments<TextDocument>,
   service: LanguageService,
-  diagnosticsHandler: DiagnosticsHandler
+  diagnosticsHandler: DiagnosticsHandler,
 ): void {
+  // Cache parsed XMLDocument per URI, keyed by document version.
+  // Avoids re-parsing on every LSP request when the document hasn't changed.
+  const xmlDocCache = new Map<string, { version: number; doc: ParsedXMLDoc }>();
+
+  function getParsedDoc(document: TextDocument): ParsedXMLDoc {
+    const cached = xmlDocCache.get(document.uri);
+    if (cached && cached.version === document.version) return cached.doc;
+    const doc = service.parseXMLDocument(document.uri, document.getText());
+    xmlDocCache.set(document.uri, { version: document.version, doc });
+    return doc;
+  }
+
+  documents.onDidClose((e) => xmlDocCache.delete(e.document.uri));
+
   connection.onCompletion((params: CompletionParams) => {
     connection.console.log(
       `[onCompletion] Triggered for ${params.textDocument.uri} at line ${params.position.line}, char ${params.position.character}`
     );
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     return toLSPCompletionList(
       service.doComplete(xmlDoc, params.position, getFileName(document.uri), getDocumentPath(document.uri))
     );
@@ -52,16 +65,12 @@ export function registerRequestHandlers(
     if (!document) return null;
     const { line, character } = params.position;
 
-    const errors = diagnosticsHandler.getDiagnosticsAt(document.uri, line, character);
-    if (errors.length > 0) {
-      const isError = (d: typeof errors[number]) => d.severity === undefined || d.severity === 1;
-      const value = errors
-        .map((d) => `${isError(d) ? "**ERROR**" : "**WARNING**"} — ${escapeMd(d.message)}`)
-        .join("\n\n");
-      return { contents: { kind: MarkupKind.Markdown, value } };
-    }
+    // Don't show schema hover for elements that Xerces has already flagged as invalid.
+    // VS Code displays the diagnostic natively; returning null avoids misleading hover
+    // content from local-only XSD element definitions (e.g. xquery's <variable>).
+    if (diagnosticsHandler.hasErrorAt(document.uri, line, character)) return null;
 
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     const result = service.doHover(xmlDoc, params.position, getFileName(document.uri), getDocumentPath(document.uri));
     connection.console.log(`[onHover] Result: ${JSON.stringify(result)}`);
     return result ? toLSPHover(result) : null;
@@ -71,7 +80,7 @@ export function registerRequestHandlers(
     connection.console.log(`[onDocumentSymbol] Triggered for ${params.textDocument.uri}`);
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     return service.findDocumentSymbols(xmlDoc).map(toLSPDocumentSymbol);
   });
 
@@ -79,7 +88,7 @@ export function registerRequestHandlers(
     connection.console.log(`[onFoldingRanges] Triggered for ${params.textDocument.uri}`);
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     return service.getFoldingRanges(xmlDoc).map(toLSPFoldingRange);
   });
 
@@ -89,7 +98,7 @@ export function registerRequestHandlers(
     );
     const document = documents.get(params.textDocument.uri);
     if (!document) return null;
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     const edits = service.doRename(xmlDoc, params.position, params.newName);
     if (!edits) return null;
     return {
@@ -111,7 +120,7 @@ export function registerRequestHandlers(
     );
     const document = documents.get(params.textDocument.uri);
     if (!document) return null;
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     const result = service.doDefinition(xmlDoc, params.position);
     return result ? { uri: result.uri, range: result.range } : null;
   });
@@ -122,7 +131,7 @@ export function registerRequestHandlers(
     );
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     return service.findReferences(xmlDoc, params.position).map((r) => ({ uri: r.uri, range: r.range }));
   });
 
@@ -130,7 +139,7 @@ export function registerRequestHandlers(
     connection.console.log(`[onDocumentFormatting] Triggered for ${params.textDocument.uri}`);
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
-    const xmlDoc = service.parseXMLDocument(document.uri, document.getText());
+    const xmlDoc = getParsedDoc(document);
     return service.format(xmlDoc, {
       tabSize: params.options.tabSize,
       insertSpaces: params.options.insertSpaces,

@@ -148,6 +148,12 @@ connection.onDidChangeConfiguration((params: DidChangeConfigurationParams) => {
 
   connection.console.log(`[server] Updating with ${schemas.length} schema(s)`);
 
+  // Invalidate stale caches so the new schema takes effect immediately.
+  // Without this, the auto:// completion provider and ProjectValidator would
+  // keep using the old schema version for already-open documents.
+  service.invalidateAutoSchemas();
+  diagnosticsHandler.dispose();
+
   if (schemas.length > 0) {
     registerSchemas(schemas);
   }

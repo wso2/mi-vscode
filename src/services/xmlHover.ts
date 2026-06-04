@@ -27,32 +27,32 @@ export function doHover(
   if (node.type === "element") {
     if (schemaProvider?.hasData() && node.name) {
       const info = schemaProvider.getElement(node.name);
-      if (info) {
-        const sections: string[] = [`### \`<${node.name}>\``];
+      if (!info) return null;
 
-        if (info.description) sections.push(info.description);
+      const sections: string[] = [`### \`<${node.name}>\``];
 
-        if (info.attributes.length > 0) {
-          const attrLines = info.attributes
-            .map((a: any) =>
-              `- \`${a.name}\`${a.type ? ` — *${a.type}*` : ""}${a.required ? " *(required)*" : ""}`
-            )
-            .join("\n");
-          sections.push(`**Attributes:**\n${attrLines}`);
-        }
+      if (info.description) sections.push(info.description);
 
-        if (info.children.length > 0) {
-          sections.push(`**Children:** ${info.children.join(", ")}`);
-        }
-
-        return {
-          contents: sections.join("\n\n"),
-          range: offsetsToRange(document.text, node.startOffset, node.endOffset),
-        };
+      if (info.attributes.length > 0) {
+        const attrLines = info.attributes
+          .map((a: any) =>
+            `- \`${a.name}\`${a.type ? ` — *${a.type}*` : ""}${a.required ? " *(required)*" : ""}`
+          )
+          .join("\n");
+        sections.push(`**Attributes:**\n${attrLines}`);
       }
+
+      if (info.children.length > 0) {
+        sections.push(`**Children:** ${info.children.join(", ")}`);
+      }
+
+      return {
+        contents: sections.join("\n\n"),
+        range: offsetsToRange(document.text, node.startOffset, node.endOffset),
+      };
     }
 
-    // Fallback: structural info from the document tree
+    // No schema active — show structural info from the document tree
     const sections: string[] = [`### \`<${node.name}>\``];
     if (node.attributes.length > 0) {
       const attrLines = node.attributes
