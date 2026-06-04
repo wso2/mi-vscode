@@ -121,6 +121,11 @@ export class SchemaProvider {
     this.associator.addUserAssociation(association);
   }
 
+  /** Removes all user-registered associations so a fresh set can be applied. */
+  clearUserAssociations(): void {
+    this.associator.clearUserAssociations();
+  }
+
   /** Returns the raw ResolvedSchema (with xsdText) for the given file name and optional namespace, or null if none matches. */
   findSchemaForDocument(fileName: string, xmlns?: string, documentPath?: string): ResolvedSchema | null {
     return this.associator.findSchema(fileName, xmlns, documentPath);

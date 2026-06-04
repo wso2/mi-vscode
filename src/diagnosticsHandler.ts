@@ -28,7 +28,9 @@ export class DiagnosticsHandler {
   private connection: Connection;
   private service: LanguageService;
   private diagnosticsByUri = new Map<string, Diagnostic[]>();
-  private projectValidators = new Map<string, any>(); // schemaUri → ProjectValidator (reuses locked grammar pool)
+  // xsdPath → ProjectValidator — one instance per unique schema, shared across all documents
+  // that resolve to the same XSD. Validators live until dispose() is called.
+  private projectValidators = new Map<string, any>();
 
   constructor(connection: Connection, service: LanguageService) {
     this.connection = connection;
@@ -79,7 +81,7 @@ export class DiagnosticsHandler {
           `[DiagnosticsHandler] Validating ${document.uri} with ProjectValidator`
         );
         try {
-          const validator = await this.getOrCreateValidator(autoUri, schemaFolder, resolved.xsdPath);
+          const validator = await this.getOrCreateValidator(schemaFolder, resolved.xsdPath!);
           const result = await validator.validate(text);
           const allErrors = [...result.parseErrors, ...result.schemaErrors];
           const xmlLines = text.split("\n");
@@ -203,23 +205,21 @@ export class DiagnosticsHandler {
     return result;
   }
 
-  /** Returns a cached ProjectValidator for schemaUri, creating one if needed.
-   *  Each validator compiles the grammar once and reuses the locked pool on
-   *  subsequent validate() calls. */
-  private async getOrCreateValidator(schemaUri: string, schemaFolder: string, entryPath?: string): Promise<any> {
-    const existing = this.projectValidators.get(schemaUri);
+  /** Returns a cached ProjectValidator for entryPath, creating one if needed.
+   *  Keyed by xsdPath so all documents that resolve to the same schema share
+   *  one instance and compile the grammar only once. */
+  private async getOrCreateValidator(schemaFolder: string, entryPath: string): Promise<any> {
+    const existing = this.projectValidators.get(entryPath);
     if (existing) return existing;
 
     const filesMap = await this.buildFilesMap(schemaFolder);
 
-    const requestedEntry = entryPath
-      ? this.toImportKey(schemaFolder, path.resolve(entryPath))
-      : undefined;
+    const requestedEntry = this.toImportKey(schemaFolder, path.resolve(entryPath));
 
     // Prefer the resolved XSD path as the entry point, then the built-in Synapse
     // entry name, otherwise use the first root-level XSD.
     let entry = "";
-    if (requestedEntry && requestedEntry in filesMap) {
+    if (requestedEntry in filesMap) {
       entry = requestedEntry;
     } else if ("synapse_config.xsd" in filesMap) {
       entry = "synapse_config.xsd";
@@ -228,9 +228,9 @@ export class DiagnosticsHandler {
     }
 
     const validator = await createProjectValidator({ entry, files: filesMap });
-    this.projectValidators.set(schemaUri, validator);
+    this.projectValidators.set(entryPath, validator);
     this.connection.console.log(
-      `[validator] Created ProjectValidator for ${schemaUri} (entry: ${entry}, files: ${Object.keys(filesMap).length})`
+      `[validator] Created ProjectValidator for ${entryPath} (entry: ${entry}, files: ${Object.keys(filesMap).length})`
     );
     return validator;
   }

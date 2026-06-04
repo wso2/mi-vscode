@@ -16,14 +16,13 @@ export interface ResolvedSchema {
 }
 
 // Resolve schemas root for both production bundle (dist/server.js) and test environment.
-// In the production esbuild bundle import.meta.url points to dist/server.js, so one
-// level up reaches the project root.  In tests import.meta.url points to the TypeScript
-// source file (src/schema/schemaAssociator.ts), so two levels up are needed.
+// Production: import.meta.url → dist/server.js, schemas are co-located at dist/resources/schemas.
+// Tests: import.meta.url → src/schema/schemaAssociator.ts, two levels up reaches the project root.
 function resolveSchemaRoot(): string {
   try {
     const dir = path.dirname(fileURLToPath(import.meta.url));
-    const prod = path.join(dir, "..", "resources", "schemas");
-    if (fs.existsSync(prod)) return prod;
+    const bundled = path.join(dir, "resources", "schemas");
+    if (fs.existsSync(bundled)) return bundled;
     return path.join(dir, "..", "..", "resources", "schemas");
   } catch {
     return path.join(process.cwd(), "resources", "schemas");
@@ -54,6 +53,10 @@ export class SchemaAssociator {
    */
   addUserAssociation(association: SchemaAssociation): void {
     this.userAssociations.push(association);
+  }
+
+  clearUserAssociations(): void {
+    this.userAssociations = [];
   }
 
   /**
