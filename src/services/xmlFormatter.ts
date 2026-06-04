@@ -31,6 +31,89 @@ export function format(document: XMLDocument, options?: FormatterOptions): TextE
   return [{ startOffset: 0, endOffset: document.text.length, newText: output.join("\n") }];
 }
 
+/**
+ * Re-indents the nodes within the given offset range and returns a TextEdit
+ * replacing those nodes with properly indented output. The replace range is
+ * expanded backwards to the start of the first node's line so existing
+ * indentation is replaced rather than prepended to.
+ * Returns an empty array when no formattable nodes fall within the range.
+ */
+export function formatRange(
+  document: XMLDocument,
+  startOffset: number,
+  endOffset: number,
+  options?: FormatterOptions
+): TextEdit[] {
+  if (!document.text) return [];
+
+  const tabSize = options?.tabSize ?? 2;
+  const insertSpaces = options?.insertSpaces ?? true;
+  const unit = insertSpaces ? " ".repeat(tabSize) : "\t";
+
+  // Find the deepest node that STRICTLY contains the selection so that a node
+  // whose boundaries exactly match the selection is treated as a child to format.
+  const container = findContainerNode(document, startOffset, endOffset);
+  const level = nodeDepth(container);
+
+  const overlapping = container.children.filter(
+    (c) => c.endOffset > startOffset && c.startOffset < endOffset
+  );
+
+  if (overlapping.length === 0) return [];
+
+  const firstNodeStart = overlapping[0].startOffset;
+  const lastNodeEnd = overlapping[overlapping.length - 1].endOffset;
+
+  // Expand replaceStart to the beginning of the line so existing indentation
+  // is overwritten rather than left in place beside the re-indented output.
+  const lineStart = findLineStart(document.text, firstNodeStart);
+  const replaceStart =
+    document.text.slice(lineStart, firstNodeStart).trim() === "" ? lineStart : firstNodeStart;
+
+  const lines: string[] = [];
+  let cursor = firstNodeStart;
+
+  for (const child of overlapping) {
+    lines.push(...formatLooseContent(document.text.slice(cursor, child.startOffset), level, unit));
+    lines.push(...formatNode(child, document.text, level, unit));
+    cursor = child.endOffset;
+  }
+
+  return [{ startOffset: replaceStart, endOffset: lastNodeEnd, newText: lines.join("\n") }];
+}
+
+function findContainerNode(document: XMLDocument, startOffset: number, endOffset: number): XMLNode {
+  let current: XMLNode = document;
+  while (true) {
+    let descended = false;
+    for (const child of current.children) {
+      if (child.startOffset < startOffset && child.endOffset > endOffset) {
+        current = child;
+        descended = true;
+        break;
+      }
+    }
+    if (!descended) break;
+  }
+  return current;
+}
+
+function nodeDepth(node: XMLNode): number {
+  let depth = 0;
+  let p = node.parent;
+  while (p !== undefined) {
+    depth++;
+    p = p.parent;
+  }
+  return depth;
+}
+
+function findLineStart(text: string, offset: number): number {
+  let i = offset;
+  while (i > 0 && text[i - 1] !== "\n") i--;
+  return i;
+}
+
 function formatTopLevel(document: XMLDocument, unit: string): string[] {
   const output: string[] = [];
   let cursor = 0;

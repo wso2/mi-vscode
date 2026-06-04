@@ -6,7 +6,7 @@ import { doComplete, CompletionList } from "./services/xmlCompletion.js";
 import { doHover, HoverResult } from "./services/xmlHover.js";
 import { findDocumentSymbols, DocumentSymbol } from "./services/xmlSymbols.js";
 import { getFoldingRanges, FoldingRange } from "./services/xmlFolding.js";
-import { format, TextEdit, FormatterOptions } from "./services/xmlFormatter.js";
+import { format, formatRange, TextEdit, FormatterOptions } from "./services/xmlFormatter.js";
 import { doRename } from "./services/xmlRename.js";
 import { doDefinition, DefinitionResult } from "./services/xmlDefinition.js";
 import { findReferences, ReferenceResult } from "./services/xmlReferences.js";
@@ -45,6 +45,15 @@ export function getLanguageService() {
 
     format(document: XMLDocument, options?: FormatterOptions): TextEdit[] {
       return format(document, options);
+    },
+
+    formatRange(
+      document: XMLDocument,
+      startOffset: number,
+      endOffset: number,
+      options?: FormatterOptions
+    ): TextEdit[] {
+      return formatRange(document, startOffset, endOffset, options);
     },
 
     doRename(document: XMLDocument, position: Position, newName: string): TextEdit[] | null {
