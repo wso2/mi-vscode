@@ -44,9 +44,9 @@
         <p>Creates the LSP connection and wires the whole lifecycle.</p>
         <ul>
           <li><code>onInitialize</code> — reads <code>workspaceFolders</code> and
-            <code>initializationOptions.schemas</code>, registers the built-in 430/440 mappings, advertises capabilities.</li>
+            <code>initializationOptions.schemas</code>, registers pattern mappings to bundled 430/440 schemas, advertises capabilities.</li>
           <li><code>onInitialized</code> — pulls <code>xmlLanguageServer.schemas</code> config, applies it, then validates open docs. Sets <code>initialConfigurationLoaded</code>.</li>
-          <li><code>onDidChangeConfiguration</code> — invalidate caches → dispose validators → <strong>clear user associations</strong> → re-register init schemas → apply workspace schemas → re-validate.</li>
+          <li><code>onDidChangeConfiguration</code> — invalidate caches → dispose validators → <strong>clear user associations</strong> → re-register init-option mappings → apply workspace schemas → re-validate.</li>
           <li><code>onDidChangeContent</code> — validate the changed document (deferred until initial config is loaded).</li>
           <li><code>onShutdown</code> — dispose diagnostics + service.</li>
         </ul>
@@ -64,7 +64,7 @@
         <h2 id="schema">Schema subsystem</h2>
 
         <h3><span class="file-ref">src/schema/schemaAssociator.ts</span></h3>
-        <p>Owns <code>findSchema(file, xmlns, path)</code>: user-pattern matches first, then built-in namespace matches. Includes a small glob→RegExp engine (<code>*</code>, <code>**</code>, <code>?</code>) and <code>resolveSchemaRoot()</code> which locates bundled schemas in both the production bundle and the test tree. Exposes <code>addUserAssociation</code> / <code>clearUserAssociations</code>.</p>
+        <p>Owns <code>findSchema(file, xmlns, path)</code>: user/init pattern matches first, then built-in namespace matches. Includes a small glob→RegExp engine (<code>*</code>, <code>**</code>, <code>?</code>) and <code>resolveSchemaRoot()</code> which locates bundled schemas in both the production bundle and the test tree. Exposes <code>addUserAssociation</code> / <code>clearUserAssociations</code>.</p>
 
         <h3><span class="file-ref">src/schema/schemaProvider.ts</span></h3>
         <p>The registry. <code>registerSchema()</code> creates one <code>XsdValidatorService</code> wrapper per unique <code>xsdKey</code> (it stores the XSD text — no compilation here) and builds a completion provider from the fully-inlined XSD (via <code>inlineIncludes()</code>). <code>validate()</code> routes to the right validator or falls back to the parser's syntax errors. <code>invalidateAutoSchemas()</code> drops all <code>auto://</code> entries; <code>dispose()</code> tears everything down. Holds the three maps described in <a href="architecture.html#caches">Caches &amp; keys</a>.</p>
@@ -91,7 +91,7 @@
           <tbody>
             <tr><td><span class="file-ref">parser/xmlParser.ts</span></td><td>Runs <code>@xml-tools/parser</code> (CST) and builds the AST.</td></tr>
             <tr><td><span class="file-ref">parser/xmlNode.ts</span></td><td>AST node types (<code>XMLDocument</code>, elements, attributes).</td></tr>
-            <tr><td><span class="file-ref">parser/xmlDocument.ts</span></td><td>Document wrapper: text, namespace extraction, syntax errors.</td></tr>
+            <tr><td><span class="file-ref">parser/xmlDocument.ts</span></td><td>Document wrapper: text, AST tree construction, syntax errors.</td></tr>
           </tbody>
         </table>
 

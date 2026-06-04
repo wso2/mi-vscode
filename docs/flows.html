@@ -42,9 +42,9 @@
 
         <!-- ── 1 ────────────────────────────────────────────────────────── -->
         <h2 id="startup">1 · Startup &amp; initialization</h2>
-        <p>Two-phase handshake. Built-in schemas are registered during <code>initialize</code>; workspace
-          settings are pulled afterwards during <code>initialized</code>. Validation is deferred until
-          both are in place.</p>
+        <p>Two-phase handshake. Init-option schema mappings are registered during
+          <code>initialize</code>; workspace settings are pulled afterwards during
+          <code>initialized</code>. Validation is deferred until both are in place.</p>
 
         <figure class="mermaid">
 sequenceDiagram
@@ -55,7 +55,7 @@ sequenceDiagram
 
     C->>S: initialize(params)
     Note over S: read workspaceFolders<br/>read initializationOptions.schemas
-    S->>SA: registerSchemas() — built-in 430/440
+    S->>SA: registerSchemas() — pattern → bundled 430/440
     S-->>C: capabilities (completion, hover, …)
     C->>S: initialized
     S->>C: workspace/configuration("xmlLanguageServer")
@@ -87,7 +87,7 @@ sequenceDiagram
 
     C->>S: textDocument/didChangeContent
     S->>DH: validateAndSend(document)
-    DH->>DH: parseXMLDocument() + getNamespace()
+    DH->>DH: parseXMLDocument(); ns = getNamespace?.()
     DH->>SP: resolveSchemaForDocument(file, ns, path)
 
     alt schema resolved
@@ -110,8 +110,8 @@ sequenceDiagram
 
         <h4>Step by step</h4>
         <ol class="steps">
-          <li><span class="st">Parse</span> The document text becomes an AST; the root namespace is extracted.</li>
-          <li><span class="st">Resolve</span> <code>SchemaAssociator</code> picks an XSD by pattern, then namespace.</li>
+          <li><span class="st">Parse</span> The document text becomes an AST; a namespace is used only if the parsed document exposes one.</li>
+          <li><span class="st">Resolve</span> <code>SchemaAssociator</code> picks an XSD by user/init pattern first, then by built-in namespace fallback.</li>
           <li><span class="st">Register completion schema</span> <em>(once per document)</em> The referenced XSD graph is loaded and registered under an <code>auto://&lt;path&gt;</code> URI so completion/hover have a model. Skipped on later edits via <code>hasSchema()</code>.</li>
           <li><span class="st">Get validator</span> A <code>ProjectValidator</code> is created (or reused) for that <code>xsdPath</code>, fed every <code>.xsd/.dtd</code> in the folder.</li>
           <li><span class="st">Validate</span> Xerces runs syntax + schema validation in one SAX pass.</li>
@@ -217,7 +217,7 @@ flowchart TD
     A["onDidChangeConfiguration"] --> B["invalidateAutoSchemas()<br/><i>drop auto:// validators + providers</i>"]
     B --> C["diagnosticsHandler.dispose()<br/><i>destroy ProjectValidators</i>"]
     C --> D["clearUserAssociations()<br/><i>wipe the slate</i>"]
-    D --> E["re-register initializationSchemas<br/><i>built-in 430/440</i>"]
+    D --> E["re-register initializationSchemas<br/><i>pattern → bundled 430/440</i>"]
     E --> F["applySchemaSettings(workspace)<br/><i>{pattern, xsdPath}</i>"]
     F --> G{initialConfigurationLoaded?}
     G -- yes --> H["re-validate all open docs"]
@@ -229,7 +229,7 @@ flowchart TD
         <div class="callout info">
           <p><span class="label">The fix this encodes:</span> earlier code re-registered schemas on every
           change <em>without</em> clearing first, so associations piled up. Clearing then re-applying
-          both the built-in and workspace sets (in that order) keeps resolution priority identical to a
+          both the init-option and workspace sets (in that order) keeps resolution priority identical to a
           fresh startup.</p>
         </div>
 

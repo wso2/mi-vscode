@@ -86,9 +86,10 @@ flowchart LR
         <h4>SchemaAssociator — "which XSD?"</h4>
         <p>Maps a document to an XSD by two rules, in strict priority:</p>
         <ol>
-          <li><strong>User associations</strong> (from settings / init options) matched by <em>glob pattern</em> on the file path.</li>
-          <li><strong>Built-in associations</strong> matched by <em>XML namespace</em> (the Synapse namespace → bundled <code>synapse_config.xsd</code>).</li>
+          <li><strong>User associations</strong> (from settings / init options) matched by <em>glob pattern</em> on the file path. Init options use bundled 430/440 schemas but are still registered as user associations.</li>
+          <li><strong>Built-in associations</strong> matched by <em>XML namespace</em> (the Synapse namespace → bundled <code>synapse_config.xsd</code>) only when no user pattern matched.</li>
         </ol>
+        <p>In the usual MI setup, path patterns choose the schema version. Namespace matching is a fallback/default route, not the primary 430/440 selection mechanism.</p>
 
         <h4>SchemaProvider — the registry</h4>
         <p>Holds three maps (see <a href="#caches">Caches &amp; keys</a>). It keeps one
@@ -187,6 +188,7 @@ flowchart TB
           <li><strong>DiagnosticsHandler does too much</strong> — ~half of its 453 lines (<code>loadReferencedXsds</code>, <code>buildFilesMap</code>, <code>findSchemaLocations</code>, <code>resolveLocalReference</code>) is schema-graph crawling that belongs in <code>schema/</code>.</li>
           <li><strong>Dead-weight validator</strong> — an <code>XsdValidatorService</code> is instantiated for every registered schema in <code>registerSchema</code>, but its <code>validate()</code> is only reached on a fallback path that almost never fires (built-ins/user schemas always carry an <code>xsdPath</code>, so diagnostics go through the WASM <code>ProjectValidator</code> instead). Cheap to create, but it's an unused branch carrying its own re-parsing cost if ever hit.</li>
           <li><strong>No-fallback resolution</strong> — if a user association matches but its XSD can't be read, <code>findSchema</code> returns <code>null</code> instead of falling through to the built-in schema, killing all validation for that file.</li>
+          <li><strong>Namespace fallback depends on parser support</strong> — diagnostics asks for <code>getNamespace?.()</code>, but the current <code>XMLDocumentImpl</code> does not expose that method. Pattern-based associations still work.</li>
           <li><strong>Two config shapes</strong> — <code>{pattern, schema:"430"}</code> (init options) and <code>{pattern, xsdPath}</code> (settings) take two code paths to the same destination.</li>
         </ol>
 
