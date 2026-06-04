@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl",
-    "bundle": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl && cp synapse-validator/wasm/xerces_validator.wasm dist/xerces_validator.wasm && cp -r resources dist/resources",
+    "bundle": "esbuild src/server.ts --bundle --platform=node --format=cjs --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl && cp xerces-wasm/wasm/xerces_validator.wasm dist/xerces_validator.wasm && cp -r resources dist/resources",
     "build:watch": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run"

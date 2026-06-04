@@ -1,6 +1,6 @@
 // @ts-ignore
-import { validate } from "../../synapse-validator/dist/index.js";
-import type { ValidationResult, Diagnostic as XercesDiagnostic, SchemaBundle as XercesSchemaBundle, XmlInput as XercesXmlInput, XsdInput as XercesXsdInput } from "../../synapse-validator/dist/types.js";
+import { validate } from "../../xerces-wasm/dist/index.js";
+import type { ValidationResult, Diagnostic as XercesDiagnostic, SchemaBundle as XercesSchemaBundle, XmlInput as XercesXmlInput, XsdInput as XercesXsdInput } from "../../xerces-wasm/dist/types.js";
 import { Range } from "../utils/rangeUtils.js";
 import { Position } from "../utils/positionUtils.js";
 

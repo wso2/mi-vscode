@@ -8,7 +8,7 @@ import { getLanguageService } from "./xmlLanguageService.js";
 import * as fs from "fs";
 import * as path from "path";
 // @ts-ignore — local CJS bundle, no ESM wrapper
-import { createProjectValidator } from "../synapse-validator/dist/index.js";
+import { createProjectValidator } from "../xerces-wasm/dist/index.js";
 
 type LanguageService = ReturnType<typeof getLanguageService>;
 
