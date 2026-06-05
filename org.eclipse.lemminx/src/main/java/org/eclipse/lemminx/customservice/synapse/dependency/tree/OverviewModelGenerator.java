@@ -25,8 +25,14 @@ import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.RequestedRe
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.Resource;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.ResourceResponse;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
+import org.eclipse.lemminx.customservice.synapse.utils.Utils;
+import org.eclipse.lemminx.dom.DOMDocument;
+import org.eclipse.lemminx.dom.DOMElement;
+import org.eclipse.lemminx.dom.DOMNode;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -55,8 +61,12 @@ public class OverviewModelGenerator {
         NewProjectResourceFinder newProjectResourceFinder = new NewProjectResourceFinder();
         ResourceResponse response = newProjectResourceFinder.getAvailableResources(projectPath, Either.forRight(requiredResources));
         for (Resource resource : response.getResources()) {
+            String absolutePath = ((ArtifactResource) resource).getAbsolutePath();
+            if (Constant.INBOUND_DASH_ENDPOINT.equals(resource.getType()) && isMcpInboundEndpoint(absolutePath)) {
+                continue;
+            }
             DependencyScanner dependencyScanner = new DependencyScanner(projectPath);
-            DependencyTree dependencyTree = dependencyScanner.analyzeArtifact(((ArtifactResource) resource).getAbsolutePath());
+            DependencyTree dependencyTree = dependencyScanner.analyzeArtifact(absolutePath);
             dependencyTreeList.add(dependencyTree);
         }
         return convertDataToOverviewModel(Paths.get(projectPath).getFileName().toString(), dependencyTreeList);
@@ -137,5 +147,18 @@ public class OverviewModelGenerator {
             default:
                 return Constant.OTHER;
         }
+    }
+
+    private static boolean isMcpInboundEndpoint(String artifactPath) {
+        try {
+            DOMDocument document = Utils.getDOMDocument(new File(artifactPath));
+            if (document == null) return false;
+            DOMNode inboundElement = Utils.getChildNodeByName(document, Constant.INBOUND_ENDPOINT);
+            if (inboundElement == null) return false;
+            return Utils.isMcpInboundEndpoint((DOMElement) inboundElement);
+        } catch (IOException e) {
+            // ignore unreadable files
+        }
+        return false;
     }
 }

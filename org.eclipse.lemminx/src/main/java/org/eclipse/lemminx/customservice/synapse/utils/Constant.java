@@ -496,6 +496,7 @@ public class Constant {
     public static final String TASK_UPPERCASE = "TASK";
     public static final String INBOUND_UPPERCASE = "INBOUND_ENDPOINT";
     public static final String INBOUND_DASH_ENDPOINT = "inbound-endpoint";
+    public static final String MCP_INBOUND_LISTENER_CLASS = "org.wso2.carbon.inbound.sse.McpInboundListener";
     public static final String CONNECTION_UPPERCASE = "CONNECTION";
     public static final String OTHER = "other";
     public static final String SCHEDULED_TASK = "schedule-task";

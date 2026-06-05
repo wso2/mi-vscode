@@ -733,10 +733,10 @@ public class DirectoryTreeBuilder {
             if (Constant.API.equalsIgnoreCase(type)) {
                 addResources(rootElement, advancedNode);
             }
-            if (Constant.INBOUND_ENDPOINT.equalsIgnoreCase(type)) {
+            if (Constant.INBOUND_ENDPOINT.equalsIgnoreCase(type) && Utils.isMcpInboundEndpoint(rootElement)) {
                 String mcpConfigRef = getMcpConfigReference(rootElement);
                 if (mcpConfigRef != null) {
-                    component.setMcpConfigReference(mcpConfigRef);
+                    advancedNode.setMcpConfigReference(mcpConfigRef);
                 }
             }
         }
@@ -969,7 +969,11 @@ public class DirectoryTreeBuilder {
                 continue;
             }
             JsonObject mcpServer = new JsonObject();
-            mcpServer.addProperty(Constant.NAME, mcpConfigKey);
+            JsonObject inboundEndpointObj = mcpInboundEndpoints.get(mcpConfigKey).getAsJsonObject();
+            String serverName = (inboundEndpointObj.has(Constant.NAME) && !inboundEndpointObj.get(Constant.NAME).isJsonNull())
+                    ? inboundEndpointObj.get(Constant.NAME).getAsString()
+                    : mcpConfigKey;
+            mcpServer.addProperty(Constant.NAME, serverName);
             mcpServer.add(Constant.LOCAL_ENTRY, localEntry);
             mcpServer.add(Constant.INBOUND_ENDPOINT, mcpInboundEndpoints.get(mcpConfigKey));
             mcpServersArray.add(mcpServer);
