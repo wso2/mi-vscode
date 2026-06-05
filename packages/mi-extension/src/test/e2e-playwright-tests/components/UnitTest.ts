@@ -105,8 +105,8 @@ export class UnitTest {
     }
 
     public async openUnitTestFormByMainBtn() {
-        console.log('Opening Unit Test Form by "Add Unit Test" button');
-        const addUnitTestBtn = this._page.getByRole('button', { name: 'Add Unit Test', exact: true });
+        console.log('Opening Unit Test Form by "Add MI Unit Test" button');
+        const addUnitTestBtn = this._page.getByRole('button', { name: 'Add MI Unit Test', exact: true });
         await addUnitTestBtn.waitFor({ state: 'visible', timeout: 60000 });
         await addUnitTestBtn.scrollIntoViewIfNeeded();
         await addUnitTestBtn.click();
@@ -116,7 +116,7 @@ export class UnitTest {
         const testExplorer = this._page.locator('div[aria-label="Test Explorer Section"]');
         await testExplorer.waitFor({ state: 'visible', timeout: 60000 });
         await testExplorer.hover();
-        const addUnitTestBtn = testExplorer.getByLabel('Test Explorer actions').getByLabel('Add unit test');
+        const addUnitTestBtn = testExplorer.getByLabel('Test Explorer actions').getByLabel('Add MI Unit Test');
         await addUnitTestBtn.waitFor({ state: 'visible', timeout: 60000 });
         await addUnitTestBtn.click();
     }
