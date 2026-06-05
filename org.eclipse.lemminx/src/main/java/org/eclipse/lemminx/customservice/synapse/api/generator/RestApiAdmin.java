@@ -125,17 +125,23 @@ public class RestApiAdmin {
                 return createAPIFromSwagger(apiName, sourcePath, publishSwaggerPath);
             } catch (JsonProcessingException e) {
                 LOGGER.log(Level.SEVERE, "Exception occurred while creating API from Swagger", e);
-                return null;
+                return new GenerateAPIResponse(null, null,
+                        "Exception occurred while creating API from Swagger: " + e.getMessage());
             }
         } else if (CREATE_FROM_WSDL.equalsIgnoreCase(mode)) {
             try {
                 return createAPIFromWSDL(apiName, endpoint, sourcePath);
             } catch (SOAPToRESTException e) {
                 LOGGER.log(Level.SEVERE, "Exception occurred while converting SOAP to REST", e);
+                return new GenerateAPIResponse(null, null,
+                        "Exception occurred while converting SOAP to REST: " + e.getMessage());
             } catch (MalformedURLException e) {
                 LOGGER.log(Level.SEVERE, "Invalid WSDL URL", e);
+                return new GenerateAPIResponse(null, null, "Invalid WSDL URL: " + e.getMessage());
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Exception occurred while creating API from WSDL", e);
+                return new GenerateAPIResponse(null, null,
+                        "Exception occurred while creating API from WSDL: " + e.getMessage());
             }
         }
         return null;
