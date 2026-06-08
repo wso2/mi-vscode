@@ -2567,10 +2567,6 @@ export interface PickMcpJsonFileResponse {
     content: string | null;
 }
 
-export interface GetMcpInboundListenerClassResponse {
-    className: string;
-}
-
 export interface GetAPIOperationInputSchemasRequest {
     projectRoot: string;
     operations: Array<{
