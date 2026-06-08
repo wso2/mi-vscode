@@ -1294,11 +1294,11 @@ export interface GetIdpSchemaFilesResponse {
     schemaFiles:  {fileName: string; documentUriWithFileName?: string}[];
 }
 
-export interface ReadFileContentRequest{
+export interface ReadIdpSchemaFileContentRequest{
     filePath: string;
 }
 
-export interface ReadFileContentResponse{
+export interface ReadIdpSchemaFileContentResponse{
     fileContent: string;
     base64Content?: string;
 }
@@ -2526,6 +2526,7 @@ export interface GetMcpServerEditDataResponse {
     tools: UnifiedTool[];
     port: number | null;
     corsSettings: McpServerCorsSettings;
+    inboundEndpointPath: string;
 }
 
 export interface BuildMcpToolsXmlRequest {

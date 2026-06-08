@@ -253,8 +253,8 @@ import {
     UpdateWsdlEndpointResponse,
     WriteContentToFileRequest,
     WriteIdpSchemaFileToRegistryRequest,
-    ReadFileContentRequest,
-    ReadFileContentResponse,
+    ReadIdpSchemaFileContentRequest,
+    ReadIdpSchemaFileContentResponse,
     WriteIdpSchemaFileToRegistryResponse,
     GetIdpSchemaFilesResponse,
     WriteContentToFileResponse,
@@ -391,6 +391,7 @@ import {
     buildInputSchemasForAPITools,
     cleanPathForToolName,
     convertToJsonSchema,
+    deriveMcpInboundEndpointPath,
     extractOperationDescription,
     generateToolsXml,
     getUsedInboundPorts,
@@ -3823,7 +3824,7 @@ ${endpointAttributes}
         });
     }
 
-    async readFileContent(params: ReadFileContentRequest): Promise<ReadFileContentResponse> {
+    async readIdpSchemaFileContent(params: ReadIdpSchemaFileContentRequest): Promise<ReadIdpSchemaFileContentResponse> {
         const { filePath } = params;
         const response = {
             fileContent: '',
@@ -6797,10 +6798,12 @@ ${keyValuesXML}`;
             const content = fs.readFileSync(params.localEntryPath, "utf8");
             tools = parseToolsFromXML(content);
         }
+        const inboundEndpointPath = params.inboundEndpointPath
+            || (params.localEntryPath ? deriveMcpInboundEndpointPath(params.localEntryPath) : "");
         let port: number | null = null;
         let corsSettings = defaultCors;
-        if (params.inboundEndpointPath && fs.existsSync(params.inboundEndpointPath)) {
-            const content = fs.readFileSync(params.inboundEndpointPath, "utf8");
+        if (inboundEndpointPath && fs.existsSync(inboundEndpointPath)) {
+            const content = fs.readFileSync(inboundEndpointPath, "utf8");
             const cfg = parseInboundEndpointConfig(content);
             port = cfg.port;
             corsSettings = {
@@ -6811,7 +6814,7 @@ ${keyValuesXML}`;
                 keepAliveInterval: cfg.keepAliveInterval,
             };
         }
-        return { tools, port, corsSettings };
+        return { tools, port, corsSettings, inboundEndpointPath };
     }
 
     async buildMcpToolsXml(params: BuildMcpToolsXmlRequest): Promise<BuildMcpToolsXmlResponse> {
