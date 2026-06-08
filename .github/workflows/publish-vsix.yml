@@ -3,13 +3,6 @@ name: Publish VSIX to VSCode Marketplace and OpenVSX
 on:
   workflow_dispatch:
     inputs:
-      extension:
-        type: choice
-        description: 'Select the extension'
-        required: true
-        default: 'micro-integrator'
-        options:
-          - 'micro-integrator'
       isPreRelease:
         required: true
         type: boolean 
@@ -61,10 +54,10 @@ jobs:
       - name: Get version
         id: vsix
         run: | 
-          file=$(ls ${{ github.event.inputs.extension }}-[0-9]*.[0-9]*.[0-9]*.vsix)
+          file=$(ls micro-integrator-[0-9]*.[0-9]*.[0-9]*.vsix)
           fileName=${file##*-}
           version=${fileName%.*}
-          extension=${{ github.event.inputs.extension }}
+          extension=micro-integrator
           extensionName="$(echo "$extension" | sed 's/.*/\u&/')"
           echo "vsixName=$file" >> $GITHUB_OUTPUT
           echo "version=$version" >> $GITHUB_OUTPUT
@@ -140,7 +133,7 @@ jobs:
                               "text": "View",
                               "onClick": {
                                 "openLink": {
-                                  "url": "https://marketplace.visualstudio.com/items?itemName=WSO2.${{ github.event.inputs.extension }}"
+                                  "url": "https://marketplace.visualstudio.com/items?itemName=WSO2.micro-integrator"
                                 }
                               }
                             }
@@ -157,7 +150,7 @@ jobs:
                               "text": "View",
                               "onClick": {
                                 "openLink": {
-                                  "url": "https://open-vsx.org/extension/wso2/${{ github.event.inputs.extension }}"
+                                  "url": "https://open-vsx.org/extension/wso2/micro-integrator"
                                 }
                               }
                             }

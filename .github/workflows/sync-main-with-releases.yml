@@ -94,5 +94,5 @@ jobs:
             curl \
             -X POST \
             -H 'Content-Type: application/json' \
-            "${{ secrets.TOOLING_TEAM_CHAT_API }}" \
+            "${{ secrets.MI_TEAM_CHAT_API }}" \
             -d "$body"

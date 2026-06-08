@@ -6,11 +6,6 @@ on:
       isPreRelease:
         required: true
         type: boolean 
-      mi:
-        description: Release MI extension
-        type: boolean
-        required: true
-        default: true
       version:
         type: choice
         description: 'Enter the version type'
@@ -31,7 +26,7 @@ jobs:
       runOnAWS: true
       isPreRelease: ${{ inputs.isPreRelease }}
       enableCache: false
-      mi:  ${{ inputs.mi }}
+      mi: true
       version: ${{ inputs.version }}
       isReleaseBuild: true
 
@@ -76,7 +71,6 @@ jobs:
           echo "chatAPI=${{ secrets.MI_TEAM_CHAT_API }}" >> $GITHUB_OUTPUT
  
       - name: Create a release in wso2/mi-vscode repo
-        if: ${{ github.event.inputs.mi == 'true' }}
         uses: ./.github/actions/release
         with:
           repo: wso2/mi-vscode
@@ -92,7 +86,7 @@ jobs:
           bot_username: ${{ secrets.CHOREO_BOT_USERNAME }}
           bot_email: ${{ secrets.CHOREO_BOT_EMAIL }}
           bot_token: ${{ secrets.CHOREO_BOT_TOKEN }}
-          mi: ${{ inputs.mi }}
+          mi: true
           chatAPI: ${{ steps.chat.outputs.chatAPI }}
 
   Notify:
