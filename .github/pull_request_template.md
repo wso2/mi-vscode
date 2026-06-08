@@ -8,7 +8,7 @@
 > Describe how you are implementing the solutions. Include an animated GIF or screenshot if the change affects the UI (email documentation@wso2.com to review all UI text). Include a link to a Markdown file or Google doc if the feature write-up is too long to paste here.
 
 ## User stories
-> Summary of user stories addressed by this change>
+> Summary of user stories addressed by this change
 
 ## Release note
 > Brief description of the new feature or bug fix as it will appear in the release notes
