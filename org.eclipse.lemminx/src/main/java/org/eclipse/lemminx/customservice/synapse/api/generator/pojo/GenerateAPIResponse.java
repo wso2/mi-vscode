@@ -18,6 +18,7 @@ public class GenerateAPIResponse {
 
     public String apiXml;
     public String endpointXml;
+    public String error;
     private final String XML_TAG = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
 
     public GenerateAPIResponse(String apiXml) {
@@ -29,5 +30,12 @@ public class GenerateAPIResponse {
 
         this.apiXml = XML_TAG + apiXml;
         this.endpointXml = XML_TAG + endpointXml;
+    }
+
+    public GenerateAPIResponse(String apiXml, String endpointXml, String error) {
+
+        this.apiXml = apiXml != null ? XML_TAG + apiXml : null;
+        this.endpointXml = endpointXml != null ? XML_TAG + endpointXml : null;
+        this.error = error;
     }
 }

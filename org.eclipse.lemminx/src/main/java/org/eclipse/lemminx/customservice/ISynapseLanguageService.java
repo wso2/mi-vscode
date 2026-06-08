@@ -359,4 +359,7 @@ public interface ISynapseLanguageService {
 
     @JsonRequest
     CompletableFuture<Either<InboundEndpointInfo, String>> getInboundInfo(InboundInfoRequest request);
+
+    @JsonRequest
+    CompletableFuture<String> fetchInboundConnectors();
 }

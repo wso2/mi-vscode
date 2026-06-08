@@ -21,6 +21,7 @@ public class Resource {
 
     private RegistryResource registry;
     private List<Node> connectors;
+    private List<Node> inboundConnectors;
     private List<Node> metadata;
     private FolderNode newResources;
 
@@ -28,6 +29,7 @@ public class Resource {
 
         registry = new RegistryResource();
         connectors = new ArrayList<>();
+        inboundConnectors = new ArrayList<>();
         metadata = new ArrayList<>();
     }
 
@@ -44,6 +46,11 @@ public class Resource {
     public void addConnector(Node connector) {
 
         connectors.add(connector);
+    }
+
+    public void addInboundConnector(Node inboundConnector) {
+
+        inboundConnectors.add(inboundConnector);
     }
 
     public void addMetadata(Node meta) {

@@ -1202,6 +1202,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         });
     }
 
+    @Override
+    public CompletableFuture<String> fetchInboundConnectors() {
+
+        return CompletableFuture.supplyAsync(() -> inboundConnectorHolder.getCustomInboundConnectors());
+    }
+
     public String getProjectUri() {
         return projectUri;
     }
