@@ -19,7 +19,7 @@ function run(command, args, cwd = repoRoot) {
 }
 
 run('git', ['submodule', 'sync']);
-run('git', ['submodule', 'update', '--init', '--remote']);
+run('git', ['submodule', 'update', '--init']);
 
 if (existsSync(submodulePath)) {
   const sparsePaths = [
