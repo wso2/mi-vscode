@@ -1169,9 +1169,6 @@ importers:
       '@wso2/font-wso2-vscode':
         specifier: workspace:*
         version: link:../font-wso2-vscode
-      '@wso2/syntax-tree':
-        specifier: workspace:*
-        version: link:../../../../../packages/syntax-tree
       '@wso2/ui-toolkit':
         specifier: workspace:*
         version: link:../ui-toolkit
