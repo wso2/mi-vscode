@@ -20,7 +20,7 @@ Thank you for your interest in contributing. This repository is focused on Micro
    ```bash
    pnpm run init-submodules
    ```
-   This updates the submodule to the latest commit on its configured branch for local development.
+   This checks out the submodule revision pinned in this repository so your local build matches CI.
 
 4. **Install Dependencies**  
    Use [Rush](https://rushjs.io/) for dependency management:
@@ -28,9 +28,14 @@ Thank you for your interest in contributing. This repository is focused on Micro
    rush install
    ```
 
-   CI uses the pinned submodule commit recorded in this repository. If your local submodule update changes shared package metadata, run:
+   If you intentionally want the latest shared submodule revision from its configured branch, run:
    ```bash
-   pnpm run init-submodules
+   pnpm run init-submodules:remote
+   ```
+
+   If your local submodule update changes shared package metadata, run:
+   ```bash
+   pnpm run init-submodules:remote
    rush update
    ```
    Commit both the updated `submodules/vscode-extensions` gitlink and `common/config/rush/pnpm-lock.yaml` when they change.

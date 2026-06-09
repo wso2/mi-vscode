@@ -20,14 +20,18 @@ pnpm run init-submodules
 rush install
 ```
 
-`pnpm run init-submodules` updates the shared `vscode-extensions` submodule to the latest commit on its configured branch for local development.
+`pnpm run init-submodules` checks out the `vscode-extensions` submodule revision pinned in this repository, which keeps local builds and CI aligned.
 
-CI intentionally runs the same script without `--remote`, so pipeline builds stay pinned to the submodule commit recorded in this repository.
+If you intentionally want the latest shared submodule revision from its configured branch, run:
+
+```bash
+pnpm run init-submodules:remote
+```
 
 If updating the submodule changes shared package metadata, run:
 
 ```bash
-pnpm run init-submodules
+pnpm run init-submodules:remote
 rush update
 ```
 
