@@ -82,8 +82,20 @@ export class DiagnosticsHandler {
         );
         try {
           const validator = await this.getOrCreateValidator(schemaFolder, resolved.xsdPath!);
-          const result = await validator.validate(text);
-          const allErrors = [...result.parseErrors, ...result.schemaErrors];
+          const sanitizedText = text
+            .replace(/\bxsi:schemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length))
+            .replace(/\bxsi:noNamespaceSchemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length));
+
+          const result = await validator.validate(sanitizedText);
+          // Xerces often reports structural errors (like mismatched tags) in both parseErrors and schemaErrors.
+          // Deduplicate them so the user doesn't see the exact same diagnostic twice.
+          const uniqueErrors = new Map<string, any>();
+          for (const e of [...result.parseErrors, ...result.schemaErrors]) {
+            const key = `${e.line}:${e.column}:${e.message}`;
+            uniqueErrors.set(key, e);
+          }
+          const allErrors = Array.from(uniqueErrors.values());
+
           const xmlLines = text.split("\n");
           const diagnostics: Diagnostic[] = allErrors.map((e: any) => {
             const line = e.line > 0 ? e.line - 1 : 0;
@@ -95,7 +107,7 @@ export class DiagnosticsHandler {
               range: { start, end: { line, character: col + 1 } },
               message: e.message,
               severity: DiagnosticSeverity.Error,
-              source: "xml-language-service",
+              source: "wso2-mi-language-server",
             };
           });
           this.send(document.uri, filterDiagnostics(diagnostics));
@@ -401,7 +413,7 @@ export class DiagnosticsHandler {
       range: d.range,
       message: d.message,
       severity: SEVERITY_MAP[d.severity],
-      source: "xml-language-service",
+      source: "wso2-mi-language-server",
     }));
   }
 }
