@@ -40,7 +40,7 @@
   },
   "scripts": {
     "prebuild": "pnpm run init-submodules && rush install",
-    "init-submodules": "node common/scripts/init-submodules.js",
+    "init-submodules": "node common/scripts/init-submodules.js --remote",
     "build": "rush build",
     "build:mi": "rush build --to micro-integrator",
     "build:ls": "rush build --to language-server"

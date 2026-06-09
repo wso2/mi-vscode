@@ -20,12 +20,20 @@ Thank you for your interest in contributing. This repository is focused on Micro
    ```bash
    pnpm run init-submodules
    ```
+   This updates the submodule to the latest commit on its configured branch for local development.
 
 4. **Install Dependencies**  
    Use [Rush](https://rushjs.io/) for dependency management:
    ```bash
    rush install
    ```
+
+   CI uses the pinned submodule commit recorded in this repository. If your local submodule update changes shared package metadata, run:
+   ```bash
+   pnpm run init-submodules
+   rush update
+   ```
+   Commit both the updated `submodules/vscode-extensions` gitlink and `common/config/rush/pnpm-lock.yaml` when they change.
 
 5. **Set Up Environment Variables**  
    `mi-extension` requires a `.env` file:
