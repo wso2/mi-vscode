@@ -575,6 +575,10 @@ public class Utils {
         return foundNode;
     }
 
+    public static boolean isMcpInboundEndpoint(DOMElement element) {
+        return Constant.MCP_INBOUND_LISTENER_CLASS.equals(element.getAttribute("class"));
+    }
+
     public static String addUnderscoreBetweenWords(String input) {
 
         StringBuilder result = new StringBuilder();
