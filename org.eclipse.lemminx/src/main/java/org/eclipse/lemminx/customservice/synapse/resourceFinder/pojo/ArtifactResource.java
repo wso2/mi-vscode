@@ -19,6 +19,7 @@ public class ArtifactResource extends Resource {
     private String artifactPath;
     private String absolutePath;
     private boolean isLocalEntry;
+    private boolean isMcpInbound;
 
     public String getArtifactPath() {
 
@@ -48,5 +49,15 @@ public class ArtifactResource extends Resource {
     public void setLocalEntry(boolean localEntry) {
 
         isLocalEntry = localEntry;
+    }
+
+    public boolean isMcpInbound() {
+
+        return isMcpInbound;
+    }
+
+    public void setMcpInbound(boolean mcpInbound) {
+
+        isMcpInbound = mcpInbound;
     }
 }

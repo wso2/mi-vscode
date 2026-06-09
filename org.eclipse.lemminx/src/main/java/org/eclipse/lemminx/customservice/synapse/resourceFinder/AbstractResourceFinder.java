@@ -1024,6 +1024,7 @@ public abstract class AbstractResourceFinder {
             artifact.setType(type);
             artifact.setFrom(ARTIFACTS);
             ((ArtifactResource) artifact).setLocalEntry(isLocalEntry);
+            ((ArtifactResource) artifact).setMcpInbound(Utils.isMcpInboundEndpoint(rootElement));
             ((ArtifactResource) artifact).setArtifactPath(file.getName());
             ((ArtifactResource) artifact).setAbsolutePath(file.getAbsolutePath());
             return artifact;
