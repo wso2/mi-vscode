@@ -64,7 +64,13 @@ jobs:
       - name: Get version
         id: vsix
         run: |
-          file=$(ls micro-integrator-[0-9]*.[0-9]*.[0-9]*.vsix)
+          shopt -s nullglob
+          files=(micro-integrator-[0-9]*.[0-9]*.[0-9]*.vsix)
+          if [ ${#files[@]} -ne 1 ]; then
+            echo "Error: Expected exactly one .vsix file, found ${#files[@]}"
+            exit 1
+          fi
+          file="${files[0]}"
           vsixName=$(basename "$file" .vsix)
           numericVersion="${vsixName#micro-integrator-}"
           echo "version=$vsixName" >> $GITHUB_OUTPUT
@@ -73,42 +79,46 @@ jobs:
       - name: Initiate release thread
         run: |
           RELEASE_TYPE=${{ inputs.isPreRelease == true && 'Pre-release' || 'Release' }}
-          body=$(cat << EOF
-          {
-            "thread": {"threadKey": "mi-release-${{ github.run_id }}"},
-            "cards": [
-              {
-                "header": {
-                  "title": "WSO2 Integrator: MI v${{ steps.vsix.outputs.numericVersion }} $RELEASE_TYPE",
-                  "subtitle": "${{ github.ref_name }} · triggered by ${{ github.actor }}"
-                },
-                "sections": [
-                  {
-                    "widgets": [
-                      {
-                        "keyValue": {
-                          "topLabel": "Status",
-                          "content": "Release workflow started",
-                          "button": {
-                            "textButton": {
-                              "text": "View Workflow",
-                              "onClick": {
-                                "openLink": {
-                                  "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          body=$(jq -n \
+            --arg threadKey "mi-release-${{ github.run_id }}" \
+            --arg numericVersion "${{ steps.vsix.outputs.numericVersion }}" \
+            --arg releaseType "$RELEASE_TYPE" \
+            --arg refName "${{ github.ref_name }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg workflowUrl "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              thread: { threadKey: $threadKey },
+              cards: [
+                {
+                  header: {
+                    title: ("WSO2 Integrator: MI v" + $numericVersion + " " + $releaseType),
+                    subtitle: ($refName + " · triggered by " + $actor)
+                  },
+                  sections: [
+                    {
+                      widgets: [
+                        {
+                          keyValue: {
+                            topLabel: "Status",
+                            content: "Release workflow started",
+                            button: {
+                              textButton: {
+                                text: "View Workflow",
+                                onClick: {
+                                  openLink: {
+                                    url: $workflowUrl
+                                  }
                                 }
                               }
                             }
                           }
                         }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-          EOF
-          )
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }')
           curl -X POST \
             -H 'Content-Type: application/json' \
             "${{ secrets.EDITOR_TEAM_CHAT_API }}&messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD" \
