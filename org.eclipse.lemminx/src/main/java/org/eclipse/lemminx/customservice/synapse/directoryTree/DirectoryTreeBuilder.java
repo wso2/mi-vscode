@@ -430,6 +430,7 @@ public class DirectoryTreeBuilder {
 
         analyzeRegistryResources(directoryTree);
         analyzeConnectorResources(directoryTree);
+        analyzeInboundConnectorResources(directoryTree);
         analyzeMetadataResources(directoryTree);
         analyzeNewResources(directoryTree);
     }
@@ -488,6 +489,25 @@ public class DirectoryTreeBuilder {
                     String path = file.getAbsolutePath();
                     Node resource = new Node("connector", name, path);
                     directoryTree.getResources().addConnector(resource);
+                }
+            }
+        }
+    }
+
+    private static void analyzeInboundConnectorResources(IntegrationDirectoryTree directoryTree) {
+
+        String inboundConnectorPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN
+                + File.separator + WSO2MI + File.separator + RESOURCES + File.separator
+                + Constant.INBOUND_CONNECTORS_DIR;
+        File folder = new File(inboundConnectorPath);
+        File[] listOfFiles = folder.listFiles();
+        if (listOfFiles != null) {
+            for (File file : listOfFiles) {
+                if (Utils.isZipFile(file) && !file.isHidden()) {
+                    String name = file.getName();
+                    String path = file.getAbsolutePath();
+                    Node resource = new Node("inboundConnector", name, path);
+                    directoryTree.getResources().addInboundConnector(resource);
                 }
             }
         }

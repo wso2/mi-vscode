@@ -123,8 +123,9 @@ public class InboundConnectorHolder {
         }
     }
 
-    public void getCustomInboundConnectors() {
+    public synchronized String getCustomInboundConnectors() {
 
+		boolean isInboundConnectorAdded = false;
         File extractFolder = new File(Path.of(this.projectPath, Constant.SRC, Constant.MAIN, Constant.WSO2MI,
                 Constant.RESOURCES, Constant.INBOUND_CONNECTORS_DIR).toString());
         InputStream inputStream = JsonLoader.class
@@ -152,6 +153,7 @@ public class InboundConnectorHolder {
                 newConnector.addProperty(Constant.TYPE, Constant.INBOUND_DASH_ENDPOINT);
                 JsonArray connectorArray = this.inboundConnectorListJson.getAsJsonArray(Constant.INBOUND_CONNECTOR_DATA);
                 connectorArray.add(newConnector);
+                isInboundConnectorAdded = true;
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Failed to import custom inbound-connector:" + zipName, e);
             }
@@ -163,6 +165,7 @@ public class InboundConnectorHolder {
                 }
             }
         }
+        return isInboundConnectorAdded ? "success" : "Failed to import the inbound-connector";
     }
 
     private List<File> getInboundConnectorZips(File extractFolder) {
