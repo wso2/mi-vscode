@@ -5,6 +5,7 @@ An LSP-compliant language server for WSO2 Micro Integrator XML configuration fil
 ## Features
 
 - **Validation** — XSD validation using the bundled Xerces-C WASM engine; reports both syntax errors and schema violations
+- **Maven Validation** — strict XSD validation for `pom.xml` files using the bundled Maven 4.0.0 schema (autocomplete/hover are disabled for POMs to keep it unobtrusive)
 - **Completions** — context-aware element and attribute suggestions based on the active schema
 - **Hover** — documentation for known elements and their attributes
 - **Go to definition / Find references** — navigate between XML elements
@@ -19,8 +20,10 @@ An LSP-compliant language server for WSO2 Micro Integrator XML configuration fil
 |---------|--------|
 | MI 4.3.0 | `resources/schemas/430/` |
 | MI 4.4.0 | `resources/schemas/440/` |
+| Maven 4.0.0 | `resources/schemas/maven/` |
 
-The built-in default is 4.4.0 (matched by `xmlns="http://ws.apache.org/ns/synapse"`). A specific version can be selected by the client via schema association settings.
+The built-in default is 4.4.0 (matched by `xmlns="http://ws.apache.org/ns/synapse"`). A specific version can be selected by the client via schema association settings. 
+**Note:** Any file named `pom.xml` is automatically hardcoded to use the Maven 4.0.0 schema, overriding any custom wildcard associations (like `**/*.xml`).
 
 ## Project structure
 
