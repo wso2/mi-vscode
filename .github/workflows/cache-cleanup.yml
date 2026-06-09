@@ -9,6 +9,10 @@ on:
     types:
       - closed
 
+permissions:
+  actions: write
+  contents: read
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest
@@ -39,4 +43,4 @@ jobs:
           done
           echo "Done"
         env:
-          GH_TOKEN: ${{ secrets.CHOREO_BOT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}

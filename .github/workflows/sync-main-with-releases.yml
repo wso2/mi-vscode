@@ -6,6 +6,10 @@ on:
     branches:
       - 'stable/**'
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   sync-main:
     if: github.event.pull_request.merged == true
@@ -15,30 +19,25 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
-          token: ${{ secrets.CHOREO_BOT_TOKEN }}
+          token: ${{ github.token }}
 
       - name: Configure Git
         run: |
-          git config --global user.email "${{ secrets.CHOREO_BOT_EMAIL }}"
-          git config --global user.name "${{ secrets.CHOREO_BOT_USERNAME }}"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
 
       - name: Create temporary branch and sync changes
         run: |
-          # Get the release branch name
           RELEASE_BRANCH="${{ github.event.pull_request.base.ref }}"
-          
-          # Create a temporary branch from main
           TEMP_BRANCH="sync/main-${RELEASE_BRANCH}-$(date +%s)"
           git checkout $RELEASE_BRANCH
           git checkout -b $TEMP_BRANCH
-
-          # Push changes to the temporary branch
           git push origin $TEMP_BRANCH
 
       - name: Create Pull Request
         id: commit
         env:
-          GH_TOKEN: ${{ secrets.CHOREO_BOT_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           RELEASE_BRANCH="${{ github.event.pull_request.base.ref }}"
           TEMP_BRANCH=$(git branch --show-current)
@@ -50,49 +49,64 @@ jobs:
             --body "This PR syncs changes from ${RELEASE_BRANCH} to the main branch.
 
             Automated PR created by GitHub Actions.")
-          
-          echo "prURL=$prURL" >> $GITHUB_OUTPUT
 
+          echo "prURL=$prURL" >> $GITHUB_OUTPUT
 
       - name: "PR Notification"
         shell: bash
         run: |
-            body=$(cat << EOF
-            {
+          body=$(cat << EOF
+          {
             "cards": [
-                { 
+              {
                 "header": {
-                    "title": "Automatic Sync PR",
+                    "title": "Automatic Sync PR"
                 },
                 "sections": [
-                    {
+                  {
                     "widgets": [
-                        {
+                      {
                         "keyValue": {
-                            "topLabel": "Pull Request",
-                            "content": "${{ steps.commit.outputs.prURL }}",
-                            "button": {
+                          "topLabel": "Pull Request",
+                          "content": "${{ steps.commit.outputs.prURL }}",
+                          "button": {
                             "textButton": {
-                                "text": "Approve",
-                                "onClick": {
+                              "text": "Approve",
+                              "onClick": {
                                 "openLink": {
-                                    "url": "${{ steps.commit.outputs.prURL }}/files"
+                                  "url": "${{ steps.commit.outputs.prURL }}/files"
                                 }
-                                }
+                              }
                             }
-                            }
+                          }
                         }
-                        }
+                      }
                     ]
-                    }
+                  }
                 ]
-                }
+              }
             ]
-            }
-            EOF
-            )
-            curl \
+          }
+          EOF
+          )
+          curl \
             -X POST \
             -H 'Content-Type: application/json' \
-            "${{ secrets.TOOLING_TEAM_CHAT_API }}" \
+            "${{ secrets.EDITOR_TEAM_CHAT_API }}" \
             -d "$body"
+
+  notify-failure:
+    needs: [sync-main]
+    if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: "Failure Notification"
+        uses: ./.github/actions/failure-notification
+        with:
+          title: "Sync Main with Release Branches Failed"
+          run_id: ${{ github.run_id }}
+          chat_api: ${{ secrets.EDITOR_TEAM_CHAT_API }}
+          repository: ${{ github.repository }}
