@@ -12,9 +12,10 @@ jobs:
       runTests: true
       runMIE2ETests: true
 
-  NotifySuccess:
-    name: Notify
+  NotifyEditorSuccess:
+    name: Notify Editor Team
     needs: Build
+    if: ${{ needs.Build.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Restore build
@@ -27,7 +28,31 @@ jobs:
         run: |
           unzip build.zip
           rm build.zip
-  
+
+      - name: Notification - Editor Team
+        uses: ./.github/actions/dailyBuildNotification
+        with:
+          title: "WSO2 Integrator: MI"
+          fileName: micro-integrator
+          chatAPI: ${{ secrets.EDITOR_TEAM_CHAT_API }}
+
+  NotifyMISuccess:
+    name: Notify MI Team
+    needs: Build
+    if: ${{ needs.Build.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore build
+        uses: actions/download-artifact@v4
+        with:
+          name: ExtBuild
+          path: ./
+
+      - name: Set up workspace
+        run: |
+          unzip build.zip
+          rm build.zip
+
       - name: Notification - MI
         uses: ./.github/actions/dailyBuildNotification
         with:
@@ -35,9 +60,9 @@ jobs:
           fileName: micro-integrator
           chatAPI: ${{ secrets.MI_TEAM_CHAT_API }}
 
-  NotifyFailure:
+  NotifyEditorFailure:
     needs: Build
-    if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode'}}
+    if: ${{ always() && needs.Build.result != 'success' && github.repository == 'wso2/mi-vscode'}}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -46,5 +71,5 @@ jobs:
         with:
           title: "Daily Build Failed"
           run_id: ${{ github.run_id }}
-          chat_api: ${{ secrets.MI_TEAM_CHAT_API }}
+          chat_api: ${{ secrets.EDITOR_TEAM_CHAT_API }}
           repository: ${{ github.repository }}

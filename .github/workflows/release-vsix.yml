@@ -17,6 +17,10 @@ on:
           - 'major'    
           - 'N/A'     
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   Build:
     name: Build branch - ${{ github.ref_name }}
@@ -60,45 +64,86 @@ jobs:
       - name: Get version
         id: vsix
         run: |
-          file=$(ls micro-integrator*.vsix)
-          version=$(basename "$file" .vsix)
-          echo $version
-          echo "version=$version" >> $GITHUB_OUTPUT
+          file=$(ls micro-integrator-[0-9]*.[0-9]*.[0-9]*.vsix)
+          vsixName=$(basename "$file" .vsix)
+          numericVersion="${vsixName#micro-integrator-}"
+          echo "version=$vsixName" >> $GITHUB_OUTPUT
+          echo "numericVersion=$numericVersion" >> $GITHUB_OUTPUT
 
-      - name: Set Chat API
-        id: chat
+      - name: Initiate release thread
         run: |
-          echo "chatAPI=${{ secrets.MI_TEAM_CHAT_API }}" >> $GITHUB_OUTPUT
+          RELEASE_TYPE=${{ inputs.isPreRelease == true && 'Pre-release' || 'Release' }}
+          body=$(cat << EOF
+          {
+            "thread": {"threadKey": "mi-release-${{ github.run_id }}"},
+            "cards": [
+              {
+                "header": {
+                  "title": "WSO2 Integrator: MI v${{ steps.vsix.outputs.numericVersion }} $RELEASE_TYPE",
+                  "subtitle": "${{ github.ref_name }} · triggered by ${{ github.actor }}"
+                },
+                "sections": [
+                  {
+                    "widgets": [
+                      {
+                        "keyValue": {
+                          "topLabel": "Status",
+                          "content": "Release workflow started",
+                          "button": {
+                            "textButton": {
+                              "text": "View Workflow",
+                              "onClick": {
+                                "openLink": {
+                                  "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+          EOF
+          )
+          curl -X POST \
+            -H 'Content-Type: application/json' \
+            "${{ secrets.EDITOR_TEAM_CHAT_API }}&messageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD" \
+            -d "$body"
  
       - name: Create a release in wso2/mi-vscode repo
         uses: ./.github/actions/release
         with:
           repo: wso2/mi-vscode
-          token: ${{ secrets.CHOREO_BOT_TOKEN }}
           name: micro-integrator
-          chatAPI: ${{ steps.chat.outputs.chatAPI }}
+          chatAPI: ${{ secrets.EDITOR_TEAM_CHAT_API }}
+          threadKey: mi-release-${{ github.run_id }}
 
       - name: Create PR and notify
         uses: ./.github/actions/pr
         with:
           version: ${{ steps.vsix.outputs.version }}
           isPreRelease: ${{ github.event.inputs.isPreRelease }}
-          bot_username: ${{ secrets.CHOREO_BOT_USERNAME }}
-          bot_email: ${{ secrets.CHOREO_BOT_EMAIL }}
-          bot_token: ${{ secrets.CHOREO_BOT_TOKEN }}
+          threadKey: mi-release-${{ github.run_id }}
           mi: true
-          chatAPI: ${{ steps.chat.outputs.chatAPI }}
+          chatAPI: ${{ secrets.EDITOR_TEAM_CHAT_API }}
 
   Notify:
     needs: [Release]
     if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode'}}
     runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: "Failure Notification"
         uses: ./.github/actions/failure-notification
         with:
           title: "Release Build Failed"
           run_id: ${{ github.run_id }}
-          chat_api: ${{ secrets.MI_TEAM_CHAT_API }}
+          chat_api: ${{ secrets.EDITOR_TEAM_CHAT_API }}
           repository: ${{ github.repository }}
+          thread_key: mi-release-${{ github.run_id }}
