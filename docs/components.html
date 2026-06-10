@@ -47,7 +47,8 @@
             <code>initializationOptions.schemas</code>, registers pattern mappings to bundled 430/440 schemas, advertises capabilities.</li>
           <li><code>onInitialized</code> — pulls <code>xmlLanguageServer.schemas</code> config, applies it, then validates open docs. Sets <code>initialConfigurationLoaded</code>.</li>
           <li><code>onDidChangeConfiguration</code> — invalidate caches → dispose validators → <strong>clear user associations</strong> → re-register init-option mappings → apply workspace schemas → re-validate.</li>
-          <li><code>onDidChangeContent</code> — validate the changed document (deferred until initial config is loaded).</li>
+          <li><code>onDidChangeContent</code> — schedule validation for the changed document, <strong>debounced 300&nbsp;ms per URI</strong>: each edit cancels the previous timer, so a burst of keystrokes produces one validation after the user pauses (deferred until initial config is loaded).</li>
+          <li><code>onDidClose</code> — cancel any pending debounce timer for the closed document.</li>
           <li><code>onShutdown</code> — dispose diagnostics + service.</li>
         </ul>
         <p>Also defines <code>registerSchemas()</code> for the init-options <code>{pattern, schema}</code> shape and <code>SCHEMA_FOLDER_MAP</code> (430/440 → bundled folder).</p>
@@ -77,7 +78,7 @@
 
         <h2 id="diag">Diagnostics</h2>
         <h3><span class="file-ref">src/diagnosticsHandler.ts</span> <span class="tag orange">orchestrator</span></h3>
-        <p>The busiest file. <code>validateAndSend()</code> drives the whole diagnostics flow. Beyond that it owns the schema-graph loading used by both engines:</p>
+        <p>The busiest file. <code>validateAndSend()</code> drives the whole diagnostics flow. It captures <code>document.version</code> on entry and re-checks it before publishing (<strong>version guard</strong>): if the document changed while the async validation ran, the stale result is discarded instead of overwriting diagnostics from a newer run. Beyond that it owns the schema-graph loading used by both engines:</p>
         <ul>
           <li><code>getOrCreateValidator()</code> — cached <code>ProjectValidator</code> per <code>xsdPath</code>.</li>
           <li><code>buildFilesMap()</code> — recursively reads every <code>.xsd/.dtd</code> in the schema folder (feeds Xerces).</li>

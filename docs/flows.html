@@ -73,8 +73,10 @@ sequenceDiagram
 
         <!-- ── 2 ────────────────────────────────────────────────────────── -->
         <h2 id="validate">2 · Document change → diagnostics</h2>
-        <p>The main loop. Every edit runs this. Note both engines are touched: the completion schema is
-          registered <em>and</em> the WASM validator runs.</p>
+        <p>The main loop. Edits are <strong>debounced 300&nbsp;ms per document</strong>, so a typing burst
+          runs this once after the user pauses. Note both engines are touched: the completion schema is
+          registered <em>and</em> the WASM validator runs. A <strong>version guard</strong> at publish
+          time discards results that went stale while validation was running.</p>
 
         <figure class="mermaid">
 sequenceDiagram
@@ -86,7 +88,9 @@ sequenceDiagram
     participant W as Xerces WASM
 
     C->>S: textDocument/didChangeContent
+    Note over S: debounce 300 ms per URI<br/>burst of keystrokes → one run
     S->>DH: validateAndSend(document)
+    DH->>DH: capture document.version
     DH->>DH: parseXMLDocument(); ns = getNamespace?.()
     DH->>SP: resolveSchemaForDocument(file, ns, path)
 
@@ -102,7 +106,11 @@ sequenceDiagram
         DH->>W: validator.validate(text)
         W-->>DH: parseErrors + schemaErrors
         DH->>DH: map ranges + filterDiagnostics()
-        DH-->>C: publishDiagnostics(uri, [...])
+        alt version unchanged
+            DH-->>C: publishDiagnostics(uri, [...])
+        else newer edits arrived meanwhile
+            Note over DH: stale — result discarded
+        end
     else no schema
         DH-->>C: publishDiagnostics(uri, []) — clear stale
     end
@@ -110,14 +118,24 @@ sequenceDiagram
 
         <h4>Step by step</h4>
         <ol class="steps">
+          <li><span class="st">Debounce</span> Each edit cancels the previous timer; validation fires 300&nbsp;ms after the last keystroke. Pending timers are cancelled when the document closes.</li>
+          <li><span class="st">Snapshot version</span> <code>validateAndSend</code> captures <code>document.version</code> on entry — the live document keeps advancing while async work runs.</li>
           <li><span class="st">Parse</span> The document text becomes an AST; a namespace is used only if the parsed document exposes one.</li>
           <li><span class="st">Resolve</span> <code>SchemaAssociator</code> picks an XSD by user/init pattern first, then by built-in namespace fallback.</li>
           <li><span class="st">Register completion schema</span> <em>(once per document)</em> The referenced XSD graph is loaded and registered under an <code>auto://&lt;path&gt;</code> URI so completion/hover have a model. Skipped on later edits via <code>hasSchema()</code>.</li>
           <li><span class="st">Get validator</span> A <code>ProjectValidator</code> is created (or reused) for that <code>xsdPath</code>, fed every <code>.xsd/.dtd</code> in the folder.</li>
           <li><span class="st">Validate</span> Xerces runs syntax + schema validation in one SAX pass.</li>
           <li><span class="st">Map &amp; filter</span> Raw errors → LSP ranges; noisy cascades collapsed and de-duplicated.</li>
+          <li><span class="st">Version guard</span> If <code>document.version</code> moved on during validation, the result is discarded — a slow older run can never overwrite a newer one.</li>
           <li><span class="st">Publish</span> Diagnostics are sent; if no schema matched, any stale diagnostics are cleared.</li>
         </ol>
+
+        <div class="callout info">
+          <p><span class="label">Why the version guard?</span> Validations for versions 5 and 6 can
+          finish out of order — if v5's (slower) run completed after v6's, it used to overwrite the
+          correct diagnostics with squiggles computed from text that no longer exists. The guard makes
+          publish order irrelevant; the debounce makes the race rare in the first place.</p>
+        </div>
 
         <!-- ── 3 ────────────────────────────────────────────────────────── -->
         <h2 id="resolve">3 · Schema resolution priority</h2>
@@ -239,7 +257,7 @@ flowchart TD
           <thead><tr><th>#</th><th>Trigger</th><th>Engine(s)</th><th>Outcome</th></tr></thead>
           <tbody>
             <tr><td>1</td><td><code>initialize</code> / <code>initialized</code></td><td>—</td><td>schemas registered, capabilities advertised</td></tr>
-            <tr><td>2</td><td><code>didChangeContent</code></td><td>① + ②</td><td>diagnostics published</td></tr>
+            <tr><td>2</td><td><code>didChangeContent</code> (debounced 300&nbsp;ms)</td><td>① + ②</td><td>diagnostics published (stale results discarded)</td></tr>
             <tr><td>3</td><td>(internal) <code>findSchema</code></td><td>—</td><td>an XSD chosen, or none</td></tr>
             <tr><td>4</td><td><code>completion</code></td><td>②</td><td>completion list</td></tr>
             <tr><td>5</td><td><code>hover</code></td><td>① gates ②</td><td>hover or null</td></tr>
