@@ -178,15 +178,33 @@ connection.onDidChangeConfiguration((params: DidChangeConfigurationParams) => {
   void validateOpenDocumentsSafely("configuration change");
 });
 
-documents.onDidChangeContent(async (change) => {
+// Debounce validation per document so rapid keystrokes trigger a single
+// validation after the user pauses, instead of one full Xerces pass per edit.
+const VALIDATION_DEBOUNCE_MS = 300;
+const pendingValidations = new Map<string, NodeJS.Timeout>();
+
+documents.onDidChangeContent((change) => {
   if (!initialConfigurationLoaded) {
     connection.console.log(
       `[onDidChangeContent] Deferring validation for ${change.document.uri} until initial configuration is loaded`
     );
     return;
   }
-  connection.console.log(`[onDidChangeContent] Validating ${change.document.uri}`);
-  await validateAndSendSafely(change.document, "document change");
+  const uri = change.document.uri;
+  clearTimeout(pendingValidations.get(uri));
+  pendingValidations.set(uri, setTimeout(() => {
+    pendingValidations.delete(uri);
+    connection.console.log(`[onDidChangeContent] Validating ${uri}`);
+    void validateAndSendSafely(change.document, "document change");
+  }, VALIDATION_DEBOUNCE_MS));
+});
+
+documents.onDidClose((event) => {
+  const timer = pendingValidations.get(event.document.uri);
+  if (timer) {
+    clearTimeout(timer);
+    pendingValidations.delete(event.document.uri);
+  }
 });
 
 connection.onShutdown(() => {

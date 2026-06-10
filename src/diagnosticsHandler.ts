@@ -38,6 +38,18 @@ export class DiagnosticsHandler {
   }
 
   async validateAndSend(document: TextDocument): Promise<void> {
+    // `document` is the live TextDocument managed by the LSP layer — its version
+    // advances as the user keeps typing while this async validation runs. Capture
+    // the version now and discard the result if it is stale by publish time, so a
+    // slow older validation can never overwrite diagnostics from a newer one.
+    const versionAtStart = document.version;
+    const isStale = (): boolean => {
+      if (document.version === versionAtStart) return false;
+      this.connection.console.log(
+        `[DiagnosticsHandler] Discarding stale diagnostics for ${document.uri} (validated v${versionAtStart}, now v${document.version})`
+      );
+      return true;
+    };
     const fileName = document.uri.split("/").pop() ?? "";
     const documentPath = document.uri.startsWith("file://")
       ? decodeURIComponent(document.uri.replace("file://", ""))
@@ -110,6 +122,7 @@ export class DiagnosticsHandler {
               source: "wso2-mi-language-server",
             };
           });
+          if (isStale()) return;
           this.send(document.uri, filterDiagnostics(diagnostics));
           return;
         } catch (error) {
@@ -123,6 +136,7 @@ export class DiagnosticsHandler {
         `[DiagnosticsHandler] Validating ${document.uri} against auto schema`
       );
       const raw = await this.service.validate(autoUri, xmlDoc);
+      if (isStale()) return;
       const converted = this.toDiagnostics(raw);
       this.send(document.uri, filterDiagnostics(converted));
       return;
