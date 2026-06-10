@@ -282,6 +282,7 @@ export class UnitTest {
             const form = await paramManager.getAddNewForm();
             await this.fillTestCaseForm(form, testCase);
             await form.submit('Create');
+            await parentForm.switchToFormView(undefined, 60000);
         }
     }
 
@@ -395,12 +396,14 @@ export class UnitTest {
                     }
                 });
                 await form.submit('Add');
+                await parentForm.switchToFormView(undefined, 60000);
             } else {
                 await form.clickAddNewForField('Select Mock Service');
                 const mockServiceForm = new Form(this._page, frame);
                 await mockServiceForm.switchToFormView();
                 await this.fillMockServiceForm(mockServiceForm, mockService, frame);
                 await mockServiceForm.submit('Create');
+                await parentForm.switchToFormView(undefined, 60000);
             }
         }
     }
