@@ -413,19 +413,25 @@ export class SidePanel {
         if (!resourceView) {
             throw new Error("Failed to switch to Resource View iframe");
         }
-        const connector = resourceView.getByTestId('sidepanel').getByText(name);
-        await connector.waitFor();
+        const connectorCard = resourceView.getByTestId('sidepanel').locator(`#card-select-${name}`).first();
+        await connectorCard.waitFor({ state: 'visible' });
 
         if (version) {
-            await connector.click();
-            await resourceView.getByRole('button', { name: '' }).click();
-            await resourceView.getByText(version).waitFor();
-            await resourceView.getByText(version).click();
+            await connectorCard.click();
+            const connectorSection = connectorCard.locator('..');
+            const versionInput = connectorSection.getByRole('textbox', { name: 'Version' }).first();
+            await versionInput.waitFor({ state: 'visible' });
+            await versionInput.click();
+            await versionInput.fill(version);
+
+            const versionOption = resourceView.getByRole('option', { name: version, exact: true }).first();
+            await versionOption.waitFor({ state: 'visible', timeout: 30000 });
+            await versionOption.click();
         }
 
-        
-        await resourceView.locator(`#card-select-${name} i`).first().waitFor();
-        await resourceView.locator(`#card-select-${name} i`).first().click();
+        const downloadButton = connectorCard.locator('..').locator('.download-icon').first();
+        await downloadButton.waitFor({ state: 'visible' });
+        await downloadButton.click();
 
         await this.confirmDownloadDependency();
 

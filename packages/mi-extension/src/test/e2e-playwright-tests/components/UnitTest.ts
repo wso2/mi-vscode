@@ -93,7 +93,7 @@ export class UnitTest {
     public async init() {
         console.log('Selecting Testing section in VS Code');
         const testActivity = this._page.getByRole('tab', { name: 'Testing' });
-        await testActivity.waitFor();
+        await testActivity.waitFor({ state: 'visible', timeout: 60000 });
         if ((await testActivity.getAttribute('aria-selected')) !== 'true') {
             const testBtn = testActivity.locator('a');
             await testBtn.waitFor();
@@ -101,17 +101,24 @@ export class UnitTest {
         } else {
             console.log('Testing section is already selected');
         }
+        await this._page.locator('div[aria-label="Test Explorer Section"]').waitFor({ state: 'visible', timeout: 60000 });
     }
 
     public async openUnitTestFormByMainBtn() {
         console.log('Opening Unit Test Form by "Add Unit Test" button');
-        await this._page.getByRole('button', { name: 'Add Unit Test', exact: true }).click();
+        const addUnitTestBtn = this._page.getByRole('button', { name: 'Add Unit Test', exact: true });
+        await addUnitTestBtn.waitFor({ state: 'visible', timeout: 60000 });
+        await addUnitTestBtn.scrollIntoViewIfNeeded();
+        await addUnitTestBtn.click();
     }
 
     public async openUnitTestFormByExplorer() {
         const testExplorer = this._page.locator('div[aria-label="Test Explorer Section"]');
+        await testExplorer.waitFor({ state: 'visible', timeout: 60000 });
         await testExplorer.hover();
-        await testExplorer.getByLabel('Test Explorer actions').getByLabel('Add unit test').click();
+        const addUnitTestBtn = testExplorer.getByLabel('Test Explorer actions').getByLabel('Add unit test');
+        await addUnitTestBtn.waitFor({ state: 'visible', timeout: 60000 });
+        await addUnitTestBtn.click();
     }
 
     private async getUniTestForm(): Promise<Form> {
