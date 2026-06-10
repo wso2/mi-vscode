@@ -30,16 +30,19 @@ export class AddArtifact {
     }
 
     public async init(projectName?: string) {
-        let iframeTitle;
+        const artifactTitle = projectName ? `Add Artifact - ${projectName}` : MACHINE_VIEW.ADD_ARTIFACT;
+        let iframeTitle: string | null = null;
 
-        try {
-            const webview = await page.getCurrentWebview();
-            iframeTitle = webview.title;
-        } catch (error) {
-            console.error("Error retrieving iframe title:", error);
-            iframeTitle = null;
-        }                         
-        if (iframeTitle !== MACHINE_VIEW.ADD_ARTIFACT && !projectName) {
+        if (!projectName) {
+            try {
+                const webview = await page.getCurrentWebview();
+                iframeTitle = webview.title;
+            } catch {
+                iframeTitle = null;
+            }
+        }
+
+        if (iframeTitle !== artifactTitle && !projectName) {
             const projectExplorer = new ProjectExplorer(this._page);
             await projectExplorer.goToOverview("testProject");
     
@@ -48,7 +51,7 @@ export class AddArtifact {
             await overviewPage.goToAddArtifact();    
         } 
 
-        const webview = projectName ? await switchToIFrame(`Add Artifact - ${projectName}`, this._page) : await switchToIFrame('Add Artifact', this._page); 
+        const webview = await switchToIFrame(artifactTitle, this._page);
         if (!webview) {
             throw new Error("Failed to switch to Add Artifact iframe");
         }

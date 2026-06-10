@@ -29,22 +29,24 @@ export class Overview {
     }
 
     public async init(projectName : string = "testProject", isMultiWorkspace : boolean = false) {
-        let iframeTitle;
+        const overviewTitle = isMultiWorkspace ? `Project Overview - ${projectName}` : MACHINE_VIEW.Overview;
+        let iframeTitle: string | null = null;
 
-        try {
-            const webview = await page.getCurrentWebview();
-            iframeTitle = webview.title;
-        } catch (error) {
-            console.error("Error retrieving iframe title:", error);
-            iframeTitle = null;
+        if (!isMultiWorkspace) {
+            try {
+                const webview = await page.getCurrentWebview();
+                iframeTitle = webview.title;
+            } catch {
+                iframeTitle = null;
+            }
         }
-        if (iframeTitle != MACHINE_VIEW.Overview) {
+
+        if (iframeTitle !== overviewTitle) {
             const projectExplorer = new ProjectExplorer(this._page);
             await projectExplorer.goToOverview(projectName);
         }
-        const webview = isMultiWorkspace ? 
-            await switchToIFrame(`Project Overview - ${projectName}`, this._page) : 
-            await switchToIFrame("Project Overview", this._page);
+
+        const webview = await switchToIFrame(overviewTitle, this._page);
         if (!webview) {
             throw new Error("Failed to switch to Overview iframe");
         }
