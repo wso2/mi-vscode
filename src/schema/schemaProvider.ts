@@ -178,9 +178,14 @@ export class SchemaProvider {
         },
       }));
     }
-    // Xerces runs syntax parsing + XSD validation in one pass, so both
-    // syntax errors and schema errors are returned even on malformed XML.
-    return validator.validate(document.text);
+    // Xerces-wasm does not support remote protocols (http/https). If xsi:schemaLocation is present,
+    // it will try to fetch the URL and fail with "unsupported protocol in URL".
+    // Replacing the entire attribute with spaces preserves line/col offsets and forces it to use our cached schema.
+    const sanitizedText = document.text
+      .replace(/\bxsi:schemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length))
+      .replace(/\bxsi:noNamespaceSchemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length));
+
+    return validator.validate(sanitizedText);
   }
 
   /** Returns true when a compiled validator for the given document URI exists in the registry. */

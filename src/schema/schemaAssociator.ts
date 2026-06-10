@@ -43,6 +43,12 @@ export class SchemaAssociator {
         pattern: "**/*.xml",
         isBuiltIn: true,
       },
+      {
+        namespace: "http://maven.apache.org/POM/4.0.0",
+        xsdPath: path.join(SCHEMAS_ROOT, "maven", "maven-4.0.0.xsd"),
+        pattern: "**/pom.xml",
+        isBuiltIn: true,
+      },
     ];
     this.userAssociations = [];
   }
@@ -66,7 +72,17 @@ export class SchemaAssociator {
    */
   findSchema(fileName: string, xmlns?: string, documentPath?: string): ResolvedSchema | null {
 
-    // user associations checked FIRST (pattern match)
+    // 0. Hardcoded priority for pom.xml to prevent custom **/*.xml associations
+    // from incorrectly mapping Maven files to Synapse schemas.
+    if (fileName === "pom.xml" || fileName.endsWith("/pom.xml") || fileName.endsWith("\\pom.xml")) {
+      const pomAssoc = this.builtInAssociations.find((a) => a.namespace === "http://maven.apache.org/POM/4.0.0");
+      if (pomAssoc) {
+        const xsdText = this.readXsdFile(pomAssoc.xsdPath);
+        if (xsdText) return { xsdText, xsdPath: pomAssoc.xsdPath, source: "builtin" };
+      }
+    }
+
+    // 1. user associations checked (pattern match)
     for (const assoc of this.userAssociations) {
       if (this.matchesPattern(fileName, assoc.pattern, documentPath)) {
         const xsdText = this.readXsdFile(assoc.xsdPath);
@@ -75,9 +91,18 @@ export class SchemaAssociator {
       }
     }
 
-    // built-ins matched by namespace only
+    // built-ins matched by namespace
     for (const assoc of this.builtInAssociations) {
       if (xmlns !== undefined && assoc.namespace === xmlns) {
+        const xsdText = this.readXsdFile(assoc.xsdPath);
+        if (xsdText === null) return null;
+        return { xsdText, xsdPath: assoc.xsdPath, source: "builtin" };
+      }
+    }
+
+    // built-ins matched by specific pattern (fallback for files without namespace)
+    for (const assoc of this.builtInAssociations) {
+      if (assoc.pattern && assoc.pattern !== "**/*.xml" && this.matchesPattern(fileName, assoc.pattern, documentPath)) {
         const xsdText = this.readXsdFile(assoc.xsdPath);
         if (xsdText === null) return null;
         return { xsdText, xsdPath: assoc.xsdPath, source: "builtin" };

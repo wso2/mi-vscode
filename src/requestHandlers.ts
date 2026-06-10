@@ -52,6 +52,9 @@ export function registerRequestHandlers(
     );
     const document = documents.get(params.textDocument.uri);
     if (!document) return [];
+
+    if (document.uri.endsWith("pom.xml")) return [];
+
     const xmlDoc = getParsedDoc(document);
     return toLSPCompletionList(
       service.doComplete(xmlDoc, params.position, getFileName(document.uri), getDocumentPath(document.uri))
@@ -64,6 +67,9 @@ export function registerRequestHandlers(
     );
     const document = documents.get(params.textDocument.uri);
     if (!document) return null;
+
+    if (document.uri.endsWith("pom.xml")) return null;
+
     const { line, character } = params.position;
 
     // Don't show schema hover for elements that Xerces has already flagged as invalid.
