@@ -419,7 +419,7 @@ export class SidePanel {
         if (version) {
             await connectorCard.click();
             const connectorSection = connectorCard.locator('..');
-            const versionInput = connectorSection.getByRole('textbox', { name: 'Version' }).first();
+            const versionInput = connectorSection.locator('input[role="combobox"]').first();
             await versionInput.waitFor({ state: 'visible' });
             await versionInput.click();
             await versionInput.fill(version);
