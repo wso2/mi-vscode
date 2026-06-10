@@ -17,7 +17,6 @@ export function getLanguageService() {
   const schemaProvider = new SchemaProvider();
 
   return {
-    // ── Phase 01 — XML Core ──────────────────────────────────────────────────
 
     parseXMLDocument(uri: string, text: string): XMLDocument {
       return parseXMLDocument(uri, text);
@@ -68,7 +67,6 @@ export function getLanguageService() {
       return findReferences(document, position);
     },
 
-    // ── Debug / Inspection ───────────────────────────────────────────────────
 
     printAST(document: XMLDocument, options?: PrintOptions): string {
       return printAST(document, options);
@@ -82,7 +80,6 @@ export function getLanguageService() {
       return printTreeAST(document);
     },
 
-    // ── Phase 02 — XSD Schema Validation ────────────────────────────────────
 
     async registerSchema(info: SchemaInfo): Promise<void> {
       return schemaProvider.registerSchema(info);
