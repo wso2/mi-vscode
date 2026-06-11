@@ -96,12 +96,12 @@ sequenceDiagram
 
     alt schema resolved
         opt first time for this document (!hasSchema)
-            Note over DH,SP: register completion schema (engine ②)
+            Note over DH,SP: register completion schema (engine 2)
             DH->>DH: loadReferencedXsds() — follow refs
             DH->>SP: registerSchema(auto://path, imports)
         end
 
-        Note over DH,W: run diagnostics (engine ①)
+        Note over DH,W: run diagnostics (engine 1)
         DH->>DH: getOrCreateValidator(xsdPath)<br/>buildFilesMap() — whole folder
         DH->>W: validator.validate(text)
         W-->>DH: parseErrors + schemaErrors
