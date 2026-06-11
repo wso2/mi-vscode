@@ -139,9 +139,6 @@ export default function createTests() {
                 // Wait for the project explorer to be ready
                 await page.executePaletteCommand('Reload Window');
                 console.log("Reloaded window");
-                await page.page.waitForSelector('a[aria-label="WSO2 Integrator"]', { timeout: 120000 });
-                await page.selectSidebarItem('WSO2 Integrator');
-                console.log("WSO2 Integrator sidebar is ready");
                 const project1Explorer = new ProjectExplorer(page.page);
                 console.log("Initializing project explorer");
                 await project1Explorer.goToOverview("project1", 120000);
