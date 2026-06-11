@@ -236,3 +236,18 @@ export async function waitUntilPomNotContains(page: Page, filePath: string, expe
     
     return true;
 }
+
+export async function dismissUnexpectedCreateFolderPrompt() {
+    const promptMessage = page.page.getByText('Would you like to create it?');
+    const promptVisible = await promptMessage.waitFor({ state: 'visible', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+
+    if (!promptVisible) {
+        return;
+    }
+
+    console.log('Dismissing unexpected create folder prompt');
+    await page.page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await promptMessage.waitFor({ state: 'detached', timeout: 5000 }).catch(() => { });
+}
