@@ -116,7 +116,7 @@ flowchart TB
     R --> PATHA
     R --> PATHB
 
-    subgraph PATHA["① Diagnostics path"]
+    subgraph PATHA["1 Diagnostics path"]
       direction TB
       BFM["buildFilesMap()<br/><i>walk whole folder,<br/>grab every .xsd/.dtd</i>"]
       PV["ProjectValidator<br/>(Xerces WASM)"]
@@ -124,7 +124,7 @@ flowchart TB
       BFM --> PV --> DG
     end
 
-    subgraph PATHB["② Completion / hover path"]
+    subgraph PATHB["2 Completion / hover path"]
       direction TB
       LRX["loadReferencedXsds()<br/><i>follow schemaLocation<br/>references recursively</i>"]
       XCP["XsdCompletionProvider<br/>(hand-written reader)"]

@@ -70,10 +70,10 @@
         <h3><span class="file-ref">src/schema/schemaProvider.ts</span></h3>
         <p>The registry. <code>registerSchema()</code> creates one <code>XsdValidatorService</code> wrapper per unique <code>xsdKey</code> (it stores the XSD text — no compilation here) and builds a completion provider from the fully-inlined XSD (via <code>inlineIncludes()</code>). <code>validate()</code> routes to the right validator or falls back to the parser's syntax errors. <code>invalidateAutoSchemas()</code> drops all <code>auto://</code> entries; <code>dispose()</code> tears everything down. Holds the three maps described in <a href="architecture.html#caches">Caches &amp; keys</a>.</p>
 
-        <h3><span class="file-ref">src/schema/xsdCompletionProvider.ts</span> <span class="tag purple">engine ②</span></h3>
+        <h3><span class="file-ref">src/schema/xsdCompletionProvider.ts</span> <span class="tag purple">engine 2</span></h3>
         <p>Hand-written XSD reader. Parses element/attribute/type declarations from XSD text and answers completion + hover queries (<code>getAllElements</code>, <code>getElement</code>, …). This is the completion "brain" — independent of Xerces.</p>
 
-        <h3><span class="file-ref">src/schema/xsdValidator.ts</span> <span class="tag green">engine ①</span></h3>
+        <h3><span class="file-ref">src/schema/xsdValidator.ts</span> <span class="tag green">engine 1</span></h3>
         <p>Thin wrapper over the WASM <code>validate()</code>. Extracts the <code>targetNamespace</code> via regex (Xerces needs it), runs validation, and maps raw Xerces errors to ranges — including clever remapping of mismatched-tag and content-model errors back onto the offending open tag.</p>
 
         <h2 id="diag">Diagnostics</h2>
