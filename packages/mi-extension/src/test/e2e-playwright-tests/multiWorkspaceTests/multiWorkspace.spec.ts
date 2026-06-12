@@ -17,7 +17,7 @@
  */
 
 import { test } from '@playwright/test';
-import { clearNotificationAlerts, initTest, page, showNotifications } from '../Utils';
+import { clearNotificationAlerts, dismissUnexpectedCreateFolderPrompt, initTest, page, showNotifications } from '../Utils';
 import { ProjectExplorer } from '../components/ProjectExplorer';
 import { Overview } from '../components/Overview';
 import { AddArtifact } from '../components/AddArtifact';
@@ -127,6 +127,7 @@ export default function createTests() {
                 });
                 console.log("Filled Project Creation Form");
                 await createNewProjectForm.submit();
+                await dismissUnexpectedCreateFolderPrompt();
                 console.log('Project created');
                 const currentWindowButton = page.page.getByRole('button', { name: 'Current Window' });
                 await currentWindowButton.waitFor({ timeout: 24000 });

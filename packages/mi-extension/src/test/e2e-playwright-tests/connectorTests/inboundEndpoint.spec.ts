@@ -924,9 +924,9 @@ export default function createTests() {
                             type: 'input',
                             value: 'exampleObject',
                         },
-                        'Package Version*': {
+                        'Salesforce API Version*': {
                             type: 'input',
-                            value: '1.0.0',
+                            value: '22.0',
                         },
                         'User Name*': {
                             type: 'input',

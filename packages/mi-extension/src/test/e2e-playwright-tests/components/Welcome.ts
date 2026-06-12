@@ -119,8 +119,12 @@ export class Welcome {
             return true;
         }
 
+        if (!webview) {
+            throw new Error('Failed to get current webview for environment setup');
+        }
+
         console.log('Setting up environment');
-        const container = webview?.locator('div#root');
+        const container = webview.locator('div#root');
         await container.waitFor();
 
         //  if both Java and MI are not setup, we will download both
@@ -130,7 +134,7 @@ export class Welcome {
             await downloadJavaAndMi.click();
             try {
                 console.log(`Waiting for I Agree button`);
-                const iAgreeBtn = await getVsCodeButton(container!, 'I Agree', 'primary');
+                const iAgreeBtn = await getVsCodeButton(container, 'I Agree', 'primary');
                 await iAgreeBtn.click();
             } catch (error) {
                 console.log('No terms and conditions to accept');
@@ -146,28 +150,28 @@ export class Welcome {
                 console.log('No Java and MI setup messages, assuming both are setup');
             }
         } else {
-            const javaErrorMessage = container?.locator('div:has-text("Java is not properly setup")');
-            await javaErrorMessage?.waitFor({ timeout: 8000 }).catch(() => { });
-            if (await javaErrorMessage!.count() > 0) {
+            const javaErrorMessage = container.locator('div:has-text("Java is not properly setup")');
+            await javaErrorMessage.waitFor({ timeout: 8000 }).catch(() => { });
+            if (await javaErrorMessage.count() > 0) {
                 console.log('Java is not setup');
-                const downloadJava = await getVsCodeButton(container!, 'Download Java', 'primary');
+                const downloadJava = await getVsCodeButton(container, 'Download Java', 'primary');
                 await downloadJava.click();
 
                 // Wait for Java to be downloaded
-                await container?.locator('div:has-text("Java is setup")').first().waitFor({ timeout: 180000 });
+                await container.locator('div:has-text("Java is setup")').first().waitFor({ timeout: 180000 });
                 console.log('Java setup done');
             }
-            const microIntegratorErrorMessage = container?.locator('div:has-text("WSO2 Integrator: MI is not available")');
-            if (await microIntegratorErrorMessage!.count() > 0) {
+            const microIntegratorErrorMessage = container.locator('div:has-text("WSO2 Integrator: MI is not available")');
+            if (await microIntegratorErrorMessage.count() > 0) {
                 console.log('WSO2 Integrator: MI is not setup');
-                const checkbox = container?.locator(`vscode-checkbox[aria-label="Download Latest Pack"]`);
-                if (await checkbox?.count() > 0) {
+                const checkbox = container.locator(`vscode-checkbox[aria-label="Download Latest Pack"]`);
+                if (await checkbox.count() > 0) {
                     const isChecked = await checkbox.isChecked();
                     if (isChecked) {
                         await checkbox.click();
                     }
                 }
-                const downloadMI = await getVsCodeButton(container!, 'Download WSO2 Integrator: MI', 'primary');
+                const downloadMI = await getVsCodeButton(container, 'Download WSO2 Integrator: MI', 'primary');
                 await downloadMI.click();
 
                 // Wait for MI to be downloaded
@@ -185,7 +189,7 @@ export class Welcome {
         } catch (error) {
             console.log('Continue button not found, trying Continue Anyway button');
             try {
-                const continueAnywayBtn = await getVsCodeButton(container!, 'Continue Anyway', 'secondary');
+                const continueAnywayBtn = await getVsCodeButton(container, 'Continue Anyway', 'secondary');
                 console.log('Clicking Continue Anyway button');
                 await continueAnywayBtn.click({ timeout: 10000 });
             } catch (innerError) {
@@ -195,7 +199,7 @@ export class Welcome {
         
         try {
             console.log('Clicking No, Don\'t Ask Again button');
-            await container!.page().getByRole('button', { name: "No, Don't Ask Again" })
+            await container.page().getByRole('button', { name: "No, Don't Ask Again" })
                 .click({ timeout: 10000 }).catch(() => { });
         } catch (error) {
             console.log('No, Don\'t Ask Again button not found, proceeding without clicking');
