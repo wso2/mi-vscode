@@ -81,9 +81,11 @@ sequenceDiagram
         <!-- ── 2 ────────────────────────────────────────────────────────── -->
         <h2 id="validate">2 · Document change → diagnostics</h2>
         <p>The main loop. Edits are <strong>debounced 300&nbsp;ms per document</strong>, so a typing burst
-          runs this once after the user pauses. Note both engines are touched: the completion schema is
-          registered <em>and</em> the WASM validator runs. A <strong>version guard</strong> at publish
-          time discards results that went stale while validation was running.</p>
+          runs this once after the user pauses. Both engines are touched: the completion schema is
+          registered <em>once per file</em>, and the WASM validator runs on every edit but is
+          <em>shared across all files using the same schema</em>.
+          A <strong>version guard</strong> at publish time discards results that went stale while
+          validation was running.</p>
 
         <figure class="mermaid">
 sequenceDiagram
@@ -98,41 +100,58 @@ sequenceDiagram
     Note over S: debounce 300 ms per URI<br/>burst of keystrokes → one run
     S->>DH: validateAndSend(document)
     DH->>DH: capture document.version
-    DH->>DH: parseXMLDocument(); ns = getNamespace?.()
+    DH->>DH: parseXMLDocument() — extract namespace if present
     DH->>SP: resolveSchemaForDocument(file, ns, path)
 
     alt schema resolved
-        opt first time for this document (!hasSchema)
-            Note over DH,SP: register completion schema (engine 2)
-            DH->>DH: loadReferencedXsds() — follow refs
+        opt first time for THIS file (!hasSchema)
+            Note over DH,SP: engine 2 — register completion schema (once per file)
+            DH->>DH: loadReferencedXsds() — follow XSD imports
             DH->>SP: registerSchema(auto://path, imports)
         end
 
-        Note over DH,W: run diagnostics (engine 1)
-        DH->>DH: getOrCreateValidator(xsdPath)<br/>buildFilesMap() — whole folder
+        Note over DH,W: engine 1 — run WASM validation (every edit)
+        DH->>DH: getOrCreateValidator(xsdPath)
+        Note over DH: first time → buildFilesMap() + compile WASM<br/>seen before → reuse cached validator
         DH->>W: validator.validate(text)
         W-->>DH: parseErrors + schemaErrors
-        DH->>DH: map ranges + filterDiagnostics()
+        DH->>DH: deduplicate + map ranges
         alt version unchanged
             DH-->>C: publishDiagnostics(uri, [...])
         else newer edits arrived meanwhile
             Note over DH: stale — result discarded
         end
-    else no schema
+    else no schema matched
         DH-->>C: publishDiagnostics(uri, []) — clear stale
     end
         </figure>
 
+        <h4>What gets reused vs. created fresh</h4>
+        <table>
+          <thead><tr><th>Thing</th><th>Scope</th><th>When created</th><th>When reused</th></tr></thead>
+          <tbody>
+            <tr><td>Completion schema (<code>auto://</code>)</td><td>Per file</td><td>First edit of that file</td><td>All later edits of the same file</td></tr>
+            <tr><td>WASM validator (<code>ProjectValidator</code>)</td><td>Per XSD folder</td><td>First file using that schema</td><td>All other files using the same schema</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Example: two projects, three files</h4>
+        <ol class="steps">
+          <li><span class="st">Open project1/proxy.xml</span> Pattern matches → 440 XSD. Completion schema registered for <code>proxy.xml</code>. WASM validator for 440 created and cached.</li>
+          <li><span class="st">Open project2/sequence.xml</span> Pattern matches → 430 XSD. Completion schema registered for <code>sequence.xml</code>. WASM validator for 430 created and cached. Now two validators exist.</li>
+          <li><span class="st">Open project1/api.xml</span> Pattern matches → 440 XSD. Completion schema registered for <code>api.xml</code> (new file). WASM validator for 440 — <strong>already cached, reused directly, no reload</strong>.</li>
+        </ol>
+
         <h4>Step by step</h4>
         <ol class="steps">
-          <li><span class="st">Debounce</span> Each edit cancels the previous timer; validation fires 300&nbsp;ms after the last keystroke. Pending timers are cancelled when the document closes.</li>
+          <li><span class="st">Debounce</span> Each edit cancels the previous timer; validation fires 300&nbsp;ms after the last keystroke.</li>
           <li><span class="st">Snapshot version</span> <code>validateAndSend</code> captures <code>document.version</code> on entry — the live document keeps advancing while async work runs.</li>
-          <li><span class="st">Parse</span> The document text becomes an AST; a namespace is used only if the parsed document exposes one.</li>
-          <li><span class="st">Resolve</span> <code>SchemaAssociator</code> picks an XSD by user/init pattern first, then by built-in namespace fallback.</li>
-          <li><span class="st">Register completion schema</span> <em>(once per document)</em> The referenced XSD graph is loaded and registered under an <code>auto://&lt;path&gt;</code> URI so completion/hover have a model. Skipped on later edits via <code>hasSchema()</code>.</li>
-          <li><span class="st">Get validator</span> A <code>ProjectValidator</code> is created (or reused) for that <code>xsdPath</code>, fed every <code>.xsd/.dtd</code> in the folder.</li>
+          <li><span class="st">Parse</span> The document text becomes an AST; a namespace is extracted if the document exposes one.</li>
+          <li><span class="st">Resolve</span> <code>SchemaAssociator</code> matches the file path against registered patterns (e.g. <code>project1/**/*.xml</code> → 440, <code>project2/**/*.xml</code> → 430).</li>
+          <li><span class="st">Register completion schema</span> <em>(once per file)</em> The XSD import graph is loaded and registered under <code>auto://&lt;path&gt;</code>. Skipped on later edits via <code>hasSchema()</code>.</li>
+          <li><span class="st">Get validator</span> <em>(once per XSD folder)</em> A <code>ProjectValidator</code> is created with every <code>.xsd</code> file compiled into WASM — or the cached one is returned immediately.</li>
           <li><span class="st">Validate</span> Xerces runs syntax + schema validation in one SAX pass.</li>
-          <li><span class="st">Map &amp; filter</span> Raw errors → LSP ranges; noisy cascades collapsed and de-duplicated.</li>
+          <li><span class="st">Deduplicate &amp; map</span> Structural errors appear in both parse and schema error lists — duplicates removed, then mapped to LSP ranges.</li>
           <li><span class="st">Version guard</span> If <code>document.version</code> moved on during validation, the result is discarded — a slow older run can never overwrite a newer one.</li>
           <li><span class="st">Publish</span> Diagnostics are sent; if no schema matched, any stale diagnostics are cleared.</li>
         </ol>
