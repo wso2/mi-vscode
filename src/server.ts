@@ -5,7 +5,6 @@ import {
   InitializeParams,
   InitializeResult,
   TextDocumentSyncKind,
-  DidChangeConfigurationParams,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import * as path from "path";
@@ -13,7 +12,6 @@ import * as fs from "fs";
 import { fileURLToPath } from "url";
 import { getLanguageService } from "./xmlLanguageService.js";
 import { DiagnosticsHandler } from "./diagnosticsHandler.js";
-import { SchemaConfig, applySchemaSettings } from "./configuration.js";
 import { registerRequestHandlers } from "./requestHandlers.js";
 import { formatError } from "./lspUtils.js";
 
@@ -31,7 +29,6 @@ const SCHEMA_FOLDER_MAP: Record<string, string> = {
   "440": path.join(SCHEMAS_ROOT, "440"),
 };
 
-let workspaceRoots: string[] = [];
 let initialConfigurationLoaded = false;
 let initializationSchemas: any[] = [];
 
@@ -91,14 +88,11 @@ function registerSchemas(schemas: any[]): void {
 // ── LSP lifecycle ────────────────────────────────────────────────────────────
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
-  workspaceRoots = (params.workspaceFolders ?? []).map((f) =>
-    decodeURIComponent(f.uri.replace("file://", ""))
-  );
   connection.console.log("=== STARTUP WAS TRIGGERED!===");
   connection.console.log("==================");
   connection.console.log(`intalize params:\n${JSON.stringify(params, null, 2)}`);
   connection.console.log(`initalize options:\n${JSON.stringify(params.initializationOptions, null, 2)}`);
-  connection.console.log("======");
+  connection.console.log("==================");
 
   const options = params.initializationOptions ?? {};
   initializationSchemas = options.schemas ?? [];
@@ -130,49 +124,23 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 });
 
 connection.onInitialized(async () => {
-  try {
-    const config = await connection.workspace.getConfiguration("xmlLanguageServer");
-    connection.console.log(`[config] Fetched initial config: ${JSON.stringify(config)}`);
-    applySchemaSettings(config?.schemas ?? [], connection, service, workspaceRoots);
-  } catch (e) {
-    connection.console.log(`[config] Could not fetch initial config: ${e}`);
-  } finally {
-    initialConfigurationLoaded = true;
-    await validateOpenDocumentsSafely("initial configuration");
-  }
+  initialConfigurationLoaded = true;
+  await validateOpenDocumentsSafely("initial configuration");
 });
 
-connection.onDidChangeConfiguration((params: DidChangeConfigurationParams) => {
-  connection.console.log("[server] Configuration changed");
+connection.onDidChangeConfiguration(() => {
+  connection.console.log("[server] Configuration changed — rebuilding schema associations");
 
-  const settings = params.settings?.xmlLanguageServer ?? params.settings ?? {};
-  const schemas = settings.schemas ?? [];
-
-  connection.console.log(`[server] Updating with ${schemas.length} schema(s)`);
-
-  // Invalidate stale caches so the new schema takes effect immediately.
-  // Without this, the auto:// completion provider and ProjectValidator would
-  // keep using the old schema version for already-open documents.
   service.invalidateAutoSchemas();
   diagnosticsHandler.dispose();
-
-  // Clear all user associations so updated settings replace rather than
-  // accumulate on top of the previous ones.
   service.clearUserAssociations();
 
-  // Re-apply the extension's built-in schema mappings (sent at initialise time
-  // via initializationOptions) that were lost when we cleared associations.
   if (initializationSchemas.length > 0) {
     registerSchemas(initializationSchemas);
   }
 
-  // Apply the updated workspace config schemas ({ pattern, xsdPath } shape).
-  if (schemas.length > 0) {
-    applySchemaSettings(schemas, connection, service, workspaceRoots);
-  }
-
   if (!initialConfigurationLoaded) {
-    connection.console.log("[config] Deferring configuration-change validation until initial configuration is loaded");
+    connection.console.log("[config] Deferring validation until initial configuration is loaded");
     return;
   }
   void validateOpenDocumentsSafely("configuration change");

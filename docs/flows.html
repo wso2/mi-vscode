@@ -42,9 +42,11 @@
 
         <!-- ── 1 ────────────────────────────────────────────────────────── -->
         <h2 id="startup">1 · Startup &amp; initialization</h2>
-        <p>Two-phase handshake. Init-option schema mappings are registered during
-          <code>initialize</code>; workspace settings are pulled afterwards during
-          <code>initialized</code>. Validation is deferred until both are in place.</p>
+        <p>Simple two-step handshake. The extension scans the workspace for <code>pom.xml</code> files,
+          detects the MI version, and sends the matching schema nickname (<code>"430"</code> or
+          <code>"440"</code>) to the server at startup via <code>initializationOptions</code>.
+          The server looks up the bundled XSD for that nickname and registers it.
+          Validation is deferred until <code>initialized</code> is received.</p>
 
         <figure class="mermaid">
 sequenceDiagram
@@ -54,21 +56,26 @@ sequenceDiagram
     participant SA as SchemaAssociator
 
     C->>S: initialize(params)
-    Note over S: read workspaceFolders<br/>read initializationOptions.schemas
+    Note over S: read initializationOptions.schemas<br/>{pattern, schema: "440"}
     S->>SA: registerSchemas() — pattern → bundled 430/440
     S-->>C: capabilities (completion, hover, …)
     C->>S: initialized
-    S->>C: workspace/configuration("xmlLanguageServer")
-    C-->>S: { schemas: [{pattern, xsdPath}] }
-    S->>SA: applySchemaSettings() — workspace schemas
     Note over S: initialConfigurationLoaded = true
     S->>S: validateOpenDocumentsSafely()
         </figure>
 
         <div class="callout info">
-          <p><span class="label">Why the deferral?</span> If a document change arrived before the
-          workspace config was pulled, it would validate against the wrong (or no) schema. The
-          <code>initialConfigurationLoaded</code> flag gates all validation until phase two completes.</p>
+          <p><span class="label">How schemas are chosen:</span> The extension reads each workspace
+          folder's <code>pom.xml</code>, extracts <code>&lt;project.runtime.version&gt;</code>, and maps
+          it to a schema folder — <code>430</code> for MI 4.3 and below, <code>440</code> for 4.4 and
+          above. No manual configuration needed.</p>
+        </div>
+
+        <div class="callout info">
+          <p><span class="label">Why the deferral?</span> If a document change arrived before
+          <code>initialized</code>, it would try to validate before schemas were registered.
+          The <code>initialConfigurationLoaded</code> flag gates all validation until the handshake
+          completes.</p>
         </div>
 
         <!-- ── 2 ────────────────────────────────────────────────────────── -->
@@ -159,9 +166,9 @@ flowchart TD
         </figure>
 
         <div class="callout warn">
-          <p><span class="label">The red branch:</span> a user association that matches but points at an
+          <p><span class="label">The red branch:</span> a registered pattern that matches but points at an
           unreadable XSD returns <code>null</code> rather than falling through to the built-in schema —
-          so a single bad <code>xsdPath</code> in settings silently disables validation for those files.
+          so a missing or corrupt bundled XSD silently disables validation for those files.
           See <a href="architecture.html#tradeoffs">trade-offs</a>.</p>
         </div>
 
@@ -227,28 +234,26 @@ sequenceDiagram
 
         <!-- ── 6 ────────────────────────────────────────────────────────── -->
         <h2 id="config">6 · Configuration reload</h2>
-        <p>When settings change, everything schema-related is rebuilt from scratch so updated settings
-          <em>replace</em> rather than accumulate on top of the old ones.</p>
+        <p>Triggered when a new XML file is opened or a workspace folder is added. Everything
+          schema-related is rebuilt from scratch so the re-registered schemas are always in a clean state.</p>
 
         <figure class="mermaid">
 flowchart TD
     A["onDidChangeConfiguration"] --> B["invalidateAutoSchemas()<br/><i>drop auto:// validators + providers</i>"]
     B --> C["diagnosticsHandler.dispose()<br/><i>destroy ProjectValidators</i>"]
     C --> D["clearUserAssociations()<br/><i>wipe the slate</i>"]
-    D --> E["re-register initializationSchemas<br/><i>pattern → bundled 430/440</i>"]
-    E --> F["applySchemaSettings(workspace)<br/><i>{pattern, xsdPath}</i>"]
-    F --> G{initialConfigurationLoaded?}
-    G -- yes --> H["re-validate all open docs"]
-    G -- no --> I["defer"]
+    D --> E["registerSchemas(initializationSchemas)<br/><i>re-apply bundled 430/440 patterns</i>"]
+    E --> F{initialConfigurationLoaded?}
+    F -- yes --> G["re-validate all open docs"]
+    F -- no --> H["defer"]
 
     style D fill:#2a1f10,stroke:#d29922,color:#f0f6fc
         </figure>
 
         <div class="callout info">
-          <p><span class="label">The fix this encodes:</span> earlier code re-registered schemas on every
-          change <em>without</em> clearing first, so associations piled up. Clearing then re-applying
-          both the init-option and workspace sets (in that order) keeps resolution priority identical to a
-          fresh startup.</p>
+          <p><span class="label">Why clear and re-register?</span> Without clearing first, calling
+          <code>registerSchemas</code> repeatedly would pile up duplicate associations. Wiping then
+          re-applying the startup schemas keeps the state identical to a fresh boot.</p>
         </div>
 
         <hr />
