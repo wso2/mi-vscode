@@ -81,8 +81,8 @@ export function getLanguageService() {
     },
 
 
-    async registerSchema(info: SchemaInfo): Promise<void> {
-      return schemaProvider.registerSchema(info);
+    async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
+      return schemaProvider.buildAndCacheCompletionProvider(info);
     },
 
     async validate(schemaUri: string, document: XMLDocument): Promise<Diagnostic[]> {

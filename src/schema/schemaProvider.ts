@@ -79,7 +79,7 @@ export class SchemaProvider {
    * same xsdPath reuse a single XsdValidatorService instance.
    * Also builds and caches a completion provider for the document URI.
    */
-  async registerSchema(info: SchemaInfo): Promise<void> {
+  async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
     const xsdKey = info.xsdPath ?? info.uri;
     const prevKey = this.documentToSchema.get(info.uri);
     this.documentToSchema.set(info.uri, xsdKey);
@@ -137,7 +137,7 @@ export class SchemaProvider {
    * Returns null if no matching schema is found.
    */
   resolveSchemaForDocument(fileName: string, xmlns?: string, documentPath?: string): XsdCompletionProvider | null {
-    // Prefer the completion provider that was built during registerSchema (which has
+    // Prefer the completion provider that was built during buildAndCacheCompletionProvider (which has
     // all xs:include content inlined).  diagnosticsHandler registers under auto://<path>.
     if (documentPath) {
       const registered = this.completionProviders.get(`auto://${documentPath}`);

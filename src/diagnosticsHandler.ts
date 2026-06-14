@@ -55,11 +55,29 @@ export class DiagnosticsHandler {
       ? decodeURIComponent(document.uri.replace("file://", ""))
       : undefined;
     const text = document.getText();
-    const xmlDoc = this.service.parseXMLDocument(document.uri, text);
-    const xmlns = (xmlDoc as any).getNamespace?.() ?? undefined;
 
-    // Auto-resolve schema by file name / namespace.
-    const resolved = this.service.resolveSchemaForDocument(fileName, xmlns, documentPath);
+    // Lazy parse — defer building the JS AST until it is actually needed.
+    // In the common case (file matches a registered pattern) the schema is
+    // resolved by filename alone and the AST is never required for WASM validation.
+    let xmlDoc: ReturnType<LanguageService["parseXMLDocument"]> | undefined;
+    const getXmlDoc = () => {
+      xmlDoc ??= this.service.parseXMLDocument(document.uri, text);
+      return xmlDoc;
+    };
+
+    // First pass: resolve by filename/pattern only (no namespace).
+    let resolved = this.service.resolveSchemaForDocument(fileName, undefined, documentPath);
+
+    // Second pass: if no pattern matched, parse to extract xmlns and retry.
+    // This handles files that rely on the built-in namespace fallback
+    // (e.g. a Synapse XML outside any pom.xml-detected project folder).
+    if (!resolved) {
+      const xmlns = (getXmlDoc() as any).getNamespace?.() ?? undefined;
+      if (xmlns !== undefined) {
+        resolved = this.service.resolveSchemaForDocument(fileName, xmlns, documentPath);
+      }
+    }
+
     if (resolved) {
       const autoUri = `auto://${documentPath ?? fileName}`;
 
@@ -72,7 +90,7 @@ export class DiagnosticsHandler {
         this.connection.console.log(
           `[DiagnosticsHandler] Auto-registering schema for ${fileName}: ${importKeys.length} referenced import files (${importKeys.filter(k => k.includes("/")).length} in subdirs)`
         );
-        await this.service.registerSchema({
+        await this.service.buildAndCacheCompletionProvider({
           uri: autoUri,
           xsdText: resolved.xsdText,
           imports,
@@ -84,11 +102,13 @@ export class DiagnosticsHandler {
       }
 
       // Use ProjectValidator for diagnostics when we have an absolute XSD path.
+      // isXmlDocument guard removed — parseXMLDocument always returns an XMLDocumentImpl,
+      // so the check is redundant when xmlDoc is produced by getXmlDoc().
       const schemaFolder = resolved.xsdPath
         ? path.dirname(path.resolve(resolved.xsdPath))
         : undefined;
 
-      if (schemaFolder && this.isXmlDocument(xmlDoc)) {
+      if (schemaFolder) {
         this.connection.console.log(
           `[DiagnosticsHandler] Validating ${document.uri} with ProjectValidator`
         );
@@ -131,11 +151,12 @@ export class DiagnosticsHandler {
         }
       }
 
-      // Fallback: service.validate() when no absolute xsdPath is available.
+      // Fallback: service.validate() when no absolute xsdPath is available or WASM threw.
+      // Requires the JS AST — parse now if not already done.
       this.connection.console.log(
         `[DiagnosticsHandler] Validating ${document.uri} against auto schema`
       );
-      const raw = await this.service.validate(autoUri, xmlDoc);
+      const raw = await this.service.validate(autoUri, getXmlDoc());
       if (isStale()) return;
       const converted = this.toDiagnostics(raw);
       this.send(document.uri, filterDiagnostics(converted));
@@ -416,10 +437,6 @@ export class DiagnosticsHandler {
 
   private toImportKey(rootDir: string, fullPath: string): string {
     return path.relative(rootDir, fullPath).split(path.sep).join("/");
-  }
-
-  private isXmlDocument(document: unknown): boolean {
-    return typeof document === "object" && document !== null && Array.isArray((document as any).syntaxErrors);
   }
 
   private toDiagnostics(raw: Awaited<ReturnType<LanguageService["validate"]>>): Diagnostic[] {
