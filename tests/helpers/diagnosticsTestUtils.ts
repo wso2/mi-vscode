@@ -48,7 +48,7 @@ export function createService(schemaPath: string, schemaText: string, registered
       xsdText: schemaText,
     }),
     hasSchema: () => false,
-    registerSchema: async (info: unknown) => {
+    buildAndCacheCompletionProvider: async (info: unknown) => {
       registered.push(info);
     },
     validate: async () => [],

@@ -82,6 +82,7 @@ describe("DiagnosticsHandler schema reference loading", () => {
     const mainText = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:include schemaLocation="common.xsd"/>
+        <xs:element name="root"/>
       </xs:schema>
     `;
 
