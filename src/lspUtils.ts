@@ -1,5 +1,6 @@
 import {
   CompletionItemKind,
+  InsertTextFormat,
   SymbolKind,
   FoldingRange as LSPFoldingRange,
   CompletionList as LSPCompletionList,
@@ -64,6 +65,7 @@ export function toLSPCompletionList(list: {
       label: item.label,
       kind: COMPLETION_KIND_MAP[item.kind],
       insertText: item.insertText,
+      insertTextFormat: InsertTextFormat.Snippet,
       detail: item.detail,
     })),
   };
