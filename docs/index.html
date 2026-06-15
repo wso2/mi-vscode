@@ -190,33 +190,7 @@ resources/schemas/        bundled Synapse XSDs (versions 430, 440)</code></pre>
     </main>
   </div>
 
-  <script>
-    (function () {
-      var body    = document.body;
-      var btn     = document.getElementById('sidebarToggle');
-      var overlay = document.getElementById('sidebarOverlay');
-      var KEY     = 'mi-docs-sidebar';
-
-      function mobile() { return window.innerWidth <= 900; }
-
-      if (!mobile() && localStorage.getItem(KEY) === 'hidden')
-        body.classList.add('sidebar-hidden');
-
-      function toggle() {
-        if (mobile()) {
-          body.classList.toggle('sidebar-open');
-        } else {
-          var hidden = body.classList.toggle('sidebar-hidden');
-          localStorage.setItem(KEY, hidden ? 'hidden' : 'visible');
-        }
-      }
-
-      btn.addEventListener('click', toggle);
-      overlay.addEventListener('click', function () { body.classList.remove('sidebar-open'); });
-      window.addEventListener('resize', function () { if (!mobile()) body.classList.remove('sidebar-open'); });
-    })();
-  </script>
-
+  <script src="docs.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
     mermaid.initialize({
