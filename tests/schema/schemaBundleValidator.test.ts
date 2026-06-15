@@ -209,7 +209,7 @@ describe("xs:include — end-to-end through SchemaProvider", () => {
 
   beforeAll(async () => {
     provider = new SchemaProvider();
-    await provider.registerSchema({
+    await provider.buildAndCacheCompletionProvider({
       uri,
       xsdText: await xsd("root.xsd"),
       imports: { "types.xsd": await xsd("types.xsd") },

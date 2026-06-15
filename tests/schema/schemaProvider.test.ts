@@ -37,8 +37,8 @@ describe("SchemaProvider", () => {
     expect(provider.hasSchema(schemaUri)).toBe(false);
   });
 
-  it("registerSchema() resolves without throwing", async () => {
-    await expect(provider.registerSchema({ uri: schemaUri, xsdText: simpleXsd })).resolves.toBeUndefined();
+  it("buildAndCacheCompletionProvider() resolves without throwing", async () => {
+    await expect(provider.buildAndCacheCompletionProvider({ uri: schemaUri, xsdText: simpleXsd })).resolves.toBeUndefined();
   });
 
   it("hasSchema() returns true after registering", () => {
@@ -72,7 +72,7 @@ describe("SchemaProvider", () => {
 
   it("registering the same uri twice replaces the old schema without throwing", async () => {
     await expect(
-      provider.registerSchema({ uri: schemaUri, xsdText: simpleXsd })
+      provider.buildAndCacheCompletionProvider({ uri: schemaUri, xsdText: simpleXsd })
     ).resolves.toBeUndefined();
     expect(provider.hasSchema(schemaUri)).toBe(true);
   });

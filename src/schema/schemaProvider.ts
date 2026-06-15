@@ -79,7 +79,7 @@ export class SchemaProvider {
    * same xsdPath reuse a single XsdValidatorService instance.
    * Also builds and caches a completion provider for the document URI.
    */
-  async registerSchema(info: SchemaInfo): Promise<void> {
+  async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
     const xsdKey = info.xsdPath ?? info.uri;
     const prevKey = this.documentToSchema.get(info.uri);
     this.documentToSchema.set(info.uri, xsdKey);
@@ -101,12 +101,15 @@ export class SchemaProvider {
 
     // Build the completion provider from the fully inlined XSD so that types
     // defined in xs:include'd schemas are available for hover and completions.
-    const completionXsd = info.imports
-      ? inlineIncludes(info.xsdText, info.imports)
-      : info.xsdText;
-    const provider = new XsdCompletionProvider(completionXsd);
-    console.error(`[schemaProvider] Built provider for ${info.uri}: ${provider.getAllElements().length} elements, payloadFactory=${provider.getElement("payloadFactory") !== undefined}, inlinedXsdLen=${completionXsd.length}`);
-    this.completionProviders.set(info.uri, provider);
+    // Cache by xsdKey so all documents sharing the same schema reuse one instance.
+    if (!this.completionProviders.has(xsdKey)) {
+      const completionXsd = info.imports
+        ? inlineIncludes(info.xsdText, info.imports)
+        : info.xsdText;
+      const provider = new XsdCompletionProvider(completionXsd);
+      console.error(`[schemaProvider] Built provider for ${xsdKey}: ${provider.getAllElements().length} elements, payloadFactory=${provider.getElement("payloadFactory") !== undefined}, inlinedXsdLen=${completionXsd.length}`);
+      this.completionProviders.set(xsdKey, provider);
+    }
   }
 
   private _isKeyReferenced(xsdKey: string): boolean {
@@ -137,11 +140,16 @@ export class SchemaProvider {
    * Returns null if no matching schema is found.
    */
   resolveSchemaForDocument(fileName: string, xmlns?: string, documentPath?: string): XsdCompletionProvider | null {
-    // Prefer the completion provider that was built during registerSchema (which has
-    // all xs:include content inlined).  diagnosticsHandler registers under auto://<path>.
+    // Prefer the completion provider that was built during buildAndCacheCompletionProvider (which has
+    // all xs:include content inlined).  Resolve via documentToSchema so the lookup works regardless
+    // of whether the provider is keyed by xsdPath or a fallback auto:// uri.
     if (documentPath) {
-      const registered = this.completionProviders.get(`auto://${documentPath}`);
-      if (registered) return registered;
+      const autoUri = `auto://${documentPath}`;
+      const xsdKey = this.documentToSchema.get(autoUri);
+      if (xsdKey) {
+        const registered = this.completionProviders.get(xsdKey);
+        if (registered) return registered;
+      }
     }
 
     const cacheKey = `${documentPath ?? fileName}|${xmlns ?? ""}`;
@@ -206,11 +214,7 @@ export class SchemaProvider {
       if (!this._isKeyReferenced(xsdKey)) {
         this.validators.get(xsdKey)?.dispose();
         this.validators.delete(xsdKey);
-      }
-    }
-    for (const key of this.completionProviders.keys()) {
-      if (key.startsWith("auto://")) {
-        this.completionProviders.delete(key);
+        this.completionProviders.delete(xsdKey);
       }
     }
   }

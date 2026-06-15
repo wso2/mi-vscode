@@ -7,28 +7,42 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <button class="menu-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+
+  <header class="topbar">
+    <button class="topbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6"  x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <a href="index.html" class="topbar-brand">
+      <div class="logo">MI</div>
+      <span class="name">MI XML Language Server</span>
+    </a>
+    <div class="topbar-crumb">
+      <span class="sep">/</span>
+      <span class="page">Component Reference</span>
+    </div>
+  </header>
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
   <div class="layout">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="logo">MI</div>
-        <div>
-          <div class="title">MI XML Language Server</div>
-          <div class="subtitle">Architecture &amp; Flow Docs</div>
-        </div>
-      </div>
+    <aside class="sidebar" id="sidebar">
       <nav>
         <div class="group-label">Getting Started</div>
         <a href="index.html">Overview</a>
+
         <div class="group-label">Deep Dive</div>
-        <a href="architecture.html">Architecture</a>
-        <a href="components.html" class="active">Component Reference</a>
+        <a href="architecture.html">Architecture <span class="sub">Layers, modules, the dual engine</span></a>
+        <a href="components.html" class="active">Component Reference <span class="sub">File-by-file</span></a>
         <a href="components.html#entry">Entry &amp; routing</a>
         <a href="components.html#schema">Schema subsystem</a>
         <a href="components.html#diag">Diagnostics</a>
         <a href="components.html#parser">Parser</a>
         <a href="components.html#features">Feature providers</a>
-        <a href="flows.html">Flows &amp; Sequences</a>
+        <a href="flows.html">Flows &amp; Sequences <span class="sub">How things happen</span></a>
       </nav>
     </aside>
 
@@ -123,11 +137,14 @@
     </main>
   </div>
 
+  <script src="docs.js"></script>
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
-    mermaid.initialize({ startOnLoad: true, theme: 'dark',
-      themeVariables: { primaryColor:'#1c2128', primaryBorderColor:'#ff7300', primaryTextColor:'#f0f6fc', lineColor:'#8b949e', fontSize:'14px' },
-      flowchart: { curve: 'basis', htmlLabels: true } });
+    mermaid.initialize({
+      startOnLoad: true, theme: 'dark',
+      themeVariables: { primaryColor: '#1c2128', primaryBorderColor: '#ff7300', primaryTextColor: '#f0f6fc', lineColor: '#8b949e', fontSize: '14px' },
+      flowchart: { curve: 'basis', htmlLabels: true }
+    });
   </script>
 </body>
 </html>

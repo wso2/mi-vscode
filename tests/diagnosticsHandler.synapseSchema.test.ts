@@ -64,7 +64,7 @@ describe("DiagnosticsHandler Synapse 4.3.0 schema fixture", () => {
     const { connection, sentDiagnostics } = createConnection();
     const service = createService(schemaPath, schemaText, registered);
     const handler = new DiagnosticsHandler(connection as any, service as any);
-    const document = TextDocument.create("file:///workspace/synapse.xml", "xml", 1, "<definitions/>");
+    const document = TextDocument.create("file:///workspace/synapse.xml", "xml", 1, `<definitions xmlns="http://ws.apache.org/ns/synapse"><registry provider="org.example.Registry"/></definitions>`);
 
     await handler.validateAndSend(document);
 
