@@ -115,4 +115,22 @@
   else
     watchForSVGs();
 
+  /* ── Text review blur ───────────────────────────────────────────────── */
+  /* Blurs prose/callouts/tables when <body data-text-review> is set.     */
+  /* To remove: delete the data-text-review attribute from <body>.        */
+
+  function setupTextReview() {
+    if (!document.body.hasAttribute('data-text-review')) return;
+
+    var badge = document.createElement('div');
+    badge.className = 'text-review-badge';
+    badge.innerHTML = '<span>⚑</span> want to check manually';
+    document.body.appendChild(badge);
+  }
+
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', setupTextReview);
+  else
+    setupTextReview();
+
 })();

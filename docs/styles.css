@@ -325,6 +325,41 @@ figcaption {
 }
 .mermaid:hover .dz-hint { opacity: 0.6; }
 
+/* ── Text review blur ────────────────────────────────────────────────────── */
+/* Active when <body data-text-review> is set on the page.                   */
+/* Diagrams (figure.mermaid) and headings (h2, h4) stay fully visible.       */
+/* To remove: delete data-text-review from <body>.                           */
+
+[data-text-review] .content p,
+[data-text-review] .content .lead,
+[data-text-review] .content .callout,
+[data-text-review] .content table,
+[data-text-review] .content .steps,
+[data-text-review] .content .footer-nav {
+  filter: blur(4px);
+  user-select: none;
+  pointer-events: none;
+}
+
+.text-review-badge {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  background: var(--yellow);
+  color: #000;
+  padding: 7px 18px 7px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  z-index: 500;
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  pointer-events: none;
+}
+
 /* ── Steps ───────────────────────────────────────────────────────────────── */
 
 .steps { counter-reset: step; list-style: none; padding: 0; margin: 32px 0; }
