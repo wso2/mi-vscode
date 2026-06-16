@@ -6,7 +6,7 @@
   <title>Flows &amp; Sequences — WSO2 MI Language Server</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
+<body data-text-review>
 
   <header class="topbar">
     <button class="topbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
@@ -193,6 +193,79 @@ sequenceDiagram
           finish out of order — if v5's (slower) run completed after v6's, it used to overwrite the
           correct diagnostics with squiggles computed from text that no longer exists. The guard makes
           publish order irrelevant; the debounce makes the race rare in the first place.</p>
+        </div>
+
+        <h4>WASM validator lifecycle &amp; cache</h4>
+        <p>Every call to <code>getOrCreateValidator()</code> either compiles a fresh grammar pool
+          or returns the cached one in a single map lookup. The state diagram shows what happens
+          inside that function; the sequence diagram shows the two runtime paths.</p>
+
+        <figure class="mermaid">
+stateDiagram-v2
+    [*] --> NotCreated : server start / config change
+
+    NotCreated --> Loading : first XML file opens for this XSD version
+
+    state Loading {
+        [*] --> ReadDisk
+        ReadDisk --> InRAM : buildFilesMap() · 82 files · ~836 KB in JS heap
+        InRAM --> SentToWASM : createProjectValidator(filesMap)
+        SentToWASM --> [*] : Xerces grammar pool compiled · JS strings GC-eligible
+    }
+
+    Loading --> Cached : validator ready
+
+    Cached --> Cached : cache hit · validate() only · no disk read · no WASM recompile
+
+    Cached --> NotCreated : dispose() · onDidChangeConfiguration
+        </figure>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant F as XML file (edit)
+    participant DH as DiagnosticsHandler
+    participant FS as File System
+    participant W as Xerces WASM
+
+    rect rgba(20, 50, 20, 0.5)
+        Note over F,W: Cold start — first file for this XSD version
+        F->>DH: validateAndSend(text)
+        DH->>DH: getOrCreateValidator() — cache miss
+        DH->>FS: buildFilesMap(schemaFolder)
+        FS-->>DH: 82 XSD files · ~836 KB loaded into JS heap
+        DH->>W: createProjectValidator(filesMap)
+        Note over W: Xerces compiles grammar pool<br/>into WASM linear memory
+        W-->>DH: ProjectValidator handle
+        Note over DH: filesMap goes out of scope → GC-eligible
+        DH->>W: validator.validate(xmlText)
+        W-->>DH: parseErrors + schemaErrors
+        DH-->>F: publishDiagnostics
+    end
+
+    rect rgba(20, 20, 55, 0.5)
+        Note over F,W: Warm path — same version, any later edit
+        F->>DH: validateAndSend(text)
+        DH->>DH: getOrCreateValidator() — cache HIT ✓
+        Note over DH: no disk read · no RAM load · no WASM recompile
+        DH->>W: validator.validate(xmlText)
+        W-->>DH: parseErrors + schemaErrors
+        DH-->>F: publishDiagnostics
+    end
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Two versions, two pools:</span> 430 and 440 each get their own
+          <code>ProjectValidator</code>, keyed by the full path to their <code>synapse_config.xsd</code>.
+          Both grammar pools coexist in WASM linear memory simultaneously — 430 files always hit the 430
+          pool, 440 files always hit the 440 pool, with no cross-contamination.</p>
+        </div>
+
+        <div class="callout info">
+          <p><span class="label">What the logs look like:</span> Cold start prints three lines —
+          <em>Loaded N XSD files into RAM</em>, <em>XSD text released from RAM</em>,
+          <em>Created ProjectValidator</em>. Every warm-path run prints only
+          <em>Cache hit — reusing ProjectValidator (no XSD reload)</em>.</p>
         </div>
 
         <!-- ── 3 ────────────────────────────────────────────────────────── -->

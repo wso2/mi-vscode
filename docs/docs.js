@@ -115,4 +115,5 @@
   else
     watchForSVGs();
 
+
 })();
