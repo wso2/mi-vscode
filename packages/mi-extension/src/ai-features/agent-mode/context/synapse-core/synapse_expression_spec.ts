@@ -35,17 +35,26 @@ Extracted from the ANTLR parser grammar. Higher precedence binds tighter.
 |------------|----------------|----------------------------------|---------------|
 | 1 (highest)| Grouping       | \`( )\`                          | —             |
 | 2          | Unary          | \`-\` (signed)                   | Right         |
-| 3          | Multiplicative | \`*\`, \`/\`, \`%\`                  | Left          |
-| 4          | Additive       | \`+\`, \`-\`                       | Left          |
+| 3          | Multiplicative | \`*\`, \`/\`, \`%\`              | Left          |
+| 4          | Additive       | \`+\`, \`-\`                     | Left          |
 | 5          | Logical        | \`and\`/\`&&\`, \`or\`/\`||\`          | Right         |
 | 6          | Comparison     | \`>\`, \`<\`, \`>=\`, \`<=\`, \`==\`, \`!=\` | Left          |
 | 7 (lowest) | Conditional    | \`? :\` (ternary)                | Right         |
 
-**Key implication:** Arithmetic is evaluated before comparisons, which are evaluated before logical operators.
+**Key implication:** Logical operators (\`and\`/\`or\`) bind TIGHTER than comparison operators — the OPPOSITE of mainstream languages. Arithmetic still binds tighter than both.
 \`\`\`
-\${vars.a + 5 > vars.b * 2 and vars.c == true}
+\${vars.a > 0 and vars.b < 10}
 \`\`\`
-Evaluates as: \`((vars.a + 5) > (vars.b * 2)) and (vars.c == true)\``,
+Parses as: \`vars.a > (0 and vars.b) < 10\` — NOT \`(vars.a > 0) and (vars.b < 10)\` — and mis-evaluates or throws (\`0 and vars.b\` is a logical op on non-booleans).
+
+**MANDATORY RULE: wrap every comparison in parentheses when it is an operand of \`and\`/\`or\`.**
+\`\`\`
+WRONG:   \${vars.a > 0 and vars.b < 10}
+CORRECT: \${(vars.a > 0) and (vars.b < 10)}
+WRONG:   \${vars.a + 5 > vars.b * 2 and vars.c == true}
+CORRECT: \${(vars.a + 5 > vars.b * 2) and (vars.c == true)}
+\`\`\`
+Operands that are already boolean (\`vars.flag\`, \`exists(...)\`, \`not(...)\`) need no parentheses. Within a single comparison, arithmetic groups as expected without extra parens: \`a + 5 > b * 2\` is \`(a + 5) > (b * 2)\`.`,
 
 type_system: `## Type System
 
