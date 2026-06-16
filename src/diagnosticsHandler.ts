@@ -257,9 +257,16 @@ export class DiagnosticsHandler {
    *  one instance and compile the grammar only once. */
   private async getOrCreateValidator(schemaFolder: string, entryPath: string): Promise<any> {
     const existing = this.projectValidators.get(entryPath);
-    if (existing) return existing;
+    if (existing) {
+      this.connection.console.log(`[validator] Cache hit — reusing ProjectValidator for ${entryPath} (no XSD reload)`);
+      return existing;
+    }
 
     const filesMap = await this.buildFilesMap(schemaFolder);
+    const totalBytes = Object.values(filesMap).reduce((s, t) => s + t.length * 2, 0);
+    this.connection.console.log(
+      `[validator] Loaded ${Object.keys(filesMap).length} XSD files (~${Math.round(totalBytes / 1024)}KB) into RAM for ${entryPath}`
+    );
 
     const requestedEntry = this.toImportKey(schemaFolder, path.resolve(entryPath));
 
@@ -275,6 +282,9 @@ export class DiagnosticsHandler {
     }
 
     const validator = await createProjectValidator({ entry, files: filesMap });
+    this.connection.console.log(
+      `[validator] XSD text released from RAM (sent to WASM linear memory) for ${entryPath}`
+    );
     this.projectValidators.set(entryPath, validator);
     this.connection.console.log(
       `[validator] Created ProjectValidator for ${entryPath} (entry: ${entry}, files: ${Object.keys(filesMap).length})`
