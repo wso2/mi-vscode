@@ -44,6 +44,11 @@
         <a href="flows.html#complete">4 · Completion</a>
         <a href="flows.html#hover">5 · Hover</a>
         <a href="flows.html#config">6 · Config reload</a>
+
+        <div class="group-label">Scenarios</div>
+        <a href="flows.html#scenarios">User Scenarios</a>
+        <a href="flows.html#scenario-validate">↳ Opening a file</a>
+        <a href="flows.html#scenario-complete">↳ Typing in editor</a>
       </nav>
     </aside>
 
@@ -135,9 +140,16 @@ sequenceDiagram
         Note over DH,W: engine 1 — WASM validation (every edit, uses raw text not AST)
         DH->>DH: getOrCreateValidator(xsdPath)
         Note over DH: first time → buildFilesMap() + compile WASM<br/>seen before → reuse cached validator
-        DH->>W: validator.validate(sanitizedText)
-        W-->>DH: parseErrors + schemaErrors
-        DH->>DH: deduplicate + map ranges
+        alt ProjectValidator succeeds
+            DH->>W: validator.validate(sanitizedText)
+            W-->>DH: parseErrors + schemaErrors
+            DH->>DH: deduplicate + map ranges
+        else ProjectValidator fails (or no absolute xsdPath)
+            DH->>SP: service.validate(autoUri, doc)
+            Note over SP: fallback to @xml-tools/parser<br/>syntax errors if no validator
+            SP-->>DH: raw diagnostics
+            DH->>DH: deduplicate + map ranges
+        end
         alt version unchanged
             DH-->>C: publishDiagnostics(uri, [...])
         else newer edits arrived meanwhile
@@ -182,7 +194,7 @@ sequenceDiagram
           <li><span class="st">Resolve pass 2 (fallback)</span> If pass 1 returned null, the document is parsed to extract its XML namespace, then resolution is retried. Handles files outside any project folder that carry a known namespace.</li>
           <li><span class="st">Register completion schema</span> <em>(once per file)</em> The XSD import graph is loaded and registered under <code>auto://&lt;path&gt;</code>. Skipped on later edits via <code>hasSchema()</code>.</li>
           <li><span class="st">Get validator</span> <em>(once per XSD folder)</em> A <code>ProjectValidator</code> is created with every <code>.xsd</code> file compiled into WASM — or the cached one is returned immediately.</li>
-          <li><span class="st">Validate</span> Xerces runs syntax + schema validation on the raw text in one SAX pass.</li>
+          <li><span class="st">Validate</span> Xerces runs syntax + schema validation on the raw text in one SAX pass. If this fails (or no absolute XSD path is available), it falls back to <code>service.validate()</code> to extract syntax/lexical errors from the npm package (<code>@xml-tools/parser</code>).</li>
           <li><span class="st">Deduplicate &amp; map</span> Structural errors appear in both parse and schema error lists — duplicates removed, then mapped to LSP ranges.</li>
           <li><span class="st">Version guard</span> If <code>document.version</code> moved on during validation, the result is discarded.</li>
           <li><span class="st">Publish</span> Diagnostics are sent; if no schema matched, any stale diagnostics are cleared.</li>
@@ -378,6 +390,118 @@ flowchart TD
           <p><span class="label">Why clear and re-register?</span> Without clearing first, calling
           <code>registerSchemas</code> repeatedly would pile up duplicate associations. Wiping then
           re-applying the startup schemas keeps the state identical to a fresh boot.</p>
+        </div>
+
+        <!-- ── User Scenarios ──────────────────────────────────────── -->
+        <h2 id="scenarios">User Scenarios</h2>
+        <p>What actually happens end-to-end when a developer uses the editor.
+          Both traces use a 4.3.0 project file (<code>df.xml</code>) as the example.</p>
+
+        <!-- ── Scenario 1 ──────────────────────────────────────────── -->
+        <h3 id="scenario-validate">Opening a file for the first time</h3>
+        <p>The developer opens <code>df.xml</code> inside a 430 project.
+          Two things happen in parallel: the completion model is built once from the
+          inlined XSD, and the WASM validator is compiled from the full schema folder.
+          Every edit after this hits both caches.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Ed as VS Code
+    participant LS as Language Server
+    participant FS as File System
+    participant W as Xerces WASM
+
+    Dev->>Ed: opens df.xml (430 project)
+    Ed->>LS: textDocument/didChangeContent
+
+    Note over LS: debounce 300 ms
+
+    LS->>LS: pattern "test-mi-430/**/*.xml" → 430 XSD matched
+
+    rect rgba(20, 50, 20, 0.45)
+        Note over LS,FS: Build completion model — once per schema version
+        LS->>FS: loadReferencedXsds() — follow xs:include chain
+        FS-->>LS: 77 XSD files merged into one 150 KB flat string
+        LS->>LS: XsdCompletionProvider() — parse + walk → 195-element Map
+        Note over LS: cached · future edits skip this entire block
+    end
+
+    rect rgba(20, 20, 55, 0.45)
+        Note over LS,W: Compile WASM validator — once per schema version
+        LS->>FS: buildFilesMap() — read all 82 XSD files (~836 KB)
+        FS-->>LS: files in JS heap
+        LS->>W: createProjectValidator(filesMap)
+        Note over W: Xerces compiles grammar pool into WASM linear memory
+        W-->>LS: ProjectValidator handle
+        Note over LS: JS text GC-eligible · validator cached
+    end
+
+    LS->>W: validator.validate(xmlText)
+    W-->>LS: errors / warnings
+    LS-->>Ed: publishDiagnostics — red squiggles appear
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Second edit onwards:</span> the two <code>rect</code> blocks above
+          are completely skipped. The LS goes straight to
+          <code>validator.validate()</code> using the cached WASM pool, and completions
+          are served from the already-built 195-element Map — zero disk reads.</p>
+        </div>
+
+        <!-- ── Scenario 2 ──────────────────────────────────────────── -->
+        <h3 id="scenario-complete">Typing in the editor</h3>
+        <p>The developer is editing <code>df.xml</code> and types inside a tag.
+          The completion engine detects the cursor context and does a direct map lookup —
+          no XSD parsing, no disk access.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Ed as VS Code
+    participant LS as Language Server
+    participant CP as XsdCompletionProvider (cached Map)
+
+    rect rgba(30, 30, 10, 0.45)
+        Note over Dev,CP: Context 1 — typing a new child element
+        Dev->>Ed: types  <  inside &lt;api&gt; body
+        Ed->>LS: textDocument/completion(position)
+        LS->>LS: text before cursor matches /&lt;\w*$/ → element context
+        LS->>LS: findNodeAt() → current node is "api", cursor in content area
+        LS->>CP: getChildren("api")
+        CP-->>LS: ["resource"]
+        LS-->>Ed: suggest  resource&gt;$0&lt;/resource&gt;
+    end
+
+    rect rgba(10, 30, 30, 0.45)
+        Note over Dev,CP: Context 2 — typing an attribute
+        Dev->>Ed: types space after  &lt;log
+        Ed->>LS: textDocument/completion(position)
+        LS->>LS: text matches open-tag pattern → attribute context
+        LS->>LS: extract tag name = "log"
+        LS->>CP: getAttributes("log")
+        CP-->>LS: [level, category, separator, description]
+        LS-->>Ed: suggest  level="$0"  category="$0"  …
+    end
+
+    rect rgba(30, 10, 10, 0.45)
+        Note over Dev,CP: Context 3 — closing a tag
+        Dev->>Ed: types  </
+        Ed->>LS: textDocument/completion(position)
+        LS->>LS: text matches /&lt;\/$/ → close-tag context
+        LS->>LS: findNodeAt() → current open element = "log"
+        LS-->>Ed: suggest  log&gt;   (no schema lookup needed)
+    end
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Why it feels instant:</span> by the time the developer types anything,
+          the <code>XsdCompletionProvider</code> is already built and cached from the first
+          <code>didChangeContent</code> event. Every completion request is a single
+          <code>Map.get()</code> call on an in-memory structure — no file I/O, no XSD parsing,
+          no WASM involved.</p>
         </div>
 
         <hr />
