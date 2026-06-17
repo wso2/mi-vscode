@@ -140,9 +140,16 @@ sequenceDiagram
         Note over DH,W: engine 1 — WASM validation (every edit, uses raw text not AST)
         DH->>DH: getOrCreateValidator(xsdPath)
         Note over DH: first time → buildFilesMap() + compile WASM<br/>seen before → reuse cached validator
-        DH->>W: validator.validate(sanitizedText)
-        W-->>DH: parseErrors + schemaErrors
-        DH->>DH: deduplicate + map ranges
+        alt ProjectValidator succeeds
+            DH->>W: validator.validate(sanitizedText)
+            W-->>DH: parseErrors + schemaErrors
+            DH->>DH: deduplicate + map ranges
+        else ProjectValidator fails (or no absolute xsdPath)
+            DH->>SP: service.validate(autoUri, doc)
+            Note over SP: fallback to @xml-tools/parser<br/>syntax errors if no validator
+            SP-->>DH: raw diagnostics
+            DH->>DH: deduplicate + map ranges
+        end
         alt version unchanged
             DH-->>C: publishDiagnostics(uri, [...])
         else newer edits arrived meanwhile
@@ -187,7 +194,7 @@ sequenceDiagram
           <li><span class="st">Resolve pass 2 (fallback)</span> If pass 1 returned null, the document is parsed to extract its XML namespace, then resolution is retried. Handles files outside any project folder that carry a known namespace.</li>
           <li><span class="st">Register completion schema</span> <em>(once per file)</em> The XSD import graph is loaded and registered under <code>auto://&lt;path&gt;</code>. Skipped on later edits via <code>hasSchema()</code>.</li>
           <li><span class="st">Get validator</span> <em>(once per XSD folder)</em> A <code>ProjectValidator</code> is created with every <code>.xsd</code> file compiled into WASM — or the cached one is returned immediately.</li>
-          <li><span class="st">Validate</span> Xerces runs syntax + schema validation on the raw text in one SAX pass.</li>
+          <li><span class="st">Validate</span> Xerces runs syntax + schema validation on the raw text in one SAX pass. If this fails (or no absolute XSD path is available), it falls back to <code>service.validate()</code> to extract syntax/lexical errors from the npm package (<code>@xml-tools/parser</code>).</li>
           <li><span class="st">Deduplicate &amp; map</span> Structural errors appear in both parse and schema error lists — duplicates removed, then mapped to LSP ranges.</li>
           <li><span class="st">Version guard</span> If <code>document.version</code> moved on during validation, the result is discarded.</li>
           <li><span class="st">Publish</span> Diagnostics are sent; if no schema matched, any stale diagnostics are cleared.</li>
