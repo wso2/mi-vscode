@@ -38,10 +38,8 @@ export class DiagnosticsHandler {
   }
 
   async validateAndSend(document: TextDocument): Promise<void> {
-    // `document` is the live TextDocument managed by the LSP layer — its version
-    // advances as the user keeps typing while this async validation runs. Capture
-    // the version now and discard the result if it is stale by publish time, so a
-    // slow older validation can never overwrite diagnostics from a newer one.
+    // document is live and keeps changing as the user types. Snapshot the version
+    // so a slow old validation can't overwrite newer diagnostics (see isStale).
     const versionAtStart = document.version;
     const isStale = (): boolean => {
       if (document.version === versionAtStart) return false;
@@ -56,9 +54,7 @@ export class DiagnosticsHandler {
       : undefined;
     const text = document.getText();
 
-    // Lazy parse — defer building the JS AST until it is actually needed.
-    // In the common case (file matches a registered pattern) the schema is
-    // resolved by filename alone and the AST is never required for WASM validation.
+    //  Parse once on first use, reuse it after.
     let xmlDoc: ReturnType<LanguageService["parseXMLDocument"]> | undefined;
     const getXmlDoc = () => {
       xmlDoc ??= this.service.parseXMLDocument(document.uri, text);
@@ -70,7 +66,6 @@ export class DiagnosticsHandler {
 
     // Second pass: if no pattern matched, parse to extract xmlns and retry.
     // This handles files that rely on the built-in namespace fallback
-    // (e.g. a Synapse XML outside any pom.xml-detected project folder).
     if (!resolved) {
       const xmlns = (getXmlDoc() as any).getNamespace?.() ?? undefined;
       if (xmlns !== undefined) {

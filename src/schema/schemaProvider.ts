@@ -74,10 +74,7 @@ export class SchemaProvider {
   }
 
   /**
-   * Compiles the given XSD (if not already compiled for the same xsdPath) and
-   * maps the document URI to that validator.  Multiple documents sharing the
-   * same xsdPath reuse a single XsdValidatorService instance.
-   * Also builds and caches a completion provider for the document URI.
+   * issues/30 - https://github.com/harshanacz/wso2-mi-language-server-ts/issues/30
    */
   async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
     const xsdKey = info.xsdPath ?? info.uri;
