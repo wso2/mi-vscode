@@ -17,6 +17,7 @@ package org.eclipse.lemminx.customservice.synapse;
 public class CodeDiagnosticRequest {
 
     private String code;
+    private String fileName;
 
     public String getCode() {
 
@@ -26,5 +27,15 @@ public class CodeDiagnosticRequest {
     public void setCode(String code) {
 
         this.code = code;
+    }
+
+    public String getFileName() {
+
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+
+        this.fileName = fileName;
     }
 }

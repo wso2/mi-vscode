@@ -346,7 +346,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<PublishDiagnosticsParams> codeDiagnostic(CodeDiagnosticRequest param) {
 
         return CompletableFuture.supplyAsync(() -> {
-            DOMDocument xmlDocument = Utils.getDOMDocument(param.getCode(), uriResolverExtensionManager);
+            // Use the real file path (when supplied) as the document URI. Several diagnostics are
+            // gated on the document path — e.g. SynapseExpressionValidator only runs for files under
+            // src/main/wso2mi/artifacts — so the literal "temp" fallback would silently drop them.
+            String uri = param.getFileName() != null ? param.getFileName() : "temp";
+            DOMDocument xmlDocument = Utils.getDOMDocument(param.getCode(), uri, uriResolverExtensionManager);
             return doDiagnostics(xmlDocument, NULL_CANCEL_CHECKER);
         });
     }
