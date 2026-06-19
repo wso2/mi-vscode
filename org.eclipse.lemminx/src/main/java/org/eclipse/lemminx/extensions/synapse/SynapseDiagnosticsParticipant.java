@@ -236,6 +236,10 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         // Validate variable references in expression attributes
         validateVariableReferences(element, diagnostics, document, definedVariables);
 
+        // Flag an opening "${" with no matching "}" (the malformed expression is otherwise
+        // treated as a plain string and reaches runtime with no feedback)
+        validateUnclosedExpressions(element, diagnostics, document);
+
         // Cross-file reference validation
         if (knownArtifacts != null) {
             validateCrossReferences(element, diagnostics, knownArtifacts);
@@ -1248,6 +1252,103 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
                 }
             }
         }
+    }
+
+    /**
+     * Flags an opening "${" that is never closed by a matching "}". Such a value is not recognized
+     * as a Synapse expression (it is treated as a plain string), so the malformed expression would
+     * otherwise reach runtime with no feedback. Scans attribute values and leaf element text,
+     * mirroring the variable-reference checks; raw-code elements (see {@link #RAW_TEXT_ELEMENTS})
+     * are skipped to avoid false positives.
+     */
+    private void validateUnclosedExpressions(DOMElement element, List<Diagnostic> diagnostics,
+                                             DOMDocument document) {
+        List<DOMAttr> attrs = element.getAttributeNodes();
+        if (attrs != null) {
+            for (DOMAttr attr : attrs) {
+                String attrValue = attr.getValue();
+                if (attrValue != null && attrValue.contains("${") && hasUnclosedExpression(attrValue)) {
+                    reportUnclosedExpression(XMLPositionUtility.selectAttributeValue(attr), diagnostics);
+                }
+            }
+        }
+
+        if (hasChildElements(element)) {
+            return;
+        }
+        String localName = element.getLocalName();
+        if (localName != null && RAW_TEXT_ELEMENTS.contains(localName.toLowerCase())) {
+            return;
+        }
+        List<DOMNode> children = element.getChildren();
+        if (children == null) {
+            return;
+        }
+        for (DOMNode child : children) {
+            if (!child.isText()) {
+                continue;
+            }
+            String text = child.getTextContent();
+            if (text != null && text.contains("${") && hasUnclosedExpression(text)) {
+                reportUnclosedExpression(
+                        XMLPositionUtility.createRange(child.getStart(), child.getEnd(), document), diagnostics);
+            }
+        }
+    }
+
+    private void reportUnclosedExpression(Range range, List<Diagnostic> diagnostics) {
+        if (range == null) {
+            return;
+        }
+        Diagnostic d = new Diagnostic();
+        d.setRange(range);
+        d.setMessage("Unclosed expression: '${' is not terminated by a matching '}'. " +
+                "Synapse expressions must be written as ${...} — add the missing '}'.");
+        d.setSeverity(DiagnosticSeverity.Warning);
+        d.setSource(SOURCE);
+        d.setCode("UnclosedExpression");
+        diagnostics.add(d);
+    }
+
+    /**
+     * Returns true if {@code value} contains an opening "${" with no matching "}" closing it.
+     * Synapse expressions have no "{"/"}" tokens of their own (indexing uses "[" "]"), so the only
+     * braces that can appear inside ${...} are within string literals — which are skipped here, so a
+     * valid expression such as {@code ${concat('{', x)}} is not mistaken for unclosed.
+     */
+    private boolean hasUnclosedExpression(String value) {
+        int open = value.indexOf("${");
+        while (open >= 0) {
+            if (!hasClosingBrace(value, open + 2)) {
+                return true;
+            }
+            open = value.indexOf("${", open + 2);
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if there is a '}' at or after {@code from} that lies outside any string literal.
+     */
+    private boolean hasClosingBrace(String value, int from) {
+        boolean inString = false;
+        char quote = 0;
+        for (int i = from; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i++; // skip the escaped character
+                } else if (c == quote) {
+                    inString = false;
+                }
+            } else if (c == '"' || c == '\'') {
+                inString = true;
+                quote = c;
+            } else if (c == '}') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

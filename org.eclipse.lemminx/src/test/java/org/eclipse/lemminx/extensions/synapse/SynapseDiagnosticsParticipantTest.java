@@ -538,6 +538,74 @@ public class SynapseDiagnosticsParticipantTest {
         assertTrue(diags.isEmpty(), "Plain text without a ${...} expression should not warn");
     }
 
+    // ===== Unclosed expression delimiters =====
+
+    @Test
+    public void testUnclosedExpressionInAttributeWarns() {
+        // '${' opened but never closed — previously treated as a plain string with no feedback.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<property name=\"p\" expression=\"${payload.count > 0\"/>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertEquals(1, diags.size(), "An unclosed ${ in an attribute should warn");
+        assertEquals(DiagnosticSeverity.Warning, diags.get(0).getSeverity());
+        assertTrue(diags.get(0).getMessage().contains("Unclosed expression"));
+    }
+
+    @Test
+    public void testClosedExpressionInAttributeNoWarning() {
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<property name=\"p\" expression=\"${payload.count > 0}\"/>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "A properly closed ${...} must not be flagged");
+    }
+
+    @Test
+    public void testUnclosedExpressionInElementTextWarns() {
+        // Same gap in element text (e.g. a connector operation parameter).
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<salesforce.query configKey=\"C\">"
+                + "<q>${payload.count</q>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertEquals(1, diags.size(), "An unclosed ${ in element text should warn");
+        assertTrue(diags.get(0).getMessage().contains("Unclosed expression"));
+    }
+
+    @Test
+    public void testWrappedClosedExpressionNoWarning() {
+        // The {${...}} form, properly closed, must not be flagged as unclosed.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<variable name=\"q\" type=\"STRING\" value=\"x\"/>"
+                + "<salesforce.query configKey=\"C\"><q>{${vars.q}}</q></salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "A closed {${...}} expression must not be flagged");
+    }
+
+    @Test
+    public void testExpressionWithBraceInStringLiteralNoWarning() {
+        // A '}' inside a string literal must not be mistaken for the closing delimiter, and the
+        // real closing '}' must still be recognized — so this valid expression is not flagged.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<property name=\"p\" expression=\"${concat('}', payload.x)}\"/>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "A brace inside a string literal must not cause a false positive");
+    }
+
+    @Test
+    public void testScriptBodyUnclosedExpressionNotFlagged() {
+        // Raw-code (script) bodies are excluded — a ${ in JS is not a Synapse expression.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<script language=\"js\">var s = \"${notReal\";</script>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "Script bodies must not be scanned for unclosed expressions");
+    }
+
     // ===== Non-Synapse document skipping =====
 
     @Test
