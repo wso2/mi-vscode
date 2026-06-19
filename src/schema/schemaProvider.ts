@@ -88,7 +88,6 @@ export class SchemaProvider {
       this.validators.delete(prevKey);
     }
 
-    // Compile the validator only once per unique XSD key.
     if (!this.validators.has(xsdKey)) {
       const xsd: XsdInput = info.imports
         ? { entry: info.xsdText, imports: info.imports }
@@ -96,9 +95,6 @@ export class SchemaProvider {
       this.validators.set(xsdKey, await XsdValidatorService.create(xsd));
     }
 
-    // Build the completion provider from the fully inlined XSD so that types
-    // defined in xs:include'd schemas are available for hover and completions.
-    // Cache by xsdKey so all documents sharing the same schema reuse one instance.
     if (!this.completionProviders.has(xsdKey)) {
       const completionXsd = info.imports
         ? inlineIncludes(info.xsdText, info.imports)
