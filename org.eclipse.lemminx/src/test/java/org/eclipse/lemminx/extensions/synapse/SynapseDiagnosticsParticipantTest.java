@@ -468,6 +468,76 @@ public class SynapseDiagnosticsParticipantTest {
         assertTrue(diags.isEmpty(), "responseVariable child element should define the variable");
     }
 
+    // ===== Variable references in element text content (Issue #4) =====
+
+    @Test
+    public void testUndefinedVariableInElementText() {
+        // Connector operation parameter references vars.X in element text, not in an attribute.
+        // 'soqlQuery1' is a typo for the defined 'soqlQuery' — this is the exact MI Copilot case.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<variable name=\"soqlQuery\" type=\"STRING\" value=\"SELECT Id, Name FROM Account LIMIT 200\"/>"
+                + "<salesforce.query configKey=\"SalesforceConn\">"
+                + "<q>{${vars.soqlQuery1}}</q>"
+                + "<responseVariable>sfResponse</responseVariable>"
+                + "<overwriteBody>false</overwriteBody>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "Undefined variable referenced in element text should warn");
+        assertEquals(DiagnosticSeverity.Warning, diags.get(0).getSeverity());
+        assertTrue(diags.get(0).getMessage().contains("soqlQuery1"));
+    }
+
+    @Test
+    public void testDefinedVariableInElementTextNoWarning() {
+        // The correctly-spelled variable referenced in element text should not warn.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<variable name=\"soqlQuery\" type=\"STRING\" value=\"SELECT Id FROM Account\"/>"
+                + "<salesforce.query configKey=\"SalesforceConn\">"
+                + "<q>{${vars.soqlQuery}}</q>"
+                + "<responseVariable>sfResponse</responseVariable>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "Defined variable referenced in element text should not warn");
+    }
+
+    @Test
+    public void testUndefinedVariableInElementTextPlainExpressionForm() {
+        // The plain ${...} form (not {${...}}) inside element text should also be detected.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<payloadFactory media-type=\"json\">"
+                + "<format>{\"id\": \"${vars.missingId}\"}</format>"
+                + "</payloadFactory>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "Undefined variable in ${...} text form should warn");
+        assertTrue(diags.get(0).getMessage().contains("missingId"));
+    }
+
+    @Test
+    public void testScriptBodyNotScannedForVariables() {
+        // Raw-code (script) bodies must not be treated as Synapse expressions (no false positives).
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<script language=\"js\">var s = \"${vars.notReal}\";</script>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "Script body should not be scanned for variable references");
+    }
+
+    @Test
+    public void testPlainTextWithoutExpressionNoWarning() {
+        // Element text that merely contains the literal 'vars.' but no ${...} expression must not warn.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<salesforce.query configKey=\"SalesforceConn\">"
+                + "<q>SELECT vars.field FROM Account</q>"
+                + "<responseVariable>sfResponse</responseVariable>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "Plain text without a ${...} expression should not warn");
+    }
+
     // ===== Non-Synapse document skipping =====
 
     @Test

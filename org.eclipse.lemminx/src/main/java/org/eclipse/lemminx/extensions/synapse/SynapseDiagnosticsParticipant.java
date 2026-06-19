@@ -131,6 +131,15 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
     );
 
     /**
+     * Leaf elements whose text content is raw code (not a Synapse expression) and must not be
+     * scanned for vars.X references — e.g. a JS/Groovy script body could legitimately contain a
+     * ${...} template literal that is not a Synapse variable reference.
+     */
+    private static final Set<String> RAW_TEXT_ELEMENTS = new HashSet<>(Arrays.asList(
+            "script"
+    ));
+
+    /**
      * Regex to find $N placeholders in PayloadFactory format strings.
      */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$(\\d+)");
@@ -1146,53 +1155,96 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
      */
     private void validateVariableReferences(DOMElement element, List<Diagnostic> diagnostics,
                                             DOMDocument document, Set<String> definedVariables) {
-        // Check all attributes for ${...} expressions containing vars.X
+        // Check all attribute values for ${...} expressions containing vars.X
         List<DOMAttr> attrs = element.getAttributeNodes();
-        if (attrs == null) {
+        if (attrs != null) {
+            for (DOMAttr attr : attrs) {
+                String attrValue = attr.getValue();
+                if (attrValue == null || (!attrValue.contains("vars.") && !attrValue.contains("vars["))) {
+                    continue;
+                }
+                checkContentForUndefinedVariables(attrValue, XMLPositionUtility.selectAttributeValue(attr),
+                        diagnostics, definedVariables);
+            }
+        }
+
+        // Check element text content too — e.g. connector operation parameters such as
+        // <q>{${vars.x}}</q> reference variables in text, not attributes.
+        validateVariableReferencesInText(element, diagnostics, document, definedVariables);
+    }
+
+    /**
+     * Scans the text content of a leaf element for ${...} expressions referencing undefined vars.X.
+     * Only leaf elements are inspected (containers expose their text via their leaf children), and
+     * raw-code elements (see {@link #RAW_TEXT_ELEMENTS}) are skipped to avoid false positives.
+     */
+    private void validateVariableReferencesInText(DOMElement element, List<Diagnostic> diagnostics,
+                                                  DOMDocument document, Set<String> definedVariables) {
+        if (hasChildElements(element)) {
             return;
         }
-        for (DOMAttr attr : attrs) {
-            String attrValue = attr.getValue();
-            if (attrValue == null || (!attrValue.contains("vars.") && !attrValue.contains("vars["))) {
+        String localName = element.getLocalName();
+        if (localName != null && RAW_TEXT_ELEMENTS.contains(localName.toLowerCase())) {
+            return;
+        }
+        List<DOMNode> children = element.getChildren();
+        if (children == null) {
+            return;
+        }
+        for (DOMNode child : children) {
+            if (!child.isText()) {
+                continue;
+            }
+            String text = child.getTextContent();
+            if (text == null || (!text.contains("vars.") && !text.contains("vars["))) {
+                continue;
+            }
+            Range range = XMLPositionUtility.createRange(child.getStart(), child.getEnd(), document);
+            checkContentForUndefinedVariables(text, range, diagnostics, definedVariables);
+        }
+    }
+
+    /**
+     * Extracts every ${...}/{${...}} expression from {@code content}, and for each vars.X reference
+     * to a name not in {@code definedVariables}, adds an UndefinedVariable warning anchored at
+     * {@code range}. Shared by the attribute-value and text-content reference checks.
+     */
+    private void checkContentForUndefinedVariables(String content, Range range,
+                                                   List<Diagnostic> diagnostics, Set<String> definedVariables) {
+        if (range == null) {
+            return;
+        }
+        Matcher exprMatcher = EXPRESSION_PATTERN.matcher(content);
+        while (exprMatcher.find()) {
+            String exprContent = exprMatcher.group(1);
+            if (exprContent == null) {
+                exprContent = exprMatcher.group(2); // {${...}} form
+            }
+            if (exprContent == null) {
                 continue;
             }
 
-            // Extract ${...} or {${...}} expressions from the attribute value
-            Matcher exprMatcher = EXPRESSION_PATTERN.matcher(attrValue);
-            while (exprMatcher.find()) {
-                String exprContent = exprMatcher.group(1);
-                if (exprContent == null) {
-                    exprContent = exprMatcher.group(2); // {${...}} form
-                }
-                if (exprContent == null) {
-                    continue;
-                }
+            // Find vars.X references within the expression
+            Matcher varsMatcher = VARS_REF_PATTERN.matcher(exprContent);
+            while (varsMatcher.find()) {
+                // Get the variable name from whichever group matched
+                String varName = varsMatcher.group(1);
+                if (varName == null) varName = varsMatcher.group(2);
+                if (varName == null) varName = varsMatcher.group(3);
 
-                // Find vars.X references within the expression
-                Matcher varsMatcher = VARS_REF_PATTERN.matcher(exprContent);
-                while (varsMatcher.find()) {
-                    // Get the variable name from whichever group matched
-                    String varName = varsMatcher.group(1);
-                    if (varName == null) varName = varsMatcher.group(2);
-                    if (varName == null) varName = varsMatcher.group(3);
-
-                    if (varName != null && !definedVariables.contains(varName)) {
-                        Range range = XMLPositionUtility.selectAttributeValue(attr);
-                        if (range != null) {
-                            Diagnostic d = new Diagnostic();
-                            d.setRange(range);
-                            d.setMessage(
-                                    "Variable '" + varName + "' is referenced but not defined in this file. " +
-                                            "If it is defined in a calling sequence, this warning can be ignored. " +
-                                            "Otherwise, define it using <variable name=\"" + varName +
-                                            "\" .../> before this point.");
-                            d.setSeverity(DiagnosticSeverity.Warning);
-                            d.setSource(SOURCE);
-                            d.setCode("UndefinedVariable");
-                            d.setData(varName);
-                            diagnostics.add(d);
-                        }
-                    }
+                if (varName != null && !definedVariables.contains(varName)) {
+                    Diagnostic d = new Diagnostic();
+                    d.setRange(range);
+                    d.setMessage(
+                            "Variable '" + varName + "' is referenced but not defined in this file. " +
+                                    "If it is defined in a calling sequence, this warning can be ignored. " +
+                                    "Otherwise, define it using <variable name=\"" + varName +
+                                    "\" .../> before this point.");
+                    d.setSeverity(DiagnosticSeverity.Warning);
+                    d.setSource(SOURCE);
+                    d.setCode("UndefinedVariable");
+                    d.setData(varName);
+                    diagnostics.add(d);
                 }
             }
         }
