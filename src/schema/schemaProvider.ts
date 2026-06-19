@@ -74,10 +74,7 @@ export class SchemaProvider {
   }
 
   /**
-   * Compiles the given XSD (if not already compiled for the same xsdPath) and
-   * maps the document URI to that validator.  Multiple documents sharing the
-   * same xsdPath reuse a single XsdValidatorService instance.
-   * Also builds and caches a completion provider for the document URI.
+   * issues/30 - https://github.com/harshanacz/wso2-mi-language-server-ts/issues/30
    */
   async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
     const xsdKey = info.xsdPath ?? info.uri;
@@ -91,7 +88,6 @@ export class SchemaProvider {
       this.validators.delete(prevKey);
     }
 
-    // Compile the validator only once per unique XSD key.
     if (!this.validators.has(xsdKey)) {
       const xsd: XsdInput = info.imports
         ? { entry: info.xsdText, imports: info.imports }
@@ -99,9 +95,6 @@ export class SchemaProvider {
       this.validators.set(xsdKey, await XsdValidatorService.create(xsd));
     }
 
-    // Build the completion provider from the fully inlined XSD so that types
-    // defined in xs:include'd schemas are available for hover and completions.
-    // Cache by xsdKey so all documents sharing the same schema reuse one instance.
     if (!this.completionProviders.has(xsdKey)) {
       const completionXsd = info.imports
         ? inlineIncludes(info.xsdText, info.imports)

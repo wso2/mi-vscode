@@ -38,10 +38,8 @@ export class DiagnosticsHandler {
   }
 
   async validateAndSend(document: TextDocument): Promise<void> {
-    // `document` is the live TextDocument managed by the LSP layer — its version
-    // advances as the user keeps typing while this async validation runs. Capture
-    // the version now and discard the result if it is stale by publish time, so a
-    // slow older validation can never overwrite diagnostics from a newer one.
+    // document is live and keeps changing as the user types. Snapshot the version
+    // so a slow old validation can't overwrite newer diagnostics (see isStale).
     const versionAtStart = document.version;
     const isStale = (): boolean => {
       if (document.version === versionAtStart) return false;
@@ -56,9 +54,7 @@ export class DiagnosticsHandler {
       : undefined;
     const text = document.getText();
 
-    // Lazy parse — defer building the JS AST until it is actually needed.
-    // In the common case (file matches a registered pattern) the schema is
-    // resolved by filename alone and the AST is never required for WASM validation.
+    //  Parse once on first use, reuse it after.
     let xmlDoc: ReturnType<LanguageService["parseXMLDocument"]> | undefined;
     const getXmlDoc = () => {
       xmlDoc ??= this.service.parseXMLDocument(document.uri, text);
@@ -70,7 +66,6 @@ export class DiagnosticsHandler {
 
     // Second pass: if no pattern matched, parse to extract xmlns and retry.
     // This handles files that rely on the built-in namespace fallback
-    // (e.g. a Synapse XML outside any pom.xml-detected project folder).
     if (!resolved) {
       const xmlns = (getXmlDoc() as any).getNamespace?.() ?? undefined;
       if (xmlns !== undefined) {
@@ -101,9 +96,6 @@ export class DiagnosticsHandler {
         );
       }
 
-      // Use ProjectValidator for diagnostics when we have an absolute XSD path.
-      // isXmlDocument guard removed — parseXMLDocument always returns an XMLDocumentImpl,
-      // so the check is redundant when xmlDoc is produced by getXmlDoc().
       const schemaFolder = resolved.xsdPath
         ? path.dirname(path.resolve(resolved.xsdPath))
         : undefined;
@@ -114,13 +106,13 @@ export class DiagnosticsHandler {
         );
         try {
           const validator = await this.getOrCreateValidator(schemaFolder, resolved.xsdPath!);
+          // we should remove schemaLocation since it's already provided.
           const sanitizedText = text
             .replace(/\bxsi:schemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length))
             .replace(/\bxsi:noNamespaceSchemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length));
 
           const result = await validator.validate(sanitizedText);
-          // Xerces often reports structural errors (like mismatched tags) in both parseErrors and schemaErrors.
-          // Deduplicate them so the user doesn't see the exact same diagnostic twice.
+
           const uniqueErrors = new Map<string, any>();
           for (const e of [...result.parseErrors, ...result.schemaErrors]) {
             const key = `${e.line}:${e.column}:${e.message}`;
@@ -252,9 +244,7 @@ export class DiagnosticsHandler {
     return result;
   }
 
-  /** Returns a cached ProjectValidator for entryPath, creating one if needed.
-   *  Keyed by xsdPath so all documents that resolve to the same schema share
-   *  one instance and compile the grammar only once. */
+  // Returns a cached ProjectValidator for entryPath, creating one if needed
   private async getOrCreateValidator(schemaFolder: string, entryPath: string): Promise<any> {
     const existing = this.projectValidators.get(entryPath);
     if (existing) {
@@ -262,16 +252,17 @@ export class DiagnosticsHandler {
       return existing;
     }
 
-    const filesMap = await this.buildFilesMap(schemaFolder);
-    const totalBytes = Object.values(filesMap).reduce((s, t) => s + t.length * 2, 0);
+    const filesMap = await this.buildFilesMap(schemaFolder); //load all xsd files into memory
+
+
+    const totalBytes = Object.values(filesMap).reduce((s, t) => s + t.length * 2, 0); //just for logging
     this.connection.console.log(
       `[validator] Loaded ${Object.keys(filesMap).length} XSD files (~${Math.round(totalBytes / 1024)}KB) into RAM for ${entryPath}`
     );
 
     const requestedEntry = this.toImportKey(schemaFolder, path.resolve(entryPath));
 
-    // Prefer the resolved XSD path as the entry point, then the built-in Synapse
-    // entry name, otherwise use the first root-level XSD.
+    // Pick the entry file: the one we resolved, else synapse_config.xsd, else any root .xsd.
     let entry = "";
     if (requestedEntry in filesMap) {
       entry = requestedEntry;
