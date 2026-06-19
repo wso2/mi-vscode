@@ -23,7 +23,7 @@ import * as path from 'path';
 /**
  * Matches the extension-wide cache root convention (see util/onboardingUtils.ts -> CACHED_FOLDER).
  */
-function getWso2MiHomeDir(): string {
+export function getWso2MiHomeDir(): string {
     return path.join(os.homedir(), '.wso2-mi');
 }
 
@@ -73,4 +73,20 @@ function sanitizeSessionId(sessionId: string): string {
 export function getCopilotSessionDir(projectPath: string, sessionId: string): string {
     const safeSessionId = sanitizeSessionId(sessionId);
     return path.join(getCopilotProjectStorageDir(projectPath), safeSessionId);
+}
+
+/**
+ * Global skills enable/disable state (`{ disabled: string[] }`) — applies to
+ * user-scope skills across all projects.
+ */
+export function getGlobalSkillsStatePath(): string {
+    return path.join(getWso2MiHomeDir(), 'copilot', 'skills-state.json');
+}
+
+/**
+ * Per-project skills enable/disable state — applies to project-scope skills only,
+ * stored per-user (not committed to the repo).
+ */
+export function getProjectSkillsStatePath(projectPath: string): string {
+    return path.join(getCopilotProjectStorageDir(projectPath), 'skills-state.json');
 }

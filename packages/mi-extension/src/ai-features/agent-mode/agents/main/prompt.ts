@@ -21,15 +21,30 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
+import * as vscode from 'vscode';
 import { formatFileTree, getExistingFiles } from '../../../utils/file-utils';
 import { getAvailableConnectorCatalog } from '../../tools/connector_tools';
 import { getPlanModeReminder as getPlanModeSessionReminder } from '../../tools/plan_mode_tools';
 import { getRuntimeVersionFromPom } from '../../tools/connector_store_cache';
+import { discoverSkills, type SkillCatalogEntry } from '../../tools/skill_discovery';
 import { getServerPathFromConfig } from '../../../../util/onboardingUtils';
 import { AgentMode, LoginMethod } from '@wso2/mi-core';
 import { getModeBriefNote, getModeReminder } from './mode';
 import { logDebug } from '../../../copilot/logger';
 import { getStateMachine } from '../../../../stateMachine';
+
+/**
+ * Whether project-level skills should be loaded. Project skills come from the
+ * (possibly untrusted) repo and can ship executable `scripts/`, so we gate them
+ * on VS Code workspace trust. Defaults to trusted when the API is unavailable.
+ */
+function isWorkspaceTrusted(): boolean {
+    try {
+        return vscode.workspace.isTrusted !== false;
+    } catch {
+        return true;
+    }
+}
 
 const MAX_PROJECT_STRUCTURE_FILES = 50;
 const MAX_PROJECT_STRUCTURE_CHARS = 10000;
@@ -116,6 +131,12 @@ The user has opened the file {{currentlyOpenedFile}} in the IDE. This may or may
 </system-reminder>
 {{/if}}
 
+{{#if skills_block}}
+<system-reminder>
+{{{skills_block}}}
+</system-reminder>
+{{/if}}
+
 {{#if runtime_version_detection_warning}}
 <system-reminder>
 # Runtime Version Warning
@@ -152,6 +173,12 @@ You are in {{mode_upper}} mode.{{#if mode_changed_from}} [mode changed from {{mo
 **DO NOT CREATE ANY README FILES or ANY DOCUMENTATION FILES after end of the task unless explicitly requested by the user.**
 </system-reminder>
 
+{{#if user_activated_skill_block}}
+<system-reminder>
+{{{user_activated_skill_block}}}
+</system-reminder>
+{{/if}}
+
 <user_query>
 {{question}}
 </user_query>
@@ -187,6 +214,7 @@ export interface BlockInjectionStatuses {
     modePolicy: BlockInjectionStatus;
     payloads: BlockInjectionStatus;
     agentsMd: BlockInjectionStatus;
+    skills: BlockInjectionStatus;
 }
 
 /**
@@ -232,6 +260,12 @@ export interface UserPromptParams {
      * connector-store catalog lookup).
      */
     precomputedContext?: SessionContextBuildResult;
+    /**
+     * Pre-formatted `<skill_content>` block for a skill the user explicitly
+     * invoked via `/skill-name`. When set, it is rendered as a leading
+     * `# Activated Skill` reminder so the model follows it for this turn.
+     */
+    userActivatedSkillContent?: string;
 }
 
 // ============================================================================
@@ -484,6 +518,12 @@ export interface SessionContextSnapshot {
     agentsMdTruncated: boolean;
     /** Original (untruncated) raw byte size of AGENTS.md, or 0 when absent. */
     agentsMdOriginalSize: number;
+    /**
+     * Discovered Agent Skills (frontmatter only; bodies loaded on activation).
+     * Includes `disable-model-invocation` skills — the catalog block filters
+     * them out, but they remain user-invocable via `/skill-name`.
+     */
+    skills: SkillCatalogEntry[];
 }
 
 interface SessionContextWithCatalog {
@@ -513,6 +553,12 @@ export interface SessionContextBlockHashes {
      * on deletion.
      */
     agentsMd: string | undefined;
+    /**
+     * sha256-16 over the model-invocable skill catalog (name/description/
+     * location/mtime/size of each). `undefined` when no model-invocable skills
+     * exist, which drives the `cleared` notice when the last one is removed.
+     */
+    skills: string | undefined;
 }
 
 /**
@@ -641,6 +687,7 @@ async function buildSessionContextSnapshot(params: SessionContextParams): Promis
     const runtimePaths = getRuntimePaths(params.projectPath);
     const catalog = await getAvailableConnectorCatalog(params.projectPath);
     const agentsMd = readAgentsMd(params.projectPath);
+    const skills = discoverSkills(params.projectPath, { includeProjectScope: isWorkspaceTrusted() });
 
     return {
         snapshot: {
@@ -668,6 +715,7 @@ async function buildSessionContextSnapshot(params: SessionContextParams): Promis
             agentsMdContent: agentsMd?.content,
             agentsMdTruncated: agentsMd?.truncated ?? false,
             agentsMdOriginalSize: agentsMd?.originalSize ?? 0,
+            skills,
         },
         catalogWarnings: catalog.warnings,
         catalogStoreStatus: catalog.storeStatus,
@@ -724,6 +772,22 @@ function deriveBlockHashes(snapshot: SessionContextSnapshot): SessionContextBloc
                 originalSize: snapshot.agentsMdOriginalSize,
             })
             : undefined,
+        // Hash over the model-invocable catalog only — adding/removing/editing a
+        // skill (mtime/size) flips the hash and re-injects the listing.
+        // `disable-model-invocation` skills are excluded since they never appear
+        // in the block. `undefined` when none so 'cleared' fires on removal.
+        skills: (() => {
+            const modelInvocable = snapshot.skills.filter((s) => !s.disableModelInvocation);
+            return modelInvocable.length > 0
+                ? hashJson(modelInvocable.map((s) => ({
+                    name: s.name,
+                    description: s.description,
+                    location: s.location,
+                    mtimeMs: s.mtimeMs,
+                    size: s.size,
+                })))
+                : undefined;
+        })(),
     };
 }
 
@@ -772,6 +836,7 @@ const DEFAULT_BLOCK_STATUSES: BlockInjectionStatuses = {
     modePolicy: 'first-injection',
     payloads: 'first-injection',
     agentsMd: 'first-injection',
+    skills: 'first-injection',
 };
 
 function buildEnvBlockText(snapshot: SessionContextSnapshot, status: BlockInjectionStatus): string | undefined {
@@ -930,6 +995,46 @@ The user has provided custom project-level instructions at AGENTS.md (project ro
 ${safeContent}${truncationFooter}`;
 }
 
+/**
+ * Render the Agent Skills catalog (Claude Code format). Lists only
+ * model-invocable skills (name + description); the model loads a skill's full
+ * instructions by calling the `skill` tool with its name. `disable-model-invocation`
+ * skills are intentionally excluded — they stay user-invocable via `/skill-name`.
+ */
+function buildSkillsBlockText(skills: SkillCatalogEntry[], status: BlockInjectionStatus): string | undefined {
+    if (status === 'cleared') {
+        return `# Available Skills [removed]
+No skills are available anymore. Discard any prior skill references and do not call the skill tool.`;
+    }
+    const modelInvocable = skills.filter((s) => !s.disableModelInvocation);
+    if (status === 'omit' || modelInvocable.length === 0) {
+        return undefined;
+    }
+    const headerSuffix = status === 're-injection' ? ` ${CONTEXT_UPDATED}` : '';
+    const list = modelInvocable
+        .map((s) => `- ${s.name}: ${neutralizePromptEnvelopeTags(s.description)}`)
+        .join('\n');
+    return `# Available Skills${headerSuffix}
+The following skills are available for use with the skill tool. When a task matches a skill's description, call the skill tool with its exact name to load its full instructions, then follow them.
+${list}`;
+}
+
+/**
+ * Render a skill the user explicitly activated via `/skill-name`. The harness
+ * has already read & formatted the skill (frontmatter stripped, args
+ * substituted, resources listed) — we just frame it so the model treats it as
+ * an activated skill and proceeds.
+ */
+function buildUserActivatedSkillBlockText(skillContent: string | undefined): string | undefined {
+    if (!skillContent) {
+        return undefined;
+    }
+    return `# Activated Skill
+The user invoked a skill. Its full instructions are below — follow them for this task.
+
+${skillContent}`;
+}
+
 // ============================================================================
 // User Prompt Generation
 // ============================================================================
@@ -991,6 +1096,8 @@ export async function getUserPrompt(params: UserPromptParams): Promise<UserPromp
     const webAvailabilityBlock = buildWebAvailabilityBlockText(snapshot, blockStatuses.webAvailability);
     const payloadsBlock = buildPayloadsBlockText(snapshot.tryoutPayloads, blockStatuses.payloads);
     const agentsMdBlock = buildAgentsMdBlockText(snapshot, blockStatuses.agentsMd);
+    const skillsBlock = buildSkillsBlockText(snapshot.skills, blockStatuses.skills);
+    const userActivatedSkillBlock = buildUserActivatedSkillBlockText(params.userActivatedSkillContent);
     const fullModePolicyBlock = buildFullModePolicyBlockText(
         mode,
         fullModePolicy,
@@ -1013,6 +1120,8 @@ export async function getUserPrompt(params: UserPromptParams): Promise<UserPromp
         web_availability_block: webAvailabilityBlock,
         payloads_block: payloadsBlock,
         agents_md_block: agentsMdBlock,
+        skills_block: skillsBlock,
+        user_activated_skill_block: userActivatedSkillBlock,
         full_mode_policy_block: fullModePolicyBlock,
         runtime_version_detection_warning: runtimeVersionDetectionWarning,
         mode_upper: mode.toUpperCase(),

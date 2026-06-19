@@ -155,6 +155,9 @@ export const WEB_FETCH_TOOL_NAME = 'web_fetch';
 // Log Tools
 export const READ_SERVER_LOGS_TOOL_NAME = 'read_server_logs';
 
+// Skills Tool (Agent Skills — Claude Code-style `Skill` tool)
+export const SKILL_TOOL_NAME = 'skill';
+
 // Tool Loading (local — replaces Anthropic native tool_search)
 export const TOOL_LOAD_TOOL_NAME = 'load_tools';
 
@@ -288,6 +291,11 @@ export type GlobExecuteFn = (args: {
 
 export type ContextExecuteFn = (args: {
     context_name: string;
+}) => Promise<ToolResult>;
+
+export type SkillExecuteFn = (args: {
+    skill: string;
+    args?: string;
 }) => Promise<ToolResult>;
 
 // ============================================================================

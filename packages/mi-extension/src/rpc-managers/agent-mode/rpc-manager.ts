@@ -42,6 +42,12 @@ import {
     MentionablePathItem,
     SearchMentionablePathsRequest,
     SearchMentionablePathsResponse,
+    ListSkillsResponse,
+    ListManagedSkillsResponse,
+    SetSkillEnabledRequest,
+    SetSkillEnabledResponse,
+    DeleteSkillRequest,
+    DeleteSkillResponse,
     GetAgentRunStatusRequest,
     GetAgentRunStatusResponse,
     ModelSettings,
@@ -75,6 +81,13 @@ import { beginServerManagementRunTracking, cleanupServerManagementOnAgentEnd } f
 import { AgentUndoCheckpointManager, SnapshotRestorePlan } from '../../ai-features/agent-mode/undo/checkpoint-manager';
 import { MiDiagramRpcManager } from '../mi-diagram/rpc-manager';
 import { getCopilotSessionDir } from '../../ai-features/agent-mode/storage-paths';
+import {
+    discoverSkills,
+    discoverManagedSkills,
+    setSkillEnabledState,
+    clearSkillState,
+    type SkillScope,
+} from '../../ai-features/agent-mode/tools/skill_discovery';
 
 const DEFAULT_MODEL_SETTINGS: ModelSettings = { mainModelPreset: 'sonnet', subModelPreset: 'haiku' };
 const AGENT_RUN_IN_PROGRESS_ERROR = 'Another agent run is already in progress. Wait for it to finish or abort it before sending a new message.';
@@ -1662,6 +1675,109 @@ export class MIAgentPanelRpcManager implements MIAgentPanelAPI {
                 items: [],
                 error: error instanceof Error ? error.message : 'Failed to search mentionable paths',
             };
+        }
+    }
+
+    /**
+     * List discovered Agent Skills for the `/skill-name` autocomplete. Includes
+     * `disable-model-invocation` skills (user-invocable even if the model can't
+     * auto-pick them). Project-level skills are gated on workspace trust, same
+     * as the catalog injected into the prompt.
+     */
+    async listSkills(): Promise<ListSkillsResponse> {
+        try {
+            const includeProjectScope = vscode.workspace.isTrusted !== false;
+            const skills = discoverSkills(this.projectUri, { includeProjectScope });
+            return {
+                skills: skills.map((s) => ({
+                    name: s.name,
+                    description: s.description,
+                    disableModelInvocation: s.disableModelInvocation,
+                })),
+            };
+        } catch (error) {
+            logError('[AgentPanel] Failed to list skills', error);
+            return { skills: [] };
+        }
+    }
+
+    /**
+     * List ALL skills (enabled + disabled, incl. shadowed) with management
+     * metadata for the settings UI.
+     */
+    async listManagedSkills(): Promise<ListManagedSkillsResponse> {
+        try {
+            const includeProjectScope = vscode.workspace.isTrusted !== false;
+            const skills = discoverManagedSkills(this.projectUri, { includeProjectScope });
+            return {
+                skills: skills.map((s) => ({
+                    name: s.name,
+                    description: s.description,
+                    scope: s.scope,
+                    enabled: s.enabled,
+                    disableModelInvocation: s.disableModelInvocation,
+                    shadowed: s.shadowed,
+                })),
+            };
+        } catch (error) {
+            logError('[AgentPanel] Failed to list managed skills', error);
+            return { skills: [] };
+        }
+    }
+
+    /** Enable/disable a skill — persisted in the skill's home scope. */
+    async setSkillEnabled(request: SetSkillEnabledRequest): Promise<SetSkillEnabledResponse> {
+        try {
+            const name = (request.name || '').trim();
+            if (!name) {
+                return { success: false, error: 'Missing skill name' };
+            }
+            const scope: SkillScope = request.scope === 'project' ? 'project' : 'user';
+            await setSkillEnabledState(this.projectUri, scope, name, request.enabled);
+            return { success: true };
+        } catch (error) {
+            logError('[AgentPanel] Failed to set skill enabled state', error);
+            return { success: false, error: error instanceof Error ? error.message : 'Failed to update skill' };
+        }
+    }
+
+    /**
+     * Delete a skill directory from disk after a modal confirmation. The target
+     * directory is resolved server-side (by name+scope) so a client can't ask us
+     * to remove an arbitrary path.
+     */
+    async deleteSkill(request: DeleteSkillRequest): Promise<DeleteSkillResponse> {
+        try {
+            const name = (request.name || '').trim();
+            if (!name) {
+                return { success: false, deleted: false, error: 'Missing skill name' };
+            }
+            const scope: SkillScope = request.scope === 'project' ? 'project' : 'user';
+            const includeProjectScope = vscode.workspace.isTrusted !== false;
+            const entry = discoverManagedSkills(this.projectUri, { includeProjectScope })
+                .find((s) => s.scope === scope && s.name.toLowerCase() === name.toLowerCase());
+            if (!entry) {
+                return { success: false, deleted: false, error: `Skill '${name}' not found` };
+            }
+
+            const confirm = await vscode.window.showWarningMessage(
+                `Delete the skill "${entry.name}"? This permanently removes ${entry.baseDir} from disk.`,
+                { modal: true },
+                'Delete',
+            );
+            if (confirm !== 'Delete') {
+                return { success: true, deleted: false };
+            }
+
+            await fs.rm(entry.baseDir, { recursive: true, force: true });
+            // Drop any lingering override so a future skill of the same name
+            // starts at its scope default.
+            await clearSkillState(this.projectUri, scope, entry.name);
+            logInfo(`[AgentPanel] Deleted skill '${entry.name}' at ${entry.baseDir}`);
+            return { success: true, deleted: true };
+        } catch (error) {
+            logError('[AgentPanel] Failed to delete skill', error);
+            return { success: false, deleted: false, error: error instanceof Error ? error.message : 'Failed to delete skill' };
         }
     }
 

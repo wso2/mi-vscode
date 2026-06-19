@@ -19,7 +19,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Codicon } from "@wso2/ui-toolkit";
 import { useMICopilotContext } from "./MICopilotContext";
-import type { MainModelPreset, SubModelPreset } from "@wso2/mi-rpc-client/src/rpc-clients/agent-mode/rpc-client";
+import type { MainModelPreset, SubModelPreset, ManagedSkillItem } from "@wso2/mi-rpc-client/src/rpc-clients/agent-mode/rpc-client";
 
 interface SettingsPanelProps {
     onClose: () => void;
@@ -222,6 +222,80 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     const tavilyDirty = tavilyDraft.trim() !== tavilyKey.trim();
     // Bedrock: web search is "enabled" when a key is saved or the user is in the middle of entering one.
     const isBedrockWebSearchOn = !!tavilyKey || tavilyInputOpen;
+
+    // ----- Skills management -----
+    // null = loading; [] = none found. Loaded once on mount, re-fetched after mutations.
+    const [managedSkills, setManagedSkills] = useState<ManagedSkillItem[] | null>(null);
+    // Keys (`${scope}:${name}`, lowercased) of rows with an in-flight toggle/delete.
+    const [busySkills, setBusySkills] = useState<Set<string>>(new Set());
+
+    const skillKey = (s: ManagedSkillItem) => `${s.scope}:${s.name.toLowerCase()}`;
+    const setSkillBusy = (key: string, busy: boolean) =>
+        setBusySkills((prev) => {
+            const next = new Set(prev);
+            if (busy) { next.add(key); } else { next.delete(key); }
+            return next;
+        });
+
+    const refreshManagedSkills = async () => {
+        if (!rpcClient) { return; }
+        try {
+            const res = await rpcClient.getMiAgentPanelRpcClient().listManagedSkills();
+            setManagedSkills(res.skills);
+        } catch {
+            setManagedSkills([]);
+        }
+    };
+
+    useEffect(() => {
+        let cancelled = false;
+        if (!rpcClient) { return; }
+        (async () => {
+            try {
+                const res = await rpcClient.getMiAgentPanelRpcClient().listManagedSkills();
+                if (!cancelled) { setManagedSkills(res.skills); }
+            } catch {
+                if (!cancelled) { setManagedSkills([]); }
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [rpcClient]);
+
+    const handleToggleSkill = async (skill: ManagedSkillItem, enabled: boolean) => {
+        if (!rpcClient) { return; }
+        const key = skillKey(skill);
+        // Optimistic update.
+        setManagedSkills((prev) => prev?.map((s) =>
+            s.scope === skill.scope && s.name === skill.name ? { ...s, enabled } : s) ?? prev);
+        setSkillBusy(key, true);
+        try {
+            const res = await rpcClient.getMiAgentPanelRpcClient().setSkillEnabled({ name: skill.name, scope: skill.scope, enabled });
+            if (!res.success) { throw new Error(res.error || 'failed'); }
+        } catch {
+            // Revert on failure.
+            setManagedSkills((prev) => prev?.map((s) =>
+                s.scope === skill.scope && s.name === skill.name ? { ...s, enabled: !enabled } : s) ?? prev);
+        } finally {
+            setSkillBusy(key, false);
+        }
+    };
+
+    const handleDeleteSkill = async (skill: ManagedSkillItem) => {
+        if (!rpcClient) { return; }
+        const key = skillKey(skill);
+        setSkillBusy(key, true);
+        try {
+            const res = await rpcClient.getMiAgentPanelRpcClient().deleteSkill({ name: skill.name, scope: skill.scope });
+            if (res.success && res.deleted) {
+                // Re-fetch so any previously-shadowed skill of the same name re-appears correctly.
+                await refreshManagedSkills();
+            }
+        } catch {
+            // Non-fatal; leave the row in place.
+        } finally {
+            setSkillBusy(key, false);
+        }
+    };
 
     // WSO2 (MI Copilot / MI_INTEL) login is the only non-BYOK method. The MI Copilot
     // proxy manages the model set (and blocks Opus), so model switching is locked here.
@@ -535,6 +609,54 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
                 </SettingsSection>
                 )}
 
+                {/* Skills — list / enable-disable / delete project & global skills */}
+                <SettingsSection title="Skills">
+                    {managedSkills === null ? (
+                        <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                            Loading skills…
+                        </p>
+                    ) : managedSkills.length === 0 ? (
+                        <InfoNote
+                            icon="info"
+                            variant="info"
+                            text="No skills found. Add a SKILL.md under .agents/skills/ (project) or ~/.agents/skills/ (global)."
+                        />
+                    ) : (
+                        <div className="space-y-4">
+                            {(["project", "user"] as const).map((scope) => {
+                                const group = managedSkills.filter((s) => s.scope === scope);
+                                if (group.length === 0) {
+                                    return null;
+                                }
+                                return (
+                                    <div key={scope} className="space-y-1">
+                                        <p
+                                            className="text-[11px] font-medium"
+                                            style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}
+                                        >
+                                            {scope === "project" ? "Project" : "Global"}
+                                        </p>
+                                        {scope === "user" && (
+                                            <p className="text-[10px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                                                Global skills are off by default — enable the ones you want to use.
+                                            </p>
+                                        )}
+                                        {group.map((skill, i) => (
+                                            <SkillRow
+                                                key={`${skill.scope}:${skill.name}:${i}`}
+                                                skill={skill}
+                                                busy={busySkills.has(`${skill.scope}:${skill.name.toLowerCase()}`)}
+                                                onToggle={(enabled) => handleToggleSkill(skill, enabled)}
+                                                onDelete={() => handleDeleteSkill(skill)}
+                                            />
+                                        ))}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </SettingsSection>
+
                 {/* Account */}
                 <SettingsSection title="Account">
                     <div className="flex items-center justify-between">
@@ -648,6 +770,99 @@ function ToggleGroup({
                     </button>
                 );
             })}
+        </div>
+    );
+}
+
+function SkillTag({ text, title }: { text: string; title: string }) {
+    return (
+        <span
+            title={title}
+            className="text-[9px] uppercase tracking-wide px-1 py-px rounded shrink-0"
+            style={{
+                color: "var(--vscode-badge-foreground)",
+                backgroundColor: "var(--vscode-badge-background)",
+                opacity: 0.8,
+            }}
+        >
+            {text}
+        </span>
+    );
+}
+
+function SkillRow({
+    skill,
+    busy,
+    onToggle,
+    onDelete,
+}: {
+    skill: ManagedSkillItem;
+    busy: boolean;
+    onToggle: (enabled: boolean) => void;
+    onDelete: () => void;
+}) {
+    const [hover, setHover] = useState(false);
+    return (
+        <div
+            className="flex items-center justify-between gap-2 rounded-md"
+            style={{
+                padding: "6px 8px",
+                backgroundColor: hover ? "var(--vscode-list-hoverBackground)" : "transparent",
+            }}
+            onMouseEnter={() => setHover(true)}
+            onMouseLeave={() => setHover(false)}
+        >
+            <div className="min-w-0 pr-2">
+                <div className="flex items-center gap-1.5">
+                    <span
+                        className="text-[13px] font-medium truncate"
+                        style={{ color: "var(--vscode-foreground)", opacity: skill.enabled ? 1 : 0.55 }}
+                    >
+                        {skill.name}
+                    </span>
+                    {skill.disableModelInvocation && (
+                        <SkillTag text="model-hidden" title="The skill's SKILL.md sets disable-model-invocation: the model won't auto-invoke it, but you can still run it with /skill-name." />
+                    )}
+                    {skill.shadowed && (
+                        <SkillTag text="shadowed" title="Another skill with the same name takes precedence; this one isn't used by the agent." />
+                    )}
+                </div>
+                <p className="text-[11px] truncate" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                    {skill.description}
+                </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+                <ToggleGroup
+                    options={["Off", "On"]}
+                    selected={skill.enabled ? "On" : "Off"}
+                    onSelect={(label) => onToggle(label === "On")}
+                    compact
+                    disabled={busy}
+                />
+                <button
+                    type="button"
+                    onClick={onDelete}
+                    disabled={busy}
+                    title="Delete skill"
+                    aria-label={`Delete skill ${skill.name}`}
+                    className="flex items-center justify-center w-6 h-6 rounded-md transition-colors"
+                    style={{
+                        color: "var(--vscode-descriptionForeground)",
+                        background: "transparent",
+                        border: "none",
+                        cursor: busy ? "not-allowed" : "pointer",
+                        opacity: busy ? 0.5 : (hover ? 1 : 0.6),
+                    }}
+                    onMouseEnter={(e) => {
+                        (e.currentTarget as HTMLElement).style.color = "var(--vscode-errorForeground)";
+                    }}
+                    onMouseLeave={(e) => {
+                        (e.currentTarget as HTMLElement).style.color = "var(--vscode-descriptionForeground)";
+                    }}
+                >
+                    <Codicon name="trash" />
+                </button>
+            </div>
         </div>
     );
 }

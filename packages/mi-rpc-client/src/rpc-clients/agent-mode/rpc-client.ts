@@ -158,6 +158,67 @@ const searchMentionablePaths: RequestType<SearchMentionablePathsRequest, SearchM
     method: `${_prefix}/searchMentionablePaths`
 };
 
+export interface SkillListItem {
+    name: string;
+    description: string;
+    disableModelInvocation: boolean;
+}
+
+export interface ListSkillsResponse {
+    skills: SkillListItem[];
+}
+
+export interface ManagedSkillItem {
+    name: string;
+    description: string;
+    scope: 'project' | 'user';
+    enabled: boolean;
+    disableModelInvocation: boolean;
+    shadowed: boolean;
+}
+
+export interface ListManagedSkillsResponse {
+    skills: ManagedSkillItem[];
+}
+
+export interface SetSkillEnabledRequest {
+    name: string;
+    scope: 'project' | 'user';
+    enabled: boolean;
+}
+
+export interface SetSkillEnabledResponse {
+    success: boolean;
+    error?: string;
+}
+
+export interface DeleteSkillRequest {
+    name: string;
+    scope: 'project' | 'user';
+}
+
+export interface DeleteSkillResponse {
+    success: boolean;
+    deleted: boolean;
+    error?: string;
+}
+
+const listSkills: RequestType<void, ListSkillsResponse> = {
+    method: `${_prefix}/listSkills`
+};
+
+const listManagedSkills: RequestType<void, ListManagedSkillsResponse> = {
+    method: `${_prefix}/listManagedSkills`
+};
+
+const setSkillEnabled: RequestType<SetSkillEnabledRequest, SetSkillEnabledResponse> = {
+    method: `${_prefix}/setSkillEnabled`
+};
+
+const deleteSkill: RequestType<DeleteSkillRequest, DeleteSkillResponse> = {
+    method: `${_prefix}/deleteSkill`
+};
+
 const getAgentRunStatus: RequestType<GetAgentRunStatusRequest, GetAgentRunStatusResponse> = {
     method: `${_prefix}/getAgentRunStatus`
 };
@@ -227,6 +288,22 @@ export class MiAgentPanelRpcClient implements MIAgentPanelAPI {
 
     searchMentionablePaths(request: SearchMentionablePathsRequest): Promise<SearchMentionablePathsResponse> {
         return this._messenger.sendRequest(searchMentionablePaths, HOST_EXTENSION, request);
+    }
+
+    listSkills(): Promise<ListSkillsResponse> {
+        return this._messenger.sendRequest(listSkills, HOST_EXTENSION);
+    }
+
+    listManagedSkills(): Promise<ListManagedSkillsResponse> {
+        return this._messenger.sendRequest(listManagedSkills, HOST_EXTENSION);
+    }
+
+    setSkillEnabled(request: SetSkillEnabledRequest): Promise<SetSkillEnabledResponse> {
+        return this._messenger.sendRequest(setSkillEnabled, HOST_EXTENSION, request);
+    }
+
+    deleteSkill(request: DeleteSkillRequest): Promise<DeleteSkillResponse> {
+        return this._messenger.sendRequest(deleteSkill, HOST_EXTENSION, request);
     }
 
     getAgentRunStatus(request: GetAgentRunStatusRequest = {}): Promise<GetAgentRunStatusResponse> {

@@ -71,7 +71,10 @@ import {
     WEB_SEARCH_TOOL_NAME,
     WEB_FETCH_TOOL_NAME,
     DEEPWIKI_ASK_QUESTION_TOOL_NAME,
+    SKILL_TOOL_NAME,
 } from './tools';
+import { findSkillByName, type SkillCatalogEntry } from '../../tools/skill_discovery';
+import { readAndFormatSkill } from '../../tools/skill_tools';
 import { logInfo, logError, logDebug } from '../../../copilot/logger';
 import { ChatHistoryManager, SessionContextBlocksState, TOOL_USE_INTERRUPTION_CONTEXT } from '../../chat-history-manager';
 import { getToolAction } from '../../tool-action-mapper';
@@ -262,6 +265,7 @@ function buildUpdatedBlocksState(
     apply('modePolicy', statuses.modePolicy, current.modePolicy);
     apply('payloads', statuses.payloads, current.payloads);
     apply('agentsMd', statuses.agentsMd, current.agentsMd);
+    apply('skills', statuses.skills, current.skills);
     return touched ? updated : undefined;
 }
 
@@ -289,9 +293,40 @@ function logBlockInjectionDrift(
     note('mode', statuses.modePolicy, previous.modePolicy, current.modePolicy);
     note('payloads', statuses.payloads, previous.payloads, current.payloads);
     note('agentsMd', statuses.agentsMd, previous.agentsMd, current.agentsMd);
+    note('skills', statuses.skills, previous.skills, current.skills);
     if (driftedBlocks.length > 0) {
         logInfo(`[Agent] Session-context drift — re-injecting: ${driftedBlocks.join(', ')}`);
     }
+}
+
+/**
+ * Detect a user-explicit skill invocation (`/skill-name [args]`) at the start of
+ * the message and resolve it against the discovered skills. Mirrors Claude Code:
+ * the harness does the lookup so the model receives the skill content
+ * deterministically. Matches both model-invocable and `disable-model-invocation`
+ * skills (the user asked for it explicitly). Returns undefined when the message
+ * is not a recognized slash invocation.
+ */
+function detectSlashSkillInvocation(
+    query: string,
+    skills: SkillCatalogEntry[],
+): { entry: SkillCatalogEntry; args: string } | undefined {
+    if (!query) {
+        return undefined;
+    }
+    const trimmed = query.replace(/^\s+/, '');
+    if (!trimmed.startsWith('/')) {
+        return undefined;
+    }
+    const match = trimmed.match(/^\/([A-Za-z0-9][A-Za-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/);
+    if (!match) {
+        return undefined;
+    }
+    const entry = findSkillByName(skills, match[1]);
+    if (!entry) {
+        return undefined;
+    }
+    return { entry, args: (match[2] ?? '').trim() };
 }
 
 const TOOL_INTERRUPTION_ERROR_CODE = 'AGENT_TOOL_INTERRUPTION';
@@ -624,6 +659,7 @@ export async function executeAgent(
             modePolicy: decideBlockStatus(currentBlockHashes.modePolicy, previousBlocks.modePolicy, forceFirstInjection),
             payloads: decideBlockStatus(currentBlockHashes.payloads, previousBlocks.payloads, forceFirstInjection),
             agentsMd: decideBlockStatus(currentBlockHashes.agentsMd, previousBlocks.agentsMd, forceFirstInjection),
+            skills: decideBlockStatus(currentBlockHashes.skills, previousBlocks.skills, forceFirstInjection),
         };
         const previousMode = previousBlocks.modePolicy as AgentMode | undefined;
 
@@ -635,6 +671,26 @@ export async function executeAgent(
         if (updatedBlocks && request.chatHistoryManager) {
             await request.chatHistoryManager.updateMetadata({ sessionContextBlocks: updatedBlocks });
             logBlockInjectionDrift(blockStatuses, previousBlocks, currentBlockHashes);
+        }
+
+        // Per-run set of activated skill names — shared with the `skill` tool so
+        // a user `/skill-name` invocation and a later model `skill` call dedup
+        // each other within the turn.
+        const activatedSkills = new Set<string>();
+
+        // User-explicit skill invocation (`/skill-name [args]`). Resolve & format
+        // here so the model receives the skill deterministically (Claude Code
+        // parity) without having to call the `skill` tool itself.
+        let userActivatedSkillContent: string | undefined;
+        const slashSkill = detectSlashSkillInvocation(request.query, sessionContextResult.snapshot.skills);
+        if (slashSkill) {
+            try {
+                userActivatedSkillContent = readAndFormatSkill(slashSkill.entry, slashSkill.args || undefined).content;
+                activatedSkills.add(slashSkill.entry.name.toLowerCase());
+                logInfo(`[Agent] User activated skill '${slashSkill.entry.name}' via /skill-name`);
+            } catch (error) {
+                logError(`[Agent] Failed to activate skill '${slashSkill.entry.name}' from /skill-name`, error);
+            }
         }
 
         // Build user prompt — pass the pre-built sessionContextResult so
@@ -652,6 +708,7 @@ export async function executeAgent(
             blockStatuses,
             previousMode,
             precomputedContext: sessionContextResult,
+            userActivatedSkillContent,
         };
         const userPromptBlocks = await getUserPrompt(userPromptParams);
 
@@ -767,6 +824,8 @@ export async function executeAgent(
             undoCheckpointManager: request.undoCheckpointManager,
             abortSignal: streamWatchdog.abortSignal,
             modelSettings: request.modelSettings,
+            skills: sessionContextResult.snapshot.skills,
+            activatedSkills,
         });
 
         const finalTools: any = tools;
@@ -1278,6 +1337,11 @@ export async function executeAgent(
                         displayInput = {
                             repoName: toolInput?.repoName,
                             question: toolInput?.question,
+                        };
+                    } else if (part.toolName === SKILL_TOOL_NAME) {
+                        displayInput = {
+                            skill: toolInput?.skill,
+                            args: toolInput?.args,
                         };
                     }
 

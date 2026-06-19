@@ -214,6 +214,18 @@ interface MentionablePathItem {
     type: 'file' | 'folder';
 }
 
+interface SlashContext {
+    start: number;
+    end: number;
+    query: string;
+}
+
+interface SkillSuggestion {
+    name: string;
+    description: string;
+    disableModelInvocation: boolean;
+}
+
 const FooterTooltip: React.FC<{
     content: React.ReactNode;
     children: React.ReactNode;
@@ -269,6 +281,7 @@ const FooterTooltip: React.FC<{
 
 const MENTION_SEARCH_LIMIT = 40;
 const MENTION_SEARCH_DEBOUNCE_MS = 120;
+const SLASH_SUGGESTION_LIMIT = 8;
 
 function useDebouncedValue<T>(value: T, delayMs: number): T {
     const [debouncedValue, setDebouncedValue] = useState(value);
@@ -304,6 +317,34 @@ function getMentionContext(input: string, cursor: number): MentionContext | null
 
     return {
         start: atIndex,
+        end: cursor,
+        query,
+    };
+}
+
+/**
+ * Slash-command (skill) trigger detection. A `/skill-name` invocation is only
+ * recognized at the very start of the message (Claude Code semantics): the text
+ * before the `/` must be empty/whitespace, and the dropdown stays open only
+ * while typing the command name (before the first space — once a space is typed
+ * the remainder is treated as args, not the skill name).
+ */
+function getSlashContext(input: string, cursor: number): SlashContext | null {
+    const textBeforeCursor = input.slice(0, cursor);
+    const slashIndex = textBeforeCursor.lastIndexOf("/");
+    if (slashIndex < 0) {
+        return null;
+    }
+    // Must be at the start of the input (only whitespace before the slash).
+    if (textBeforeCursor.slice(0, slashIndex).trim().length > 0) {
+        return null;
+    }
+    const query = textBeforeCursor.slice(slashIndex + 1);
+    if (/\s/.test(query)) {
+        return null;
+    }
+    return {
+        start: slashIndex,
         end: cursor,
         query,
     };
@@ -401,6 +442,13 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
     const [pendingMentionCursorPosition, setPendingMentionCursorPosition] = useState<number | null>(null);
     const mentionSearchRequestIdRef = useRef(0);
     const debouncedMentionContext = useDebouncedValue(mentionContext, MENTION_SEARCH_DEBOUNCE_MS);
+
+    // Slash-command (skill) autocomplete — mirrors the @mention machinery. The
+    // full skill list is fetched once per panel open and filtered client-side.
+    const [slashContext, setSlashContext] = useState<SlashContext | null>(null);
+    const [slashSuggestions, setSlashSuggestions] = useState<SkillSuggestion[]>([]);
+    const [activeSlashIndex, setActiveSlashIndex] = useState(0);
+    const allSkillsRef = useRef<SkillSuggestion[] | null>(null);
 
     // Context usage tracking (always visible)
     const CONTEXT_TOKEN_THRESHOLD = 200000;
@@ -1132,8 +1180,63 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
         setPendingMentionCursorPosition(cursorPosition);
     };
 
+    const updateSlashStateFromInput = (inputValue: string, cursorPosition: number) => {
+        const context = getSlashContext(inputValue, cursorPosition);
+        setSlashContext(context);
+        if (!context) {
+            setSlashSuggestions([]);
+            setActiveSlashIndex(0);
+        }
+    };
+
+    const closeSlashSuggestions = () => {
+        setSlashContext(null);
+        setSlashSuggestions([]);
+        setActiveSlashIndex(0);
+    };
+
+    const handleSlashSelect = (skill: SkillSuggestion) => {
+        if (!slashContext) {
+            return;
+        }
+        // Insert "/name " — the trailing space closes the dropdown and lets the
+        // user type arguments. The backend resolves the /skill-name on send.
+        const token = `/${skill.name} `;
+        const before = currentUserPrompt.slice(0, slashContext.start);
+        const after = currentUserPrompt.slice(slashContext.end);
+        const updatedPrompt = `${before}${token}${after}`;
+        const cursorPosition = (before + token).length;
+
+        setCurrentUserprompt(updatedPrompt);
+        closeSlashSuggestions();
+        setPendingMentionCursorPosition(cursorPosition);
+    };
+
     // Handle text input keydown events
     const handleTextKeydown = (event: React.KeyboardEvent) => {
+        if (slashContext && slashSuggestions.length > 0) {
+            if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setActiveSlashIndex((prev) => Math.min(prev + 1, slashSuggestions.length - 1));
+                return;
+            }
+            if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setActiveSlashIndex((prev) => Math.max(prev - 1, 0));
+                return;
+            }
+            if (event.key === "Enter" || event.key === "Tab") {
+                event.preventDefault();
+                handleSlashSelect(slashSuggestions[activeSlashIndex]);
+                return;
+            }
+            if (event.key === "Escape") {
+                event.preventDefault();
+                closeSlashSuggestions();
+                return;
+            }
+        }
+
         if (mentionContext) {
             const hasMentionQuery = mentionContext.query.trim().length > 0;
 
@@ -1209,6 +1312,7 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
         abortedRef.current = false;
         sendInProgressRef.current = true;
         closeMentionSuggestions();
+        closeSlashSuggestions();
         // Clear input immediately so user can't send the same message again while compacting.
         setCurrentUserprompt("");
 
@@ -1795,6 +1899,66 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
 
         void searchMentionablePaths();
     }, [mentionContext, debouncedMentionContext, rpcClient, backendRequestTriggered, isUsageExceeded]);
+
+    // Skill autocomplete: load the skill list once (lazily), filter client-side.
+    useEffect(() => {
+        if (!slashContext || backendRequestTriggered || isUsageExceeded) {
+            setSlashSuggestions([]);
+            return;
+        }
+
+        let cancelled = false;
+
+        const computeSuggestions = (skills: SkillSuggestion[]) => {
+            const query = slashContext.query.trim().toLowerCase();
+            const score = (s: SkillSuggestion): number => {
+                if (!query) {
+                    return 0;
+                }
+                const name = s.name.toLowerCase();
+                if (name === query) return 100;
+                if (name.startsWith(query)) return 90;
+                if (name.includes(query)) return 70;
+                if (s.description.toLowerCase().includes(query)) return 40;
+                return -1;
+            };
+            const filtered = (query ? skills.filter((s) => score(s) >= 0) : skills.slice())
+                .sort((a, b) => {
+                    const diff = score(b) - score(a);
+                    return diff !== 0 ? diff : a.name.localeCompare(b.name);
+                })
+                .slice(0, SLASH_SUGGESTION_LIMIT);
+            if (!cancelled) {
+                setSlashSuggestions(filtered);
+                setActiveSlashIndex(0);
+            }
+        };
+
+        if (allSkillsRef.current) {
+            computeSuggestions(allSkillsRef.current);
+        } else {
+            void (async () => {
+                try {
+                    const response = await rpcClient.getMiAgentPanelRpcClient().listSkills();
+                    if (cancelled) {
+                        return;
+                    }
+                    allSkillsRef.current = response.skills || [];
+                    computeSuggestions(allSkillsRef.current);
+                } catch (error) {
+                    console.error("Error loading skills:", error);
+                    if (!cancelled) {
+                        allSkillsRef.current = [];
+                        setSlashSuggestions([]);
+                    }
+                }
+            })();
+        }
+
+        return () => {
+            cancelled = true;
+        };
+    }, [slashContext, rpcClient, backendRequestTriggered, isUsageExceeded]);
 
     useEffect(() => {
         setActiveMentionIndex(0);
@@ -2602,6 +2766,86 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
                 </div>
             )}
 
+            {slashContext && !backendRequestTriggered && !isUsageExceeded && (
+                <div
+                    style={{
+                        margin: "0 16px 8px 16px",
+                        border: "1px solid var(--vscode-widget-border, var(--vscode-panel-border))",
+                        borderRadius: "10px",
+                        backgroundColor: "var(--vscode-editorWidget-background)",
+                        boxShadow: "0 8px 24px rgba(0, 0, 0, 0.22)",
+                        maxHeight: "220px",
+                        overflowY: "auto",
+                        position: "relative",
+                        zIndex: 12,
+                    }}
+                >
+                    {slashSuggestions.length === 0 ? (
+                        <div
+                            style={{
+                                padding: "10px 12px",
+                                fontSize: "12px",
+                                color: "var(--vscode-descriptionForeground)",
+                            }}
+                        >
+                            {allSkillsRef.current && allSkillsRef.current.length === 0
+                                ? "No skills available. Add a SKILL.md under .agents/skills/ (project) or ~/.agents/skills/ (user)."
+                                : "No matching skills"}
+                        </div>
+                    ) : (
+                        slashSuggestions.map((skill, index) => {
+                            const isActive = index === activeSlashIndex;
+                            return (
+                                <button
+                                    key={`skill:${skill.name}`}
+                                    onClick={() => handleSlashSelect(skill)}
+                                    onMouseEnter={() => setActiveSlashIndex(index)}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    style={{
+                                        width: "100%",
+                                        border: "none",
+                                        backgroundColor: isActive
+                                            ? "var(--vscode-list-activeSelectionBackground)"
+                                            : "transparent",
+                                        color: isActive
+                                            ? "var(--vscode-list-activeSelectionForeground)"
+                                            : "var(--vscode-foreground)",
+                                        padding: "8px 10px",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: "8px",
+                                        textAlign: "left",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    <span
+                                        className="codicon codicon-sparkle"
+                                        style={{ fontSize: "13px", opacity: 0.9, flexShrink: 0 }}
+                                    />
+                                    <span style={{ fontSize: "12px", fontWeight: 500, flexShrink: 0 }}>
+                                        /{skill.name}
+                                    </span>
+                                    <span
+                                        style={{
+                                            fontSize: "12px",
+                                            color: isActive
+                                                ? "var(--vscode-list-activeSelectionForeground)"
+                                                : "var(--vscode-descriptionForeground)",
+                                            opacity: 0.85,
+                                            overflow: "hidden",
+                                            textOverflow: "ellipsis",
+                                            whiteSpace: "nowrap",
+                                        }}
+                                    >
+                                        {skill.description}
+                                    </span>
+                                </button>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
             {mentionContext && !backendRequestTriggered && !isUsageExceeded && (
                 <div
                     style={{
@@ -2765,14 +3009,17 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
                             const value = e.target.value;
                             setCurrentUserprompt(value);
                             updateMentionStateFromInput(value, e.target.selectionStart ?? value.length);
+                            updateSlashStateFromInput(value, e.target.selectionStart ?? value.length);
                         }}
                         onClick={(e: React.MouseEvent<HTMLTextAreaElement>) => {
                             const target = e.currentTarget;
                             updateMentionStateFromInput(target.value, target.selectionStart ?? target.value.length);
+                            updateSlashStateFromInput(target.value, target.selectionStart ?? target.value.length);
                         }}
                         onKeyUp={(e: React.KeyboardEvent<HTMLTextAreaElement>) => {
                             const target = e.currentTarget;
                             updateMentionStateFromInput(target.value, target.selectionStart ?? target.value.length);
+                            updateSlashStateFromInput(target.value, target.selectionStart ?? target.value.length);
                         }}
                         onFocus={() => {
                             setIsFocused(true);
