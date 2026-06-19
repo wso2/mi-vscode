@@ -60,7 +60,9 @@ module.exports = {
         }
         if (deps['protobufjs']) {
           const currentVersion = deps['protobufjs'];
-          if (currentVersion.startsWith('^8') || currentVersion.startsWith('8')) {
+          const majorMatch = String(currentVersion).match(/^\s*[\^~><=]*\s*(\d+)\b/);
+          const major = majorMatch ? Number(majorMatch[1]) : null;
+          if (major === 8) {
             deps['protobufjs'] = '8.6.0'; // security fixes
           } else {
             deps['protobufjs'] = '7.6.3'; // security fixes
@@ -68,12 +70,14 @@ module.exports = {
         }
         if (deps['form-data']) {
           const currentVersion = deps['form-data'];
+          const majorMatch = String(currentVersion).match(/^\s*[\^~><=]*\s*(\d+)\b/);
+          const major = majorMatch ? Number(majorMatch[1]) : null;
           let newVersion;
-          if (/^[\s\^~><=]*2[.\s]/.test(currentVersion)) {
+          if (major === 2) {
             newVersion = '2.5.6';
-          } else if (/^[\s\^~><=]*3[.\s]/.test(currentVersion)) {
+          } else if (major === 3) {
             newVersion = '3.0.5';
-          } else if (/^[\s\^~><=]*4[.\s]/.test(currentVersion)) {
+          } else if (major === 4) {
             newVersion = '4.0.6';
           } else {
             context.log(`Unexpected form-data version: ${currentVersion}`);
