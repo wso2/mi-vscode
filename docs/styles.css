@@ -257,6 +257,27 @@ a.card:hover { text-decoration: none; }
 .callout p:last-child  { margin-bottom: 0; }
 .callout .label { font-weight: 600; color: var(--text-bright); display: block; margin-bottom: 6px;}
 
+/* ── Cache detail list ───────────────────────────────────────────────────── */
+
+dl.cache-detail { margin: 24px 0; }
+dl.cache-detail dt {
+  color: var(--text-bright); font-weight: 600;
+  margin-top: 18px; line-height: 1.5;
+}
+dl.cache-detail dt:first-child { margin-top: 0; }
+dl.cache-detail dt em { color: var(--text-dim); font-weight: 400; }
+dl.cache-detail dd {
+  margin: 8px 0 0 0; padding: 10px 16px;
+  background: var(--bg-alt); border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+}
+dl.cache-detail dd .note {
+  margin: 10px 0 0 0; padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 14px; color: var(--text-dim);
+}
+dl.cache-detail dd .note strong { color: var(--text); }
+
 /* ── Tables ──────────────────────────────────────────────────────────────── */
 
 table {

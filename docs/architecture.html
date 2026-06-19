@@ -189,6 +189,31 @@ flowchart TB
             <tr><td><code>completionProviders</code></td><td><code>auto://uri</code> <em>or</em> <code>path|ns</code></td><td>SchemaProvider</td><td>invalidateAutoSchemas</td></tr>
           </tbody>
         </table>
+
+        <p>Concretely, for a single open document those caches hold:</p>
+        <dl class="cache-detail">
+          <dt><code>documentToSchema</code> — <em>"which schema does this document use?"</em> (per-document)</dt>
+          <dd>
+            <code>"auto://&hellip;/test.xml"</code> &rarr; <code>"/resources/schemas/440/synapse_config.xsd"</code>
+          </dd>
+
+          <dt><code>validators</code> — <em>"the compiled <code>XsdValidatorService</code> for this schema"</em> (per-schema, fallback diagnostics path)</dt>
+          <dd>
+            <code>"/&hellip;/440/synapse_config.xsd"</code> &rarr; <code>&lt;compiled validator&gt;</code>
+          </dd>
+
+          <dt><code>completionProviders</code> — <em>"autocomplete / hover engine for this schema"</em> (per-schema)</dt>
+          <dd>
+            <code>"/&hellip;/440/synapse_config.xsd"</code> &rarr; <code>&lt;completion provider&gt;</code>
+          </dd>
+
+          <dt><code>projectValidators</code> (in <code>DiagnosticsHandler</code>) — <em>"the Xerces-WASM validator for this schema; primary diagnostics path"</em> (per-schema)</dt>
+          <dd>
+            <code>"/&hellip;/440/synapse_config.xsd"</code> &rarr; <code>&lt;project validator&gt;</code>
+            <p class="note"><strong>Note:</strong> keyed by the XSD <em>file path</em> (<code>xsdPath</code>), not the schema folder. The folder (<code>"/&hellip;/440"</code>) is only used to gather the files map for WASM, not as the cache key — so <code>validators</code> and <code>projectValidators</code> share the same per-schema granularity.</p>
+          </dd>
+        </dl>
+
         <div class="callout warn">
           <p><span class="label">Fragility:</span> the <code>auto://&lt;path&gt;</code> URI is a
           synthetic key invented by <code>DiagnosticsHandler</code> purely to register completion
