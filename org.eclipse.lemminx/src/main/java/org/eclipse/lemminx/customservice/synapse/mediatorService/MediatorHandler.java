@@ -176,6 +176,11 @@ public class MediatorHandler {
             Map<String, Object> connectorData = new HashMap<>();
             connectorData.put(Constant.TAG, operation.getTag());
             connectorData.put(Constant.CONFIG_KEY, data.get(Constant.CONFIG_KEY));
+            Object description = data.get(Constant.DESCRIPTION);
+            if (description == null && node instanceof Connector) {
+                description = ((Connector) node).getDescription();
+            }
+            connectorData.put(Constant.DESCRIPTION, description);
             List<Object> parameterData = new ArrayList<>();
             for (OperationParameter parameter : parameters) {
                 if (data.containsKey(parameter.getName())) {
@@ -197,6 +202,7 @@ public class MediatorHandler {
             }
 
             connectorData.put(Constant.PARAMETERS, parameterData);
+            connectorData.put(Constant.HAS_PARAMETERS, !parameterData.isEmpty());
             StringWriter writer = new StringWriter();
             String edit = templateMap.get(Constant.CONNECTOR).execute(writer, connectorData).toString();
             TextEdit textEdit = new TextEdit(range, edit);

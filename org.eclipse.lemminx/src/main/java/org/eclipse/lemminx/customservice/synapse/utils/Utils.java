@@ -1066,6 +1066,36 @@ public class Utils {
         return mapped != null ? mapped : Constant.DEFAULT_MI_VERSION;
     }
 
+    public static boolean hasDependency(String projectPath, String artifactId) {
+        try {
+            Path pomPath = Path.of(projectPath, "pom.xml");
+            File pomFile = pomPath.toFile();
+            if (!pomFile.exists()) {
+                return false;
+            }
+            DOMDocument document = getDOMDocument(pomFile);
+            DOMNode dependencies = getChildNodeByName(document.getDocumentElement(), Constant.DEPENDENCIES);
+            if (dependencies == null) {
+                return false;
+            }
+            for (DOMNode dependency : dependencies.getChildren()) {
+                if (!Constant.DEPENDENCY.equalsIgnoreCase(dependency.getNodeName())) {
+                    continue;
+                }
+                DOMNode artifactNode = getChildNodeByName(dependency, Constant.ARTIFACT_ID);
+                if (artifactNode != null) {
+                    String pomArtifactId = getInlineString(artifactNode.getFirstChild());
+                    if (pomArtifactId != null && artifactId.equals(pomArtifactId.trim())) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error occurred while checking pom dependency: " + artifactId, e);
+        }
+        return false;
+    }
+
     public static Map<String, Mustache> getTemplateMap(String resourceFolderName) {
         Map<String, Mustache> templateMap = new HashMap<>();
         try {
