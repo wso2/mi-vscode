@@ -18,10 +18,18 @@ public class ConnectorGeneratorResponse {
 
     public boolean buildStatus;
     public String connectorPath;
+    public String errorMessage;
 
     public ConnectorGeneratorResponse(boolean buildStatus, String connectorPath) {
 
         this.buildStatus = buildStatus;
         this.connectorPath = connectorPath;
+    }
+
+    public ConnectorGeneratorResponse(boolean buildStatus, String connectorPath, String errorMessage) {
+
+        this.buildStatus = buildStatus;
+        this.connectorPath = connectorPath;
+        this.errorMessage = errorMessage;
     }
 }

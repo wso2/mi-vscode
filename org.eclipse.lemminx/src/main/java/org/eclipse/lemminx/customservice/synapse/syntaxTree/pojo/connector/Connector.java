@@ -24,6 +24,7 @@ public class Connector extends Mediator {
     String connectorName;
     String method;
     String configKey;
+    String description;
     List<ConnectorParameter> parameters;
 
     public Connector() {
@@ -84,6 +85,16 @@ public class Connector extends Mediator {
     public void setConfigKey(String configKey) {
 
         this.configKey = configKey;
+    }
+
+    public String getDescription() {
+
+        return description;
+    }
+
+    public void setDescription(String description) {
+
+        this.description = description;
     }
 
     public void removeParameter(String name) {

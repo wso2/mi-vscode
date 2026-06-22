@@ -1044,7 +1044,10 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                         connectorGenReq.connectorProjectPath, projectServerVersion, projectUri);
             }
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Error occurred while generating the connector", e);
+			String errorMsg = "Error occurred while generating the connector: " + e.getMessage();
+            log.log(Level.SEVERE, errorMsg, e);
+            ConnectorGeneratorResponse errorResponse = new ConnectorGeneratorResponse(false, null, errorMsg);
+            return CompletableFuture.supplyAsync(() -> errorResponse);
         }
         ConnectorGeneratorResponse response = new ConnectorGeneratorResponse(filePath != null, filePath);
         return CompletableFuture.supplyAsync(() -> response);
@@ -1239,7 +1242,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     private void packHttpConnector() {
 
-        if (Utils.compareVersions(projectServerVersion, Constant.MI_440_VERSION) >= 0) {
+        if (Utils.compareVersions(projectServerVersion, Constant.MI_440_VERSION) >= 0
+                && Utils.hasDependency(projectUri, Constant.HTTP_CONNECTOR_ARTIFACT_ID)) {
             String projectId = new File(projectUri).getName() + "_" + Utils.getHash(projectUri);
             String connectorDownloadPath = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
                     Constant.CONNECTORS, projectId, Constant.DOWNLOADED).toString();

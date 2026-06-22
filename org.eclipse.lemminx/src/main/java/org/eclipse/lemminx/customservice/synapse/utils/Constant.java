@@ -173,6 +173,7 @@ public class Constant {
     public static final String STATISTICS = "statistics";
     public static final String TRACE = "trace";
     public static final String PARAMETERS = "parameters";
+    public static final String HAS_PARAMETERS = "hasParameters";
     public static final String PARAMETER = "parameter";
     public static final String LOCKED = "locked";
     public static final String SRC = "src";
@@ -550,6 +551,7 @@ public class Constant {
     public static final String WSO2_MI = ".wso2-mi";
     public static final String M2 = ".m2";
     public static final String DOWNLOADED = "Downloaded";
+    public static final String HTTP_CONNECTOR_ARTIFACT_ID = "mi-connector-http";
     public static final String EXTRACTED = "Extracted";
     public static final String PARALLEL_EXECUTION = "parallelExecution";
     public static final String CONTINUE_WITHOUT_AGGREGATION = "continueWithoutAggregation";

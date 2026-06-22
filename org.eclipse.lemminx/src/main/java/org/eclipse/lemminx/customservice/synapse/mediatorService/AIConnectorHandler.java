@@ -555,6 +555,14 @@ public class AIConnectorHandler {
         return toolData;
     }
 
+    private static String unwrapExpression(String value) {
+
+        if (StringUtils.isNotBlank(value) && value.startsWith("${") && value.endsWith("}")) {
+            return value.substring(2, value.length() - 1);
+        }
+        return value;
+    }
+
     /**
      * Generates a unique sequence template name for the newly added tool.
      */
@@ -931,7 +939,7 @@ public class AIConnectorHandler {
 
         JsonObject expression = new JsonObject();
         expression.addProperty(Constant.IS_EXPRESSION, true);
-        expression.addProperty(Constant.VALUE, node.getAttribute(RESULT_EXPRESSION));
+        expression.addProperty(Constant.VALUE, unwrapExpression(node.getAttribute(RESULT_EXPRESSION)));
         toolData.put(TOOL_RESULT_EXPRESSION, expression);
 
         toolData.put(TOOL_DESCRIPTION, node.getAttribute(Constant.DESCRIPTION));
