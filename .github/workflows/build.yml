@@ -39,6 +39,10 @@ on:
         type: boolean
         required: false
         default: false
+      continueOnTrivyFailure:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   Build_Stage:
@@ -121,6 +125,8 @@ jobs:
           MI_AUTH_CLIENT_ID: ${{ secrets.MI_AUTH_CLIENT_ID }}
 
       - name: Run Trivy vulnerability scanner
+        id: trivy
+        continue-on-error: ${{ inputs.continueOnTrivyFailure }}
         uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: 'fs'
@@ -130,6 +136,10 @@ jobs:
           timeout: '10m'
           skip-dirs: 'common/temp,packages/mi-language-server'
           ignore-unfixed: true
+
+      - name: Note Trivy warning
+        if: ${{ inputs.continueOnTrivyFailure && steps.trivy.outcome == 'failure' }}
+        run: echo "Trivy found vulnerabilities, but the workflow continued so the daily build could still run the tests." >> $GITHUB_STEP_SUMMARY
 
   ExtTest_MI:
     name: Run MI diagram tests
