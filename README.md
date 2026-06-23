@@ -33,10 +33,10 @@ src/                    TypeScript source
   requestHandlers.ts    LSP request handlers (completion, hover, symbols, …)
   diagnosticsHandler.ts XSD validation → LSP diagnostics
   xmlLanguageService.ts Façade over parser + schema services
-  schema/               XSD resolution, validation, completion provider
+  schema/               XSD resolution and completion provider
   services/             Per-feature logic (hover, completion, rename, …)
   parser/               XML parser wrapper
-resources/schemas/      Bundled XSD schemas (430, 440)
+resources/schemas/      Bundled XSD schemas (430, 440, maven)
 xerces-wasm/            Pre-built Xerces-C WebAssembly module
 tests/                  Vitest test suite
 ```
