@@ -132,7 +132,7 @@ connection.onDidChangeConfiguration(() => {
   connection.console.log("[server] Configuration changed — rebuilding schema associations");
 
   service.invalidateAutoSchemas();
-  diagnosticsHandler.dispose();
+  void diagnosticsHandler.dispose();
   service.clearUserAssociations();
 
   if (initializationSchemas.length > 0) {
@@ -176,7 +176,7 @@ documents.onDidClose((event) => {
 });
 
 connection.onShutdown(() => {
-  diagnosticsHandler.dispose();
+  void diagnosticsHandler.dispose();
   service.dispose();
 });
 
