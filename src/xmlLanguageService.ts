@@ -11,7 +11,6 @@ import { doRename } from "./services/xmlRename.js";
 import { doDefinition, DefinitionResult } from "./services/xmlDefinition.js";
 import { findReferences, ReferenceResult } from "./services/xmlReferences.js";
 import { SchemaProvider, SchemaInfo, SchemaAssociation, ResolvedSchema } from "./schema/schemaProvider.js";
-import { Diagnostic } from "./schema/xsdValidator.js";
 
 export function getLanguageService() {
   const schemaProvider = new SchemaProvider();
@@ -83,10 +82,6 @@ export function getLanguageService() {
 
     async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
       return schemaProvider.buildAndCacheCompletionProvider(info);
-    },
-
-    async validate(schemaUri: string, document: XMLDocument): Promise<Diagnostic[]> {
-      return schemaProvider.validate(schemaUri, document);
     },
 
     hasSchema(uri: string): boolean {

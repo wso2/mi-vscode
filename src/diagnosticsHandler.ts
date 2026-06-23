@@ -17,13 +17,6 @@ const MAX_SCHEMA_IMPORT_FILE_BYTES = 2 * 1024 * 1024;
 const MAX_SCHEMA_IMPORT_TOTAL_BYTES = 20 * 1024 * 1024;
 const MAX_SCHEMA_IMPORT_DEPTH = 10;
 
-const SEVERITY_MAP: Record<"error" | "warning" | "info", DiagnosticSeverity> =
-  {
-    error: DiagnosticSeverity.Error,
-    warning: DiagnosticSeverity.Warning,
-    info: DiagnosticSeverity.Information,
-  };
-
 export class DiagnosticsHandler {
   private connection: Connection;
   private service: LanguageService;
@@ -113,46 +106,18 @@ export class DiagnosticsHandler {
 
           const result = await validator.validate(sanitizedText);
 
-          const uniqueErrors = new Map<string, any>();
-          for (const e of [...result.parseErrors, ...result.schemaErrors]) {
-            const key = `${e.line}:${e.column}:${e.message}`;
-            uniqueErrors.set(key, e);
-          }
-          const allErrors = Array.from(uniqueErrors.values());
-
-          const xmlLines = text.split("\n");
-          const diagnostics: Diagnostic[] = allErrors.map((e: any) => {
-            const line = e.line > 0 ? e.line - 1 : 0;
-            const col = e.column > 0 ? e.column - 1 : 0;
-            const lineText = xmlLines[line] ?? "";
-            const tagStart = lineText.lastIndexOf("<", col);
-            const start = tagStart >= 0 ? { line, character: tagStart } : { line, character: col };
-            return {
-              range: { start, end: { line, character: col + 1 } },
-              message: e.message,
-              severity: DiagnosticSeverity.Error,
-              source: "wso2-mi-language-server",
-            };
-          });
+          const diagnostics = mapErrorsToDiagnostics(result, text);
           if (isStale()) return;
           this.send(document.uri, filterDiagnostics(diagnostics));
           return;
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          this.warn(`[DiagnosticsHandler] ProjectValidator failed for ${document.uri}; falling back to schema provider validation: ${message}`);
+          this.warn(`[DiagnosticsHandler] ProjectValidator failed for ${document.uri}; clearing diagnostics: ${message}`);
+          if (isStale()) return;
+          this.send(document.uri, []);
+          return;
         }
       }
-
-      // Fallback: service.validate() when no absolute xsdPath is available or WASM threw.
-      // Requires the JS AST — parse now if not already done.
-      this.connection.console.log(
-        `[DiagnosticsHandler] Validating ${document.uri} against auto schema`
-      );
-      const raw = await this.service.validate(autoUri, getXmlDoc());
-      if (isStale()) return;
-      const converted = this.toDiagnostics(raw);
-      this.send(document.uri, filterDiagnostics(converted));
-      return;
     }
 
     // No schema found — clear any stale diagnostics.
@@ -439,15 +404,29 @@ export class DiagnosticsHandler {
   private toImportKey(rootDir: string, fullPath: string): string {
     return path.relative(rootDir, fullPath).split(path.sep).join("/");
   }
+}
 
-  private toDiagnostics(raw: Awaited<ReturnType<LanguageService["validate"]>>): Diagnostic[] {
-    return raw.map((d) => ({
-      range: d.range,
-      message: d.message,
-      severity: SEVERITY_MAP[d.severity],
-      source: "wso2-mi-language-server",
-    }));
+
+export function mapErrorsToDiagnostics(result: { parseErrors: any[]; schemaErrors: any[] }, text: string): Diagnostic[] {
+  const uniqueErrors = new Map<string, any>();
+  for (const e of [...result.parseErrors, ...result.schemaErrors]) {
+    uniqueErrors.set(`${e.line}:${e.column}:${e.message}`, e);
   }
+
+  const xmlLines = text.split("\n");
+  return Array.from(uniqueErrors.values()).map((e: any) => {
+    const line = e.line > 0 ? e.line - 1 : 0;
+    const col = e.column > 0 ? e.column - 1 : 0;
+    const lineText = xmlLines[line] ?? "";
+    const tagStart = lineText.lastIndexOf("<", col);
+    const start = tagStart >= 0 ? { line, character: tagStart } : { line, character: col };
+    return {
+      range: { start, end: { line, character: col + 1 } },
+      message: e.message,
+      severity: DiagnosticSeverity.Error,
+      source: "wso2-mi-language-server",
+    };
+  });
 }
 
 /**
