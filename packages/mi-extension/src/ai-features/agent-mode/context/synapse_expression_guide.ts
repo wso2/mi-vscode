@@ -125,10 +125,7 @@ Headers, properties, params, and configs auto-parse string values: \`"200"\` →
 2. **\`==\` compares string representations**: \`1 == 1.0\` → false. Use \`float()\` for numeric comparison.
 3. **Logical ops need strict boolean**: \`1 and true\` THROWS. No truthy/falsy. \`not()\` argument MUST be boolean.
 4. **Comparison ops are numeric-only**: \`"abc" > "abd"\` THROWS. Convert to numbers first.
-5. **\`and\`/\`or\` bind TIGHTER than comparisons — ALWAYS parenthesize each comparison**: unlike every other language, \`a > 0 and b < 10\` parses as \`a > (0 and b) < 10\` and mis-evaluates or throws.
-   WRONG: \`\${integer(params.queryParams.id) <= 0 or integer(params.queryParams.id) > 10}\`
-   CORRECT: \`\${(integer(params.queryParams.id) <= 0) or (integer(params.queryParams.id) > 10)}\`
-   Operands that are already boolean (\`vars.flag\`, \`exists(...)\`, \`not(...)\`) need no parens.
+5. **\`and\`/\`or\` bind TIGHTER than comparisons — parenthesize each comparison**: \`\${(a > 0) and (b < 10)}\`, not \`\${a > 0 and b < 10}\` (which mis-parses as \`a > (0 and b) < 10\`). Already-boolean operands (\`vars.flag\`, \`exists(...)\`) need no parens.
 6. **Ternary condition must be boolean**: \`null ? "a" : "b"\` THROWS.
 7. **PayloadFactory: NEVER use \`<args>\` with Synapse Expressions** — embed directly in \`<format>\`.
 8. **Single-line only**: no multi-line code inside \`\${}\`.

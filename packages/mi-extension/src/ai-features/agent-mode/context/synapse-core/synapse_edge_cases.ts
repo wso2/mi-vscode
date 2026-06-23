@@ -69,11 +69,10 @@ false || true           → true   OK
 "text" or false         → THROWS
 0 and false             → THROWS
 \`\`\`
-**Workaround:** Use comparisons to produce booleans — and ALWAYS parenthesize each comparison, because \`and\`/\`or\` bind tighter than comparison operators:
+**Workaround:** Use comparisons to produce booleans, and parenthesize each one (\`and\`/\`or\` bind tighter than comparisons):
 \`\`\`xml
 \${(payload.count > 0) and (payload.active == "true")}
 \`\`\`
-Unparenthesized, \`payload.count > 0 and payload.active == "true"\` parses as \`payload.count > (0 and payload.active) == "true"\` and throws this very error.
 
 ### Comparison operators are numeric-only
 \`>\`, \`<\`, \`>=\`, \`<=\` only work with numeric values:
@@ -150,17 +149,6 @@ length(payload.middle)  → THROWS ("Null source value")
 - Accessing a null JSON field → returns null → downstream operations throw
 - Accessing an undefined variable → throws "Variable X is not defined"
 - Missing header/property → throws "Could not fetch the value"
-
-### Undeclared variables always throw — declare before use
-There is no default/null value for an unset variable: \`vars.X\` throws unless a \`<variable name="X">\` mediator (or a connector \`responseVariable="X"\`) ran earlier in the flow. A common generated-code bug is referencing variables that are never declared:
-\`\`\`xml
-<!-- WRONG: vars.requestId is read but never set anywhere upstream -->
-<log category="INFO"><message>ID: \${vars.requestId}</message></log>
-
-<!-- CORRECT: declare first, then use -->
-<variable name="requestId" type="STRING" expression="\${params.queryParams.requestId}"/>
-<log category="INFO"><message>ID: \${vars.requestId}</message></log>
-\`\`\`
 
 ### exists() is the only safe guard
 \`exists()\` is unique — it wraps the entire evaluation in a try-catch:

@@ -41,20 +41,7 @@ Extracted from the ANTLR parser grammar. Higher precedence binds tighter.
 | 6          | Comparison     | \`>\`, \`<\`, \`>=\`, \`<=\`, \`==\`, \`!=\` | Left          |
 | 7 (lowest) | Conditional    | \`? :\` (ternary)                | Right         |
 
-**Key implication:** Logical operators (\`and\`/\`or\`) bind TIGHTER than comparison operators — the OPPOSITE of mainstream languages. Arithmetic still binds tighter than both.
-\`\`\`
-\${vars.a > 0 and vars.b < 10}
-\`\`\`
-Parses as: \`vars.a > (0 and vars.b) < 10\` — NOT \`(vars.a > 0) and (vars.b < 10)\` — and mis-evaluates or throws (\`0 and vars.b\` is a logical op on non-booleans).
-
-**MANDATORY RULE: wrap every comparison in parentheses when it is an operand of \`and\`/\`or\`.**
-\`\`\`
-WRONG:   \${vars.a > 0 and vars.b < 10}
-CORRECT: \${(vars.a > 0) and (vars.b < 10)}
-WRONG:   \${vars.a + 5 > vars.b * 2 and vars.c == true}
-CORRECT: \${(vars.a + 5 > vars.b * 2) and (vars.c == true)}
-\`\`\`
-Operands that are already boolean (\`vars.flag\`, \`exists(...)\`, \`not(...)\`) need no parentheses. Within a single comparison, arithmetic groups as expected without extra parens: \`a + 5 > b * 2\` is \`(a + 5) > (b * 2)\`.`,
+**Key implication:** Logical operators (\`and\`/\`or\`) bind TIGHTER than comparison operators — the OPPOSITE of mainstream languages (arithmetic still binds tighter than both). So \`\${vars.a > 0 and vars.b < 10}\` parses as \`vars.a > (0 and vars.b) < 10\` (mis-evaluates/throws), NOT \`(vars.a > 0) and (vars.b < 10)\`. Always parenthesize each comparison that is an operand of \`and\`/\`or\`: \`\${(vars.a > 0) and (vars.b < 10)}\`. Already-boolean operands (\`vars.flag\`, \`exists(...)\`, \`not(...)\`) need no parentheses.`,
 
 type_system: `## Type System
 

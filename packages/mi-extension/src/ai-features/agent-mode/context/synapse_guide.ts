@@ -95,7 +95,6 @@ export const SYNAPSE_GUIDE = `
     \`\`\`
     - Supported types: \`STRING\`, \`BOOLEAN\`, \`INTEGER\`, \`DOUBLE\`, \`LONG\`, \`XML\`, \`JSON\`.
     - Use either \`value\` or \`expression\` in a single variable definition (not both).
-    - **Declare before use**: every \`\${vars.X}\` reference must be preceded in the message flow by a \`<variable name="X" .../>\` mediator or a connector operation with \`responseVariable="X"\`. Reading an unset variable throws "Variable X is not defined" at runtime — there is no implicit null/default. Before writing any expression that uses \`vars.*\`, verify the variable is set upstream in the same flow.
 
     - Examples
     \`\`\`xml
