@@ -21,9 +21,12 @@ export class DiagnosticsHandler {
   private connection: Connection;
   private service: LanguageService;
   private diagnosticsByUri = new Map<string, Diagnostic[]>();
-  // xsdPath → ProjectValidator — one instance per unique schema, shared across all documents
-  // that resolve to the same XSD. Validators live until dispose() is called.
-  private projectValidators = new Map<string, any>();
+  // xsdPath → Promise<ProjectValidator> — one instance per unique schema, shared across all
+  // documents that resolve to the same XSD. We cache the in-flight build *promise* (not the
+  // resolved validator) so concurrent callers for the same entryPath share a single build and
+  // can't each create a duplicate "ghost" validator that later leaks. Validators live until
+  // dispose() is called.
+  private validatorPromises = new Map<string, Promise<any>>();
 
   constructor(connection: Connection, service: LanguageService) {
     this.connection = connection;
@@ -133,16 +136,21 @@ export class DiagnosticsHandler {
     this.send(uri, []);
   }
 
-  /** Destroys all cached ProjectValidators and releases their grammar pools. */
-  dispose(): void {
-    for (const validator of this.projectValidators.values()) {
-      try {
-        validator.destroy();
-      } catch {
-        // ignore errors during teardown
-      }
-    }
-    this.projectValidators.clear();
+  /** Destroys all cached ProjectValidators and releases their grammar pools.
+   *  Awaits in-flight builds so validators that haven't resolved yet are also destroyed. */
+  async dispose(): Promise<void> {
+    const promises = [...this.validatorPromises.values()];
+    this.validatorPromises.clear();
+    await Promise.all(
+      promises.map(async (p) => {
+        try {
+          const validator = await p;
+          validator.destroy();
+        } catch {
+          // ignore failed builds / errors during teardown
+        }
+      })
+    );
     this.connection.console.log("[validator] All ProjectValidators destroyed");
   }
 
@@ -209,14 +217,28 @@ export class DiagnosticsHandler {
     return result;
   }
 
-  // Returns a cached ProjectValidator for entryPath, creating one if needed
-  private async getOrCreateValidator(schemaFolder: string, entryPath: string): Promise<any> {
-    const existing = this.projectValidators.get(entryPath);
+  // Returns a cached ProjectValidator for entryPath, creating one if needed.
+  // The build promise is stored synchronously (before any await) so concurrent callers for the
+  // same entryPath share one build instead of each creating a duplicate validator that leaks.
+  private getOrCreateValidator(schemaFolder: string, entryPath: string): Promise<any> {
+    const existing = this.validatorPromises.get(entryPath);
     if (existing) {
       this.connection.console.log(`[validator] Cache hit — reusing ProjectValidator for ${entryPath} (no XSD reload)`);
       return existing;
     }
 
+    const promise = this.buildValidator(schemaFolder, entryPath);
+    this.validatorPromises.set(entryPath, promise);
+    // If the build fails, evict so a later request can retry instead of caching a rejected promise.
+    promise.catch(() => {
+      if (this.validatorPromises.get(entryPath) === promise) {
+        this.validatorPromises.delete(entryPath);
+      }
+    });
+    return promise;
+  }
+
+  private async buildValidator(schemaFolder: string, entryPath: string): Promise<any> {
     const filesMap = await this.buildFilesMap(schemaFolder); //load all xsd files into memory
 
 
@@ -241,7 +263,6 @@ export class DiagnosticsHandler {
     this.connection.console.log(
       `[validator] XSD text released from RAM (sent to WASM linear memory) for ${entryPath}`
     );
-    this.projectValidators.set(entryPath, validator);
     this.connection.console.log(
       `[validator] Created ProjectValidator for ${entryPath} (entry: ${entry}, files: ${Object.keys(filesMap).length})`
     );
