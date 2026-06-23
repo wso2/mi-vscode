@@ -124,10 +124,6 @@ export class SchemaProvider {
       }
     }
 
-    const cacheKey = `${documentPath ?? fileName}|${xmlns ?? ""}`;
-    const cached = this.completionProviders.get(cacheKey);
-    if (cached) return cached;
-
     const resolved = this.associator.findSchema(fileName, xmlns, documentPath);
     if (!resolved) return null;
 
