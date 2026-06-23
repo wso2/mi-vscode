@@ -106,27 +106,7 @@ export class DiagnosticsHandler {
 
           const result = await validator.validate(sanitizedText);
 
-          const uniqueErrors = new Map<string, any>();
-          for (const e of [...result.parseErrors, ...result.schemaErrors]) {
-            const key = `${e.line}:${e.column}:${e.message}`;
-            uniqueErrors.set(key, e);
-          }
-          const allErrors = Array.from(uniqueErrors.values());
-
-          const xmlLines = text.split("\n");
-          const diagnostics: Diagnostic[] = allErrors.map((e: any) => {
-            const line = e.line > 0 ? e.line - 1 : 0;
-            const col = e.column > 0 ? e.column - 1 : 0;
-            const lineText = xmlLines[line] ?? "";
-            const tagStart = lineText.lastIndexOf("<", col);
-            const start = tagStart >= 0 ? { line, character: tagStart } : { line, character: col };
-            return {
-              range: { start, end: { line, character: col + 1 } },
-              message: e.message,
-              severity: DiagnosticSeverity.Error,
-              source: "wso2-mi-language-server",
-            };
-          });
+          const diagnostics = mapErrorsToDiagnostics(result, text);
           if (isStale()) return;
           this.send(document.uri, filterDiagnostics(diagnostics));
           return;
@@ -424,6 +404,29 @@ export class DiagnosticsHandler {
   private toImportKey(rootDir: string, fullPath: string): string {
     return path.relative(rootDir, fullPath).split(path.sep).join("/");
   }
+}
+
+
+export function mapErrorsToDiagnostics(result: { parseErrors: any[]; schemaErrors: any[] }, text: string): Diagnostic[] {
+  const uniqueErrors = new Map<string, any>();
+  for (const e of [...result.parseErrors, ...result.schemaErrors]) {
+    uniqueErrors.set(`${e.line}:${e.column}:${e.message}`, e);
+  }
+
+  const xmlLines = text.split("\n");
+  return Array.from(uniqueErrors.values()).map((e: any) => {
+    const line = e.line > 0 ? e.line - 1 : 0;
+    const col = e.column > 0 ? e.column - 1 : 0;
+    const lineText = xmlLines[line] ?? "";
+    const tagStart = lineText.lastIndexOf("<", col);
+    const start = tagStart >= 0 ? { line, character: tagStart } : { line, character: col };
+    return {
+      range: { start, end: { line, character: col + 1 } },
+      message: e.message,
+      severity: DiagnosticSeverity.Error,
+      source: "wso2-mi-language-server",
+    };
+  });
 }
 
 /**
