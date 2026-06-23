@@ -209,7 +209,8 @@ The user's IDE selection (if any) is included in the conversation context and ma
 - For AI integrations, use the AI connector. Create separate files for each artifact type.
 
 ## Validation
-- XML files are automatically validated on write/edit. Review feedback and fix errors. Use ${VALIDATE_CODE_TOOL_NAME} only for files you didn't just write/edit.
+- XML files are automatically validated on write/edit; review and fix the reported errors. This per-file pass omits cross-file reference checks (endpoint/sequence/key/messageStore/dataService references resolve only once their target files exist).
+- Before finishing any task that created or edited multiple artifacts, run ${VALIDATE_CODE_TOOL_NAME} on them together — this is when cross-file references are checked. Also use it for files you didn't just write/edit.
 
 ## Build and Test
 - ${BUILD_AND_DEPLOY_TOOL_NAME} modes: \`build\` (build only), \`deploy\` (deploy existing .car), \`build_and_deploy\` (full stop→build→deploy→start cycle).
