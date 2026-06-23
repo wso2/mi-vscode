@@ -1,5 +1,3 @@
-import { XsdValidatorService, Diagnostic, XsdInput, SchemaBundle } from "./xsdValidator.js";
-import { XMLDocument } from "../parser/xmlNode.js";
 import { XsdCompletionProvider } from "./xsdCompletionProvider.js";
 import { SchemaAssociator, SchemaAssociation, ResolvedSchema } from "./schemaAssociator.js";
 
@@ -47,7 +45,7 @@ export { SchemaAssociation, ResolvedSchema };
  * schemaLocation values) to their XSD content, enabling multi-file schemas.
  * `xsdPath` is an optional stable key for the XSD file itself (e.g. its absolute
  * path on disk).  When provided, multiple documents that share the same XSD path
- * will reuse a single compiled XsdValidatorService instead of creating one copy
+ * will reuse a single compiled completion provider instead of creating one copy
  * per open document.  Defaults to `uri` when omitted.
  */
 export interface SchemaInfo {
@@ -57,13 +55,9 @@ export interface SchemaInfo {
   imports?: Record<string, string>;
 }
 
-export { SchemaBundle };
-
-/** Registry that manages compiled XSD validators and routes validation requests to them. */
+/** Registry that builds and caches XSD completion providers per resolved schema. */
 export class SchemaProvider {
-  // xsdKey (xsdPath ?? uri) → one validator per unique XSD
-  private validators = new Map<string, XsdValidatorService>();
-  // documentUri → xsdKey — many documents can share the same validator
+  // documentUri → xsdKey — many documents can share the same completion provider
   private documentToSchema = new Map<string, string>();
   private completionProviders: Map<string, XsdCompletionProvider>;
   private associator: SchemaAssociator;
@@ -78,22 +72,7 @@ export class SchemaProvider {
    */
   async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
     const xsdKey = info.xsdPath ?? info.uri;
-    const prevKey = this.documentToSchema.get(info.uri);
     this.documentToSchema.set(info.uri, xsdKey);
-
-    // If this document previously pointed to a different XSD key, release that
-    // validator when no other document still references it.
-    if (prevKey && prevKey !== xsdKey && !this._isKeyReferenced(prevKey)) {
-      this.validators.get(prevKey)?.dispose();
-      this.validators.delete(prevKey);
-    }
-
-    if (!this.validators.has(xsdKey)) {
-      const xsd: XsdInput = info.imports
-        ? { entry: info.xsdText, imports: info.imports }
-        : info.xsdText;
-      this.validators.set(xsdKey, await XsdValidatorService.create(xsd));
-    }
 
     if (!this.completionProviders.has(xsdKey)) {
       const completionXsd = info.imports
@@ -159,37 +138,7 @@ export class SchemaProvider {
     return new XsdCompletionProvider(resolved.xsdText);
   }
 
-  /**
-   * Validates the document against the schema registered under schemaUri.
-   * Returns a warning diagnostic when no matching schema is found.
-   */
-  async validate(schemaUri: string, document: XMLDocument): Promise<Diagnostic[]> {
-    const xsdKey = this.documentToSchema.get(schemaUri);
-    const validator = xsdKey ? this.validators.get(xsdKey) : undefined;
-    if (!validator) {
-      // No schema registered — fall back to the parser's own syntax errors so
-      // basic well-formedness problems are still reported without Xerces.
-      return document.syntaxErrors.map((e) => ({
-        message: e.message,
-        severity: "error" as const,
-        source: "syntax" as const,
-        range: {
-          start: { line: e.line, character: e.character },
-          end:   { line: e.line, character: e.character },
-        },
-      }));
-    }
-    // Xerces-wasm does not support remote protocols (http/https). If xsi:schemaLocation is present,
-    // it will try to fetch the URL and fail with "unsupported protocol in URL".
-    // Replacing the entire attribute with spaces preserves line/col offsets and forces it to use our cached schema.
-    const sanitizedText = document.text
-      .replace(/\bxsi:schemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length))
-      .replace(/\bxsi:noNamespaceSchemaLocation\s*=\s*(["'])([\s\S]*?)\1/g, (m) => " ".repeat(m.length));
-
-    return validator.validate(sanitizedText);
-  }
-
-  /** Returns true when a compiled validator for the given document URI exists in the registry. */
+  /** Returns true when a completion provider for the given document URI exists in the registry. */
   hasSchema(uri: string): boolean {
     return this.documentToSchema.has(uri);
   }
@@ -205,19 +154,13 @@ export class SchemaProvider {
     }
     for (const xsdKey of keysToCheck) {
       if (!this._isKeyReferenced(xsdKey)) {
-        this.validators.get(xsdKey)?.dispose();
-        this.validators.delete(xsdKey);
         this.completionProviders.delete(xsdKey);
       }
     }
   }
 
-  /** Disposes all registered validators and clears the registry. */
+  /** Clears all cached completion providers and the registry. */
   dispose(): void {
-    for (const validator of this.validators.values()) {
-      validator.dispose();
-    }
-    this.validators.clear();
     this.documentToSchema.clear();
     this.completionProviders.clear();
   }
