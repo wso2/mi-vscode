@@ -39,6 +39,7 @@ import org.eclipse.lemminx.commons.TextDocument;
 import org.eclipse.lemminx.dom.DOMDocument;
 import org.eclipse.lemminx.dom.DOMParser;
 import org.eclipse.lemminx.extensions.contentmodel.settings.XMLValidationRootSettings;
+import org.eclipse.lemminx.extensions.synapse.SynapseDiagnosticsParticipant;
 import org.eclipse.lemminx.services.DocumentSymbolsResult;
 import org.eclipse.lemminx.services.SymbolInformationResult;
 import org.eclipse.lemminx.services.XMLLanguageService;
@@ -599,7 +600,13 @@ public class XMLTextDocumentService implements TextDocumentService {
 	public void didSave(DidSaveTextDocumentParams params) {
 		computeAsync((monitor) -> {
 			// A document was saved, collect documents to revalidate
-			SaveContext context = new SaveContext(params.getTextDocument().getUri());
+			String savedUri = params.getTextDocument().getUri();
+			if (savedUri != null && savedUri.contains("src/main/wso2mi")) {
+				// An artifact/resource file was saved — drop the cached cross-file index so the
+				// revalidation below (and sibling files) sees the updated set instead of stale data.
+				SynapseDiagnosticsParticipant.invalidateArtifactIndexCache();
+			}
+			SaveContext context = new SaveContext(savedUri);
 			doSave(context);
 
 			// Manage didSave document lifecycle participants

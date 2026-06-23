@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -72,12 +73,48 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
     private static final long ARTIFACT_CACHE_TTL_MS = 5000; // 5 seconds
     private final Map<String, CachedArtifactIndex> artifactIndexCache = new ConcurrentHashMap<>();
 
+    /**
+     * Invalidation signal for {@link #artifactIndexCache}. The cache is keyed per project with a
+     * short TTL; when an artifact/resource file under {@code src/main/wso2mi} changes, the language
+     * server bumps this epoch so the next diagnostics run rebuilds the index instead of serving a
+     * stale entry (which would wrongly flag a just-written sibling as unresolved for up to the TTL).
+     * A cache entry is only honored while its stored epoch matches the current one.
+     */
+    private static final AtomicLong artifactCacheEpoch = new AtomicLong();
+
+    /** Invalidate the cross-file artifact index cache (call when project artifact files change). */
+    public static void invalidateArtifactIndexCache() {
+        artifactCacheEpoch.incrementAndGet();
+    }
+
     /** Template name -> absolute file path, populated during artifact index building. */
     private volatile Map<String, String> templateFilePaths = java.util.Collections.emptyMap();
     /** Artifact names that appear in multiple files (duplicates). */
     private volatile Set<String> duplicateArtifactNames = java.util.Collections.emptySet();
     /** Artifact names that participate in direct circular references (A->B->A). */
     private volatile Set<String> cyclicArtifacts = java.util.Collections.emptySet();
+
+    /**
+     * Request-scoped opt-out for cross-file (other-artifact-dependent) checks. The MI Copilot agent
+     * sets this for per-file auto-validation after a write, when sibling artifacts it references may
+     * not exist on disk yet, to suppress transient false positives. It is thread-confined and set by
+     * {@code SynapseLanguageService.codeDiagnostic()} around the {@code doDiagnostics} call; the
+     * editor/manual flows never set it, so cross-file validation stays on by default.
+     */
+    private static final ThreadLocal<Boolean> SKIP_CROSS_FILE_VALIDATION =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    public static void setSkipCrossFileValidation(boolean skip) {
+        SKIP_CROSS_FILE_VALIDATION.set(skip);
+    }
+
+    public static void clearSkipCrossFileValidation() {
+        SKIP_CROSS_FILE_VALIDATION.remove();
+    }
+
+    private static boolean isSkipCrossFileValidation() {
+        return Boolean.TRUE.equals(SKIP_CROSS_FILE_VALIDATION.get());
+    }
 
     private static final Set<String> SYNAPSE_ROOT_ELEMENTS = new HashSet<>(Arrays.asList(
             "api", "proxy", "endpoint", "sequence", "inboundEndpoint", "template",
@@ -158,8 +195,13 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             "api", "proxy", "sequence", "inboundEndpoint", "resource"
     ));
 
+    // Synchronized because a single participant instance is registered in SynapsePlugin and
+    // diagnostics can run concurrently (editor validation and codeDiagnostic both execute async).
+    // The cross-file index is derived into shared instance fields per run, so serializing here keeps
+    // one request from clearing/overwriting that state while another is still validating. Runs are
+    // short (the project scan is cached), so the contention cost is minimal.
     @Override
-    public void doDiagnostics(DOMDocument xmlDocument, List<Diagnostic> diagnostics,
+    public synchronized void doDiagnostics(DOMDocument xmlDocument, List<Diagnostic> diagnostics,
                               XMLValidationSettings validationSettings, CancelChecker cancelChecker) {
         DOMElement root = xmlDocument.getDocumentElement();
         if (root == null) {
@@ -173,7 +215,18 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         if (SYNAPSE_NS.equals(namespace)) {
             // Valid Synapse file — run all validations
             Set<String> definedVariables = new HashSet<>();
-            Set<String> knownArtifacts = buildArtifactNameIndex(xmlDocument, cancelChecker);
+            // Cross-file reference checks depend on the project-wide artifact index. When the caller
+            // opts out (agent per-file validation) the index is not built, avoiding the filesystem
+            // scan; it is also null when the project path is not derivable. In either case the
+            // index is unavailable, so clear the derived cross-file state — otherwise a stale index
+            // from a prior request could surface template/duplicate/cycle diagnostics here.
+            boolean skipCrossFile = isSkipCrossFileValidation();
+            Set<String> knownArtifacts = skipCrossFile ? null : buildArtifactNameIndex(xmlDocument, cancelChecker);
+            if (knownArtifacts == null) {
+                this.templateFilePaths = java.util.Collections.emptyMap();
+                this.duplicateArtifactNames = java.util.Collections.emptySet();
+                this.cyclicArtifacts = java.util.Collections.emptySet();
+            }
 
             // Detect MI runtime version for new-pattern hints
             String projectPath = deriveProjectPath(xmlDocument);
@@ -965,6 +1018,8 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
      * P1-14: Validate call-template with-param names against template parameter declarations.
      */
     private void validateCallTemplateParams(DOMElement element, List<Diagnostic> diagnostics) {
+        // Cross-file check: depends on the referenced template file (cycles + parameter declarations)
+        if (isSkipCrossFileValidation()) return;
         String target = element.getAttribute("target");
         if (StringUtils.isEmpty(target) || isExpression(target)) return;
 
@@ -1071,6 +1126,7 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
      * P1-19: Warn if the current document's root artifact name is duplicated in the project.
      */
     private void validateDuplicateArtifactName(DOMElement root, List<Diagnostic> diagnostics) {
+        if (isSkipCrossFileValidation()) return; // cross-file check: needs the project-wide index
         if (duplicateArtifactNames.isEmpty()) return;
         String name = root.getAttribute("name");
         if (name != null && duplicateArtifactNames.contains(name)) {
@@ -1196,7 +1252,9 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             return;
         }
         for (DOMNode child : children) {
-            if (!child.isText()) {
+            // Include CDATA: inline JSON/XML payloads (e.g. payloadFactory <format>) commonly wrap
+            // ${vars.x} references in <![CDATA[...]]>.
+            if (!child.isText() && !child.isCDATA()) {
                 continue;
             }
             String text = child.getTextContent();
@@ -1285,7 +1343,8 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             return;
         }
         for (DOMNode child : children) {
-            if (!child.isText()) {
+            // Include CDATA: ${...} can appear inside <![CDATA[...]]> payloads too.
+            if (!child.isText() && !child.isCDATA()) {
                 continue;
             }
             String text = child.getTextContent();
@@ -1521,9 +1580,14 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             return null;
         }
 
+        // Read the invalidation epoch up front: a cache entry built before the latest file change
+        // is treated as a miss even within its TTL, so a just-written sibling is picked up at once.
+        long epoch = artifactCacheEpoch.get();
+
         // Check cache first
         CachedArtifactIndex cached = artifactIndexCache.get(projectPath);
-        if (cached != null && (System.currentTimeMillis() - cached.timestamp) < ARTIFACT_CACHE_TTL_MS) {
+        if (cached != null && cached.epoch == epoch
+                && (System.currentTimeMillis() - cached.timestamp) < ARTIFACT_CACHE_TTL_MS) {
             // Restore all derived state so cross-reference checks see the same
             // template paths, duplicates, and cycles as a fresh build would.
             this.templateFilePaths = cached.templateFilePaths;
@@ -1568,7 +1632,7 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         this.duplicateArtifactNames = duplicates;
         this.cyclicArtifacts = cycles;
         artifactIndexCache.put(projectPath, new CachedArtifactIndex(
-                artifactNames, templatePaths, duplicates, cycles, System.currentTimeMillis()));
+                artifactNames, templatePaths, duplicates, cycles, System.currentTimeMillis(), epoch));
         return artifactNames;
     }
 
@@ -2372,17 +2436,20 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         final Set<String> duplicateArtifactNames;
         final Set<String> cyclicArtifacts;
         final long timestamp;
+        final long epoch;
 
         CachedArtifactIndex(Set<String> artifactNames,
                             Map<String, String> templateFilePaths,
                             Set<String> duplicateArtifactNames,
                             Set<String> cyclicArtifacts,
-                            long timestamp) {
+                            long timestamp,
+                            long epoch) {
             this.artifactNames = artifactNames;
             this.templateFilePaths = templateFilePaths;
             this.duplicateArtifactNames = duplicateArtifactNames;
             this.cyclicArtifacts = cyclicArtifacts;
             this.timestamp = timestamp;
+            this.epoch = epoch;
         }
     }
 }

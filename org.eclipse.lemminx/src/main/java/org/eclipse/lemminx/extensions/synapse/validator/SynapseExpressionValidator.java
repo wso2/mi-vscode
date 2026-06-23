@@ -64,7 +64,16 @@ public class SynapseExpressionValidator implements XMLComponent, XMLDocumentFilt
 
     private boolean isFileInArtifacts(String baseSystemId) {
 
-        return baseSystemId.contains(TryOutConstants.PROJECT_ARTIFACT_PATH.toString());
+        if (baseSystemId == null) {
+            return false;
+        }
+        // Compare with forward slashes so the check holds on every OS: the document system id is
+        // typically a file:// URI (always '/'), while PROJECT_ARTIFACT_PATH.toString() uses the
+        // platform separator ('\' on Windows) — without normalizing, the gate would never match on
+        // Windows and expression validation would silently not run there.
+        String normalizedId = baseSystemId.replace('\\', '/');
+        String artifactsPath = TryOutConstants.PROJECT_ARTIFACT_PATH.toString().replace('\\', '/');
+        return normalizedId.contains(artifactsPath);
     }
 
     @Override

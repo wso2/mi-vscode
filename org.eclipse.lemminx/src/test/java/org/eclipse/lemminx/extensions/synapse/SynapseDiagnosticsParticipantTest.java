@@ -606,6 +606,33 @@ public class SynapseDiagnosticsParticipantTest {
         assertTrue(diags.isEmpty(), "Script bodies must not be scanned for unclosed expressions");
     }
 
+    // ===== CDATA payloads are scanned too =====
+
+    @Test
+    public void testUndefinedVariableInCdataWarns() {
+        // ${vars.x} inside a CDATA payload (e.g. payloadFactory format) must still be validated.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<payloadFactory media-type=\"json\">"
+                + "<format><![CDATA[{\"id\": \"${vars.missingCdata}\"}]]></format>"
+                + "</payloadFactory>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "Undefined variable referenced inside CDATA should warn");
+        assertTrue(diags.get(0).getMessage().contains("missingCdata"));
+    }
+
+    @Test
+    public void testUnclosedExpressionInCdataWarns() {
+        // An unclosed ${ inside a CDATA payload must still be flagged.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<payloadFactory media-type=\"json\">"
+                + "<format><![CDATA[{\"id\": \"${payload.id\"}]]></format>"
+                + "</payloadFactory>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertEquals(1, diags.size(), "Unclosed ${ inside CDATA should warn");
+    }
+
     // ===== Non-Synapse document skipping =====
 
     @Test
@@ -1656,6 +1683,7 @@ public class SynapseDiagnosticsParticipantTest {
             originalUserHome = null;
         }
         SynapseLanguageService.setLoadedResourceFinder(null);
+        SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
     }
 
     /**
@@ -1743,5 +1771,140 @@ public class SynapseDiagnosticsParticipantTest {
         List<Diagnostic> unresolved = diagnosticsWithCode(diags, "UnresolvedArtifactReference");
         assertEquals(1, unresolved.size());
         assertTrue(unresolved.get(0).getMessage().contains("reallyDoesNotExist"));
+    }
+
+    // ===== skipCrossFileValidation opt-out (Change 1) =====
+
+    /** As {@link #diagnoseAtPath(String, Path)} but with the request-scoped cross-file opt-out set. */
+    private List<Diagnostic> diagnoseAtPath(String xml, Path xmlFilePath, boolean skipCrossFile) throws Exception {
+        try {
+            SynapseDiagnosticsParticipant.setSkipCrossFileValidation(skipCrossFile);
+            return diagnoseAtPath(xml, xmlFilePath);
+        } finally {
+            SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
+        }
+    }
+
+    @Test
+    public void testSkipCrossFileValidationSuppressesUnresolvedButKeepsWithinFileChecks(@TempDir Path tempDir)
+            throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        // References a sequence that does not exist (cross-file) AND an undefined variable (within-file).
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<property name=\"p\" expression=\"${vars.undefinedVar}\"/>"
+                + "<sequence key=\"doesNotExist\"/>"
+                + "</inSequence></resource></api>";
+
+        List<Diagnostic> diags = diagnoseAtPath(xml, apiXml, true);
+        assertTrue(diagnosticsWithCode(diags, "UnresolvedArtifactReference").isEmpty(),
+                "skipCrossFileValidation must suppress the cross-file UnresolvedArtifactReference");
+        assertEquals(1, diagnosticsWithCode(diags, "UndefinedVariable").size(),
+                "Within-file UndefinedVariable must still be reported when cross-file checks are skipped");
+    }
+
+    @Test
+    public void testCrossFileValidationDefaultStillFlagsUnresolved(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<sequence key=\"doesNotExist\"/>"
+                + "</inSequence></resource></api>";
+
+        // Default (flag false) — cross-file validation runs and flags the unresolved reference.
+        List<Diagnostic> diags = diagnoseAtPath(xml, apiXml, false);
+        assertEquals(1, diagnosticsWithCode(diags, "UnresolvedArtifactReference").size(),
+                "With cross-file validation on (default), an unresolved reference must still be flagged");
+    }
+
+    // ===== Cached artifact index invalidation (Change 2) =====
+
+    /** Runs diagnostics with a caller-supplied participant so its artifact-index cache persists across calls. */
+    private List<Diagnostic> diagnoseAtPathWith(SynapseDiagnosticsParticipant participant, String xml,
+                                                Path xmlFilePath) throws Exception {
+        Files.createDirectories(xmlFilePath.getParent());
+        Files.writeString(xmlFilePath, xml);
+        TextDocument textDocument = new TextDocument(xml, xmlFilePath.toUri().toString());
+        DOMDocument document = DOMParser.getInstance().parse(textDocument, null);
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        participant.doDiagnostics(document, diagnostics, null, () -> {});
+        return diagnostics;
+    }
+
+    @Test
+    public void testInvalidateArtifactIndexCacheRebuildsAfterFileChange(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        String api = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<sequence key=\"sibling\"/></inSequence></resource></api>";
+
+        // Reuse one participant so its cross-file index cache survives across calls (as in production).
+        SynapseDiagnosticsParticipant participant = new SynapseDiagnosticsParticipant();
+
+        // 1. Sibling does not exist yet -> unresolved, and the index is now cached for this project.
+        List<Diagnostic> first = diagnoseAtPathWith(participant, api, apiXml);
+        assertEquals(1, diagnosticsWithCode(first, "UnresolvedArtifactReference").size(),
+                "Sibling 'sibling' does not exist yet -> should be flagged unresolved");
+
+        // 2. Write the sibling on disk. Within the TTL and without invalidation the cache is stale.
+        Path siblingXml = consumer.resolve("src/main/wso2mi/artifacts/sequences/sibling.xml");
+        Files.createDirectories(siblingXml.getParent());
+        Files.writeString(siblingXml, "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"sibling\"><log/></sequence>");
+
+        List<Diagnostic> stale = diagnoseAtPathWith(participant, api, apiXml);
+        assertEquals(1, diagnosticsWithCode(stale, "UnresolvedArtifactReference").size(),
+                "Within the TTL and without invalidation, the stale cached index still flags it unresolved");
+
+        // 3. Invalidate -> the next run rebuilds the index and resolves the now-present sibling.
+        SynapseDiagnosticsParticipant.invalidateArtifactIndexCache();
+        List<Diagnostic> fresh = diagnoseAtPathWith(participant, api, apiXml);
+        assertTrue(diagnosticsWithCode(fresh, "UnresolvedArtifactReference").isEmpty(),
+                "After invalidation the rebuilt index includes the new sibling -> no longer unresolved");
+    }
+
+    @Test
+    public void testStaleCrossFileStateNotLeakedWhenIndexUnavailable(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path project = tempDir.resolve("proj");
+        // Two artifacts sharing a name -> "DupSeq" becomes a known duplicate for this project.
+        Path seqA = project.resolve("src/main/wso2mi/artifacts/sequences/a.xml");
+        Path seqB = project.resolve("src/main/wso2mi/artifacts/sequences/b.xml");
+        Files.createDirectories(seqA.getParent());
+        Files.writeString(seqA, "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"DupSeq\"><log/></sequence>");
+        Files.writeString(seqB, "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"DupSeq\"><log/></sequence>");
+
+        // Reuse one participant so its instance-level cross-file state persists across requests.
+        SynapseDiagnosticsParticipant participant = new SynapseDiagnosticsParticipant();
+
+        // Request A: validate a doc inside the project so the duplicate index is built into the
+        // participant's instance state (duplicateArtifactNames = { "DupSeq" }).
+        Path apiXml = project.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        diagnoseAtPathWith(participant, "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence><respond/></inSequence></resource></api>",
+                apiXml);
+
+        // Request B (same participant): a doc named "DupSeq" whose project path is not derivable, so
+        // the cross-file index is unavailable. The stale duplicate state must be cleared, not reused.
+        TextDocument textB = new TextDocument(
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"DupSeq\"><log/></sequence>", "test.xml");
+        DOMDocument docB = DOMParser.getInstance().parse(textB, null);
+        List<Diagnostic> diagsB = new ArrayList<>();
+        participant.doDiagnostics(docB, diagsB, null, () -> {});
+        assertTrue(diagnosticsWithCode(diagsB, "DuplicateArtifactName").isEmpty(),
+                "Stale cross-file duplicate state must not leak to a request with no project index");
     }
 }

@@ -52,7 +52,8 @@ public class CodeDiagnosticFileNameTest extends AbstractCacheBasedTest {
     private static final String SYNAPSE_NS = "http://ws.apache.org/ns/synapse";
     private static final String SYNAPSE_CATALOG_440 =
             "src/main/resources/org/eclipse/lemminx/schemas/440/catalog.xml";
-    // An absolute path under the project artifacts directory, as the MI extension sends.
+    // An absolute path under the project artifacts directory, as the MI extension sends. The
+    // SynapseExpressionValidator gate is separator-agnostic, so this forward-slash URI works on all OSes.
     private static final String ARTIFACT_URI =
             "/home/proj/src/main/wso2mi/artifacts/sequences/Test.xml";
 
@@ -143,5 +144,15 @@ public class CodeDiagnosticFileNameTest extends AbstractCacheBasedTest {
         assertEquals(UNPARENTHESIZED, request.getCode());
         assertEquals(ARTIFACT_URI, request.getFileName(),
                 "CodeDiagnosticRequest must carry the fileName sent by the extension");
+    }
+
+    @Test
+    public void testCodeDiagnosticRequestSkipCrossFileDefaultsFalse() {
+        org.eclipse.lemminx.customservice.synapse.CodeDiagnosticRequest request =
+                new org.eclipse.lemminx.customservice.synapse.CodeDiagnosticRequest();
+        assertFalse(request.isSkipCrossFileValidation(),
+                "skipCrossFileValidation must default to false so the editor/validate-all paths are unchanged");
+        request.setSkipCrossFileValidation(true);
+        assertTrue(request.isSkipCrossFileValidation());
     }
 }

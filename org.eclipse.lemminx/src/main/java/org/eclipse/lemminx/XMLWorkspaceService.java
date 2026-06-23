@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.eclipse.lemminx.commons.WorkspaceFolders;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
+import org.eclipse.lemminx.extensions.synapse.SynapseDiagnosticsParticipant;
 import org.eclipse.lemminx.services.extensions.commands.IXMLCommandService;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
 import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
@@ -99,6 +100,12 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 			} else if (change.getUri().contains(Constant.CONNECTORS) && change.getUri().contains(".zip")) {
 				((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateConnectors();
 			} else {
+				if (change.getUri().contains("src/main/wso2mi")) {
+					// An artifact/resource file changed on disk — drop the cached cross-file index so
+					// the next diagnostics run rebuilds it (otherwise a just-written sibling stays
+					// "unresolved" for up to the cache TTL).
+					SynapseDiagnosticsParticipant.invalidateArtifactIndexCache();
+				}
 				if (!xmlTextDocumentService.documentIsOpen(change.getUri())) {
 					xmlTextDocumentService.doSave(change.getUri());
 				}
