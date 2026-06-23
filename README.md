@@ -1,20 +1,22 @@
 # WSO2 MI XML Language Server
 
-An LSP-compliant language server for WSO2 Micro Integrator XML configuration files. Provides schema-aware editing features powered by Apache Xerces-C (via WebAssembly).
+LSP language server for WSO2 Micro Integrator XML config files. Schema-aware editing powered by Apache Xerces-C (WebAssembly).
 
 ## Features
 
-- **Validation** — XSD validation using the bundled Xerces-C WASM engine; reports both syntax errors and schema violations
-- **Maven Validation** — strict XSD validation for `pom.xml` files using the bundled Maven 4.0.0 schema (autocomplete/hover are disabled for POMs to keep it unobtrusive)
-- **Completions** — context-aware element and attribute suggestions based on the active schema
-- **Hover** — documentation for known elements and their attributes
-- **Go to definition / Find references** — navigate between XML elements
-- **Rename** — rename elements across the document
-- **Document symbols** — outline view of the XML structure
-- **Folding** — collapse/expand XML blocks
-- **Formatting** — auto-format XML documents
+- Validation (XSD syntax + schema)
+- Completions
+- Hover
+- Go to definition
+- Find references
+- Rename
+- Document symbols
+- Folding
+- Formatting
 
-## Supported schema versions
+`pom.xml` files use strict Maven 4.0.0 validation (completions/hover disabled).
+
+## Schemas
 
 | Version | Folder |
 |---------|--------|
@@ -22,21 +24,19 @@ An LSP-compliant language server for WSO2 Micro Integrator XML configuration fil
 | MI 4.4.0 | `resources/schemas/440/` |
 | Maven 4.0.0 | `resources/schemas/maven/` |
 
-The built-in default is 4.4.0 (matched by `xmlns="http://ws.apache.org/ns/synapse"`). A specific version can be selected by the client via schema association settings. 
-**Note:** Any file named `pom.xml` is automatically hardcoded to use the Maven 4.0.0 schema, overriding any custom wildcard associations (like `**/*.xml`).
+Default is 4.4.0 (`xmlns="http://ws.apache.org/ns/synapse"`). Clients can override via schema associations; `pom.xml` always uses Maven.
 
 ## Project structure
 
 ```
-src/                    TypeScript source
+src/
   server.ts             LSP entry point (connection, lifecycle)
-  requestHandlers.ts    LSP request handlers (completion, hover, symbols, …)
+  requestHandlers.ts    LSP request handlers
   diagnosticsHandler.ts XSD validation → LSP diagnostics
   xmlLanguageService.ts Façade over parser + schema services
   schema/               XSD resolution and completion provider
   services/             Per-feature logic (hover, completion, rename, …)
   parser/               XML parser wrapper
-resources/schemas/      Bundled XSD schemas (430, 440, maven)
 xerces-wasm/            Pre-built Xerces-C WebAssembly module
 tests/                  Vitest test suite
 ```
@@ -45,23 +45,18 @@ tests/                  Vitest test suite
 
 ```bash
 npm install
-npm run build       # TypeScript compile only
-npm run bundle      # Full production bundle (dist/)
-npm test            # Run test suite
+npm run bundle   # production bundle (dist/)
+npm test
 ```
 
 ## Client configuration
 
-The client can pass schema associations at initialisation:
-
 ```json
 {
   "initializationOptions": {
-    "schemas": [
-      { "pattern": "**/*.xml", "schema": "430" }
-    ]
+    "schemas": [{ "pattern": "**/*.xml", "schema": "430" }]
   }
 }
 ```
 
-Schema changes sent via `workspace/didChangeConfiguration` are picked up immediately — the server invalidates its cached providers and re-validates all open documents.
+Changes via `workspace/didChangeConfiguration` are applied immediately.
