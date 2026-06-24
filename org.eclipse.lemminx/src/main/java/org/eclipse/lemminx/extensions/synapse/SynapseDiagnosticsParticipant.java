@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -72,12 +73,48 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
     private static final long ARTIFACT_CACHE_TTL_MS = 5000; // 5 seconds
     private final Map<String, CachedArtifactIndex> artifactIndexCache = new ConcurrentHashMap<>();
 
+    /**
+     * Invalidation signal for {@link #artifactIndexCache}. The cache is keyed per project with a
+     * short TTL; when an artifact/resource file under {@code src/main/wso2mi} changes, the language
+     * server bumps this epoch so the next diagnostics run rebuilds the index instead of serving a
+     * stale entry (which would wrongly flag a just-written sibling as unresolved for up to the TTL).
+     * A cache entry is only honored while its stored epoch matches the current one.
+     */
+    private static final AtomicLong artifactCacheEpoch = new AtomicLong();
+
+    /** Invalidate the cross-file artifact index cache (call when project artifact files change). */
+    public static void invalidateArtifactIndexCache() {
+        artifactCacheEpoch.incrementAndGet();
+    }
+
     /** Template name -> absolute file path, populated during artifact index building. */
     private volatile Map<String, String> templateFilePaths = java.util.Collections.emptyMap();
     /** Artifact names that appear in multiple files (duplicates). */
     private volatile Set<String> duplicateArtifactNames = java.util.Collections.emptySet();
     /** Artifact names that participate in direct circular references (A->B->A). */
     private volatile Set<String> cyclicArtifacts = java.util.Collections.emptySet();
+
+    /**
+     * Request-scoped opt-out for cross-file (other-artifact-dependent) checks. The MI Copilot agent
+     * sets this for per-file auto-validation after a write, when sibling artifacts it references may
+     * not exist on disk yet, to suppress transient false positives. It is thread-confined and set by
+     * {@code SynapseLanguageService.codeDiagnostic()} around the {@code doDiagnostics} call; the
+     * editor/manual flows never set it, so cross-file validation stays on by default.
+     */
+    private static final ThreadLocal<Boolean> SKIP_CROSS_FILE_VALIDATION =
+            ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    public static void setSkipCrossFileValidation(boolean skip) {
+        SKIP_CROSS_FILE_VALIDATION.set(skip);
+    }
+
+    public static void clearSkipCrossFileValidation() {
+        SKIP_CROSS_FILE_VALIDATION.remove();
+    }
+
+    private static boolean isSkipCrossFileValidation() {
+        return Boolean.TRUE.equals(SKIP_CROSS_FILE_VALIDATION.get());
+    }
 
     private static final Set<String> SYNAPSE_ROOT_ELEMENTS = new HashSet<>(Arrays.asList(
             "api", "proxy", "endpoint", "sequence", "inboundEndpoint", "template",
@@ -131,6 +168,15 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
     );
 
     /**
+     * Leaf elements whose text content is raw code (not a Synapse expression) and must not be
+     * scanned for vars.X references — e.g. a JS/Groovy script body could legitimately contain a
+     * ${...} template literal that is not a Synapse variable reference.
+     */
+    private static final Set<String> RAW_TEXT_ELEMENTS = new HashSet<>(Arrays.asList(
+            "script"
+    ));
+
+    /**
      * Regex to find $N placeholders in PayloadFactory format strings.
      */
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$(\\d+)");
@@ -149,8 +195,13 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             "api", "proxy", "sequence", "inboundEndpoint", "resource"
     ));
 
+    // Synchronized because a single participant instance is registered in SynapsePlugin and
+    // diagnostics can run concurrently (editor validation and codeDiagnostic both execute async).
+    // The cross-file index is derived into shared instance fields per run, so serializing here keeps
+    // one request from clearing/overwriting that state while another is still validating. Runs are
+    // short (the project scan is cached), so the contention cost is minimal.
     @Override
-    public void doDiagnostics(DOMDocument xmlDocument, List<Diagnostic> diagnostics,
+    public synchronized void doDiagnostics(DOMDocument xmlDocument, List<Diagnostic> diagnostics,
                               XMLValidationSettings validationSettings, CancelChecker cancelChecker) {
         DOMElement root = xmlDocument.getDocumentElement();
         if (root == null) {
@@ -164,7 +215,18 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         if (SYNAPSE_NS.equals(namespace)) {
             // Valid Synapse file — run all validations
             Set<String> definedVariables = new HashSet<>();
-            Set<String> knownArtifacts = buildArtifactNameIndex(xmlDocument, cancelChecker);
+            // Cross-file reference checks depend on the project-wide artifact index. When the caller
+            // opts out (agent per-file validation) the index is not built, avoiding the filesystem
+            // scan; it is also null when the project path is not derivable. In either case the
+            // index is unavailable, so clear the derived cross-file state — otherwise a stale index
+            // from a prior request could surface template/duplicate/cycle diagnostics here.
+            boolean skipCrossFile = isSkipCrossFileValidation();
+            Set<String> knownArtifacts = skipCrossFile ? null : buildArtifactNameIndex(xmlDocument, cancelChecker);
+            if (knownArtifacts == null) {
+                this.templateFilePaths = java.util.Collections.emptyMap();
+                this.duplicateArtifactNames = java.util.Collections.emptySet();
+                this.cyclicArtifacts = java.util.Collections.emptySet();
+            }
 
             // Detect MI runtime version for new-pattern hints
             String projectPath = deriveProjectPath(xmlDocument);
@@ -226,6 +288,10 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
 
         // Validate variable references in expression attributes
         validateVariableReferences(element, diagnostics, document, definedVariables);
+
+        // Flag an opening "${" with no matching "}" (the malformed expression is otherwise
+        // treated as a plain string and reaches runtime with no feedback)
+        validateUnclosedExpressions(element, diagnostics, document);
 
         // Cross-file reference validation
         if (knownArtifacts != null) {
@@ -952,6 +1018,8 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
      * P1-14: Validate call-template with-param names against template parameter declarations.
      */
     private void validateCallTemplateParams(DOMElement element, List<Diagnostic> diagnostics) {
+        // Cross-file check: depends on the referenced template file (cycles + parameter declarations)
+        if (isSkipCrossFileValidation()) return;
         String target = element.getAttribute("target");
         if (StringUtils.isEmpty(target) || isExpression(target)) return;
 
@@ -1058,6 +1126,7 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
      * P1-19: Warn if the current document's root artifact name is duplicated in the project.
      */
     private void validateDuplicateArtifactName(DOMElement root, List<Diagnostic> diagnostics) {
+        if (isSkipCrossFileValidation()) return; // cross-file check: needs the project-wide index
         if (duplicateArtifactNames.isEmpty()) return;
         String name = root.getAttribute("name");
         if (name != null && duplicateArtifactNames.contains(name)) {
@@ -1146,56 +1215,199 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
      */
     private void validateVariableReferences(DOMElement element, List<Diagnostic> diagnostics,
                                             DOMDocument document, Set<String> definedVariables) {
-        // Check all attributes for ${...} expressions containing vars.X
+        // Check all attribute values for ${...} expressions containing vars.X
         List<DOMAttr> attrs = element.getAttributeNodes();
-        if (attrs == null) {
+        if (attrs != null) {
+            for (DOMAttr attr : attrs) {
+                String attrValue = attr.getValue();
+                if (attrValue == null || (!attrValue.contains("vars.") && !attrValue.contains("vars["))) {
+                    continue;
+                }
+                checkContentForUndefinedVariables(attrValue, XMLPositionUtility.selectAttributeValue(attr),
+                        diagnostics, definedVariables);
+            }
+        }
+
+        // Check element text content too — e.g. connector operation parameters such as
+        // <q>{${vars.x}}</q> reference variables in text, not attributes.
+        validateVariableReferencesInText(element, diagnostics, document, definedVariables);
+    }
+
+    /**
+     * Scans the text content of a leaf element for ${...} expressions referencing undefined vars.X.
+     * Only leaf elements are inspected (containers expose their text via their leaf children), and
+     * raw-code elements (see {@link #RAW_TEXT_ELEMENTS}) are skipped to avoid false positives.
+     */
+    private void validateVariableReferencesInText(DOMElement element, List<Diagnostic> diagnostics,
+                                                  DOMDocument document, Set<String> definedVariables) {
+        if (hasChildElements(element)) {
             return;
         }
-        for (DOMAttr attr : attrs) {
-            String attrValue = attr.getValue();
-            if (attrValue == null || (!attrValue.contains("vars.") && !attrValue.contains("vars["))) {
+        String localName = element.getLocalName();
+        if (localName != null && RAW_TEXT_ELEMENTS.contains(localName.toLowerCase())) {
+            return;
+        }
+        List<DOMNode> children = element.getChildren();
+        if (children == null) {
+            return;
+        }
+        for (DOMNode child : children) {
+            // Include CDATA: inline JSON/XML payloads (e.g. payloadFactory <format>) commonly wrap
+            // ${vars.x} references in <![CDATA[...]]>.
+            if (!child.isText() && !child.isCDATA()) {
+                continue;
+            }
+            String text = child.getTextContent();
+            if (text == null || (!text.contains("vars.") && !text.contains("vars["))) {
+                continue;
+            }
+            Range range = XMLPositionUtility.createRange(child.getStart(), child.getEnd(), document);
+            checkContentForUndefinedVariables(text, range, diagnostics, definedVariables);
+        }
+    }
+
+    /**
+     * Extracts every ${...}/{${...}} expression from {@code content}, and for each vars.X reference
+     * to a name not in {@code definedVariables}, adds an UndefinedVariable warning anchored at
+     * {@code range}. Shared by the attribute-value and text-content reference checks.
+     */
+    private void checkContentForUndefinedVariables(String content, Range range,
+                                                   List<Diagnostic> diagnostics, Set<String> definedVariables) {
+        if (range == null) {
+            return;
+        }
+        Matcher exprMatcher = EXPRESSION_PATTERN.matcher(content);
+        while (exprMatcher.find()) {
+            String exprContent = exprMatcher.group(1);
+            if (exprContent == null) {
+                exprContent = exprMatcher.group(2); // {${...}} form
+            }
+            if (exprContent == null) {
                 continue;
             }
 
-            // Extract ${...} or {${...}} expressions from the attribute value
-            Matcher exprMatcher = EXPRESSION_PATTERN.matcher(attrValue);
-            while (exprMatcher.find()) {
-                String exprContent = exprMatcher.group(1);
-                if (exprContent == null) {
-                    exprContent = exprMatcher.group(2); // {${...}} form
-                }
-                if (exprContent == null) {
-                    continue;
-                }
+            // Find vars.X references within the expression
+            Matcher varsMatcher = VARS_REF_PATTERN.matcher(exprContent);
+            while (varsMatcher.find()) {
+                // Get the variable name from whichever group matched
+                String varName = varsMatcher.group(1);
+                if (varName == null) varName = varsMatcher.group(2);
+                if (varName == null) varName = varsMatcher.group(3);
 
-                // Find vars.X references within the expression
-                Matcher varsMatcher = VARS_REF_PATTERN.matcher(exprContent);
-                while (varsMatcher.find()) {
-                    // Get the variable name from whichever group matched
-                    String varName = varsMatcher.group(1);
-                    if (varName == null) varName = varsMatcher.group(2);
-                    if (varName == null) varName = varsMatcher.group(3);
-
-                    if (varName != null && !definedVariables.contains(varName)) {
-                        Range range = XMLPositionUtility.selectAttributeValue(attr);
-                        if (range != null) {
-                            Diagnostic d = new Diagnostic();
-                            d.setRange(range);
-                            d.setMessage(
-                                    "Variable '" + varName + "' is referenced but not defined in this file. " +
-                                            "If it is defined in a calling sequence, this warning can be ignored. " +
-                                            "Otherwise, define it using <variable name=\"" + varName +
-                                            "\" .../> before this point.");
-                            d.setSeverity(DiagnosticSeverity.Warning);
-                            d.setSource(SOURCE);
-                            d.setCode("UndefinedVariable");
-                            d.setData(varName);
-                            diagnostics.add(d);
-                        }
-                    }
+                if (varName != null && !definedVariables.contains(varName)) {
+                    Diagnostic d = new Diagnostic();
+                    d.setRange(range);
+                    d.setMessage(
+                            "Variable '" + varName + "' is referenced but not defined in this file. " +
+                                    "If it is defined in a calling sequence, this warning can be ignored. " +
+                                    "Otherwise, define it using <variable name=\"" + varName +
+                                    "\" .../> before this point.");
+                    d.setSeverity(DiagnosticSeverity.Warning);
+                    d.setSource(SOURCE);
+                    d.setCode("UndefinedVariable");
+                    d.setData(varName);
+                    diagnostics.add(d);
                 }
             }
         }
+    }
+
+    /**
+     * Flags an opening "${" that is never closed by a matching "}". Such a value is not recognized
+     * as a Synapse expression (it is treated as a plain string), so the malformed expression would
+     * otherwise reach runtime with no feedback. Scans attribute values and leaf element text,
+     * mirroring the variable-reference checks; raw-code elements (see {@link #RAW_TEXT_ELEMENTS})
+     * are skipped to avoid false positives.
+     */
+    private void validateUnclosedExpressions(DOMElement element, List<Diagnostic> diagnostics,
+                                             DOMDocument document) {
+        List<DOMAttr> attrs = element.getAttributeNodes();
+        if (attrs != null) {
+            for (DOMAttr attr : attrs) {
+                String attrValue = attr.getValue();
+                if (attrValue != null && attrValue.contains("${") && hasUnclosedExpression(attrValue)) {
+                    reportUnclosedExpression(XMLPositionUtility.selectAttributeValue(attr), diagnostics);
+                }
+            }
+        }
+
+        if (hasChildElements(element)) {
+            return;
+        }
+        String localName = element.getLocalName();
+        if (localName != null && RAW_TEXT_ELEMENTS.contains(localName.toLowerCase())) {
+            return;
+        }
+        List<DOMNode> children = element.getChildren();
+        if (children == null) {
+            return;
+        }
+        for (DOMNode child : children) {
+            // Include CDATA: ${...} can appear inside <![CDATA[...]]> payloads too.
+            if (!child.isText() && !child.isCDATA()) {
+                continue;
+            }
+            String text = child.getTextContent();
+            if (text != null && text.contains("${") && hasUnclosedExpression(text)) {
+                reportUnclosedExpression(
+                        XMLPositionUtility.createRange(child.getStart(), child.getEnd(), document), diagnostics);
+            }
+        }
+    }
+
+    private void reportUnclosedExpression(Range range, List<Diagnostic> diagnostics) {
+        if (range == null) {
+            return;
+        }
+        Diagnostic d = new Diagnostic();
+        d.setRange(range);
+        d.setMessage("Unclosed expression: '${' is not terminated by a matching '}'. " +
+                "Synapse expressions must be written as ${...} — add the missing '}'.");
+        d.setSeverity(DiagnosticSeverity.Warning);
+        d.setSource(SOURCE);
+        d.setCode("UnclosedExpression");
+        diagnostics.add(d);
+    }
+
+    /**
+     * Returns true if {@code value} contains an opening "${" with no matching "}" closing it.
+     * Synapse expressions have no "{"/"}" tokens of their own (indexing uses "[" "]"), so the only
+     * braces that can appear inside ${...} are within string literals — which are skipped here, so a
+     * valid expression such as {@code ${concat('{', x)}} is not mistaken for unclosed.
+     */
+    private boolean hasUnclosedExpression(String value) {
+        int open = value.indexOf("${");
+        while (open >= 0) {
+            if (!hasClosingBrace(value, open + 2)) {
+                return true;
+            }
+            open = value.indexOf("${", open + 2);
+        }
+        return false;
+    }
+
+    /**
+     * Returns true if there is a '}' at or after {@code from} that lies outside any string literal.
+     */
+    private boolean hasClosingBrace(String value, int from) {
+        boolean inString = false;
+        char quote = 0;
+        for (int i = from; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i++; // skip the escaped character
+                } else if (c == quote) {
+                    inString = false;
+                }
+            } else if (c == '"' || c == '\'') {
+                inString = true;
+                quote = c;
+            } else if (c == '}') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -1368,9 +1580,14 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             return null;
         }
 
+        // Read the invalidation epoch up front: a cache entry built before the latest file change
+        // is treated as a miss even within its TTL, so a just-written sibling is picked up at once.
+        long epoch = artifactCacheEpoch.get();
+
         // Check cache first
         CachedArtifactIndex cached = artifactIndexCache.get(projectPath);
-        if (cached != null && (System.currentTimeMillis() - cached.timestamp) < ARTIFACT_CACHE_TTL_MS) {
+        if (cached != null && cached.epoch == epoch
+                && (System.currentTimeMillis() - cached.timestamp) < ARTIFACT_CACHE_TTL_MS) {
             // Restore all derived state so cross-reference checks see the same
             // template paths, duplicates, and cycles as a fresh build would.
             this.templateFilePaths = cached.templateFilePaths;
@@ -1415,7 +1632,7 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         this.duplicateArtifactNames = duplicates;
         this.cyclicArtifacts = cycles;
         artifactIndexCache.put(projectPath, new CachedArtifactIndex(
-                artifactNames, templatePaths, duplicates, cycles, System.currentTimeMillis()));
+                artifactNames, templatePaths, duplicates, cycles, System.currentTimeMillis(), epoch));
         return artifactNames;
     }
 
@@ -2219,17 +2436,20 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         final Set<String> duplicateArtifactNames;
         final Set<String> cyclicArtifacts;
         final long timestamp;
+        final long epoch;
 
         CachedArtifactIndex(Set<String> artifactNames,
                             Map<String, String> templateFilePaths,
                             Set<String> duplicateArtifactNames,
                             Set<String> cyclicArtifacts,
-                            long timestamp) {
+                            long timestamp,
+                            long epoch) {
             this.artifactNames = artifactNames;
             this.templateFilePaths = templateFilePaths;
             this.duplicateArtifactNames = duplicateArtifactNames;
             this.cyclicArtifacts = cyclicArtifacts;
             this.timestamp = timestamp;
+            this.epoch = epoch;
         }
     }
 }

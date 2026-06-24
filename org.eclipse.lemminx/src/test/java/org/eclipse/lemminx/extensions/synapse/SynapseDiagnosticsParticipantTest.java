@@ -468,6 +468,171 @@ public class SynapseDiagnosticsParticipantTest {
         assertTrue(diags.isEmpty(), "responseVariable child element should define the variable");
     }
 
+    // ===== Variable references in element text content (Issue #4) =====
+
+    @Test
+    public void testUndefinedVariableInElementText() {
+        // Connector operation parameter references vars.X in element text, not in an attribute.
+        // 'soqlQuery1' is a typo for the defined 'soqlQuery' — this is the exact MI Copilot case.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<variable name=\"soqlQuery\" type=\"STRING\" value=\"SELECT Id, Name FROM Account LIMIT 200\"/>"
+                + "<salesforce.query configKey=\"SalesforceConn\">"
+                + "<q>{${vars.soqlQuery1}}</q>"
+                + "<responseVariable>sfResponse</responseVariable>"
+                + "<overwriteBody>false</overwriteBody>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "Undefined variable referenced in element text should warn");
+        assertEquals(DiagnosticSeverity.Warning, diags.get(0).getSeverity());
+        assertTrue(diags.get(0).getMessage().contains("soqlQuery1"));
+    }
+
+    @Test
+    public void testDefinedVariableInElementTextNoWarning() {
+        // The correctly-spelled variable referenced in element text should not warn.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<variable name=\"soqlQuery\" type=\"STRING\" value=\"SELECT Id FROM Account\"/>"
+                + "<salesforce.query configKey=\"SalesforceConn\">"
+                + "<q>{${vars.soqlQuery}}</q>"
+                + "<responseVariable>sfResponse</responseVariable>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "Defined variable referenced in element text should not warn");
+    }
+
+    @Test
+    public void testUndefinedVariableInElementTextPlainExpressionForm() {
+        // The plain ${...} form (not {${...}}) inside element text should also be detected.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<payloadFactory media-type=\"json\">"
+                + "<format>{\"id\": \"${vars.missingId}\"}</format>"
+                + "</payloadFactory>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "Undefined variable in ${...} text form should warn");
+        assertTrue(diags.get(0).getMessage().contains("missingId"));
+    }
+
+    @Test
+    public void testScriptBodyNotScannedForVariables() {
+        // Raw-code (script) bodies must not be treated as Synapse expressions (no false positives).
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<script language=\"js\">var s = \"${vars.notReal}\";</script>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "Script body should not be scanned for variable references");
+    }
+
+    @Test
+    public void testPlainTextWithoutExpressionNoWarning() {
+        // Element text that merely contains the literal 'vars.' but no ${...} expression must not warn.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<salesforce.query configKey=\"SalesforceConn\">"
+                + "<q>SELECT vars.field FROM Account</q>"
+                + "<responseVariable>sfResponse</responseVariable>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "Plain text without a ${...} expression should not warn");
+    }
+
+    // ===== Unclosed expression delimiters =====
+
+    @Test
+    public void testUnclosedExpressionInAttributeWarns() {
+        // '${' opened but never closed — previously treated as a plain string with no feedback.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<property name=\"p\" expression=\"${payload.count > 0\"/>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertEquals(1, diags.size(), "An unclosed ${ in an attribute should warn");
+        assertEquals(DiagnosticSeverity.Warning, diags.get(0).getSeverity());
+        assertTrue(diags.get(0).getMessage().contains("Unclosed expression"));
+    }
+
+    @Test
+    public void testClosedExpressionInAttributeNoWarning() {
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<property name=\"p\" expression=\"${payload.count > 0}\"/>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "A properly closed ${...} must not be flagged");
+    }
+
+    @Test
+    public void testUnclosedExpressionInElementTextWarns() {
+        // Same gap in element text (e.g. a connector operation parameter).
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<salesforce.query configKey=\"C\">"
+                + "<q>${payload.count</q>"
+                + "</salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertEquals(1, diags.size(), "An unclosed ${ in element text should warn");
+        assertTrue(diags.get(0).getMessage().contains("Unclosed expression"));
+    }
+
+    @Test
+    public void testWrappedClosedExpressionNoWarning() {
+        // The {${...}} form, properly closed, must not be flagged as unclosed.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<variable name=\"q\" type=\"STRING\" value=\"x\"/>"
+                + "<salesforce.query configKey=\"C\"><q>{${vars.q}}</q></salesforce.query>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "A closed {${...}} expression must not be flagged");
+    }
+
+    @Test
+    public void testExpressionWithBraceInStringLiteralNoWarning() {
+        // A '}' inside a string literal must not be mistaken for the closing delimiter, and the
+        // real closing '}' must still be recognized — so this valid expression is not flagged.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<property name=\"p\" expression=\"${concat('}', payload.x)}\"/>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "A brace inside a string literal must not cause a false positive");
+    }
+
+    @Test
+    public void testScriptBodyUnclosedExpressionNotFlagged() {
+        // Raw-code (script) bodies are excluded — a ${ in JS is not a Synapse expression.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<script language=\"js\">var s = \"${notReal\";</script>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertTrue(diags.isEmpty(), "Script bodies must not be scanned for unclosed expressions");
+    }
+
+    // ===== CDATA payloads are scanned too =====
+
+    @Test
+    public void testUndefinedVariableInCdataWarns() {
+        // ${vars.x} inside a CDATA payload (e.g. payloadFactory format) must still be validated.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<payloadFactory media-type=\"json\">"
+                + "<format><![CDATA[{\"id\": \"${vars.missingCdata}\"}]]></format>"
+                + "</payloadFactory>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "Undefined variable referenced inside CDATA should warn");
+        assertTrue(diags.get(0).getMessage().contains("missingCdata"));
+    }
+
+    @Test
+    public void testUnclosedExpressionInCdataWarns() {
+        // An unclosed ${ inside a CDATA payload must still be flagged.
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<payloadFactory media-type=\"json\">"
+                + "<format><![CDATA[{\"id\": \"${payload.id\"}]]></format>"
+                + "</payloadFactory>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UnclosedExpression");
+        assertEquals(1, diags.size(), "Unclosed ${ inside CDATA should warn");
+    }
+
     // ===== Non-Synapse document skipping =====
 
     @Test
@@ -1518,6 +1683,7 @@ public class SynapseDiagnosticsParticipantTest {
             originalUserHome = null;
         }
         SynapseLanguageService.setLoadedResourceFinder(null);
+        SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
     }
 
     /**
@@ -1605,5 +1771,140 @@ public class SynapseDiagnosticsParticipantTest {
         List<Diagnostic> unresolved = diagnosticsWithCode(diags, "UnresolvedArtifactReference");
         assertEquals(1, unresolved.size());
         assertTrue(unresolved.get(0).getMessage().contains("reallyDoesNotExist"));
+    }
+
+    // ===== skipCrossFileValidation opt-out (Change 1) =====
+
+    /** As {@link #diagnoseAtPath(String, Path)} but with the request-scoped cross-file opt-out set. */
+    private List<Diagnostic> diagnoseAtPath(String xml, Path xmlFilePath, boolean skipCrossFile) throws Exception {
+        try {
+            SynapseDiagnosticsParticipant.setSkipCrossFileValidation(skipCrossFile);
+            return diagnoseAtPath(xml, xmlFilePath);
+        } finally {
+            SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
+        }
+    }
+
+    @Test
+    public void testSkipCrossFileValidationSuppressesUnresolvedButKeepsWithinFileChecks(@TempDir Path tempDir)
+            throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        // References a sequence that does not exist (cross-file) AND an undefined variable (within-file).
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<property name=\"p\" expression=\"${vars.undefinedVar}\"/>"
+                + "<sequence key=\"doesNotExist\"/>"
+                + "</inSequence></resource></api>";
+
+        List<Diagnostic> diags = diagnoseAtPath(xml, apiXml, true);
+        assertTrue(diagnosticsWithCode(diags, "UnresolvedArtifactReference").isEmpty(),
+                "skipCrossFileValidation must suppress the cross-file UnresolvedArtifactReference");
+        assertEquals(1, diagnosticsWithCode(diags, "UndefinedVariable").size(),
+                "Within-file UndefinedVariable must still be reported when cross-file checks are skipped");
+    }
+
+    @Test
+    public void testCrossFileValidationDefaultStillFlagsUnresolved(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<sequence key=\"doesNotExist\"/>"
+                + "</inSequence></resource></api>";
+
+        // Default (flag false) — cross-file validation runs and flags the unresolved reference.
+        List<Diagnostic> diags = diagnoseAtPath(xml, apiXml, false);
+        assertEquals(1, diagnosticsWithCode(diags, "UnresolvedArtifactReference").size(),
+                "With cross-file validation on (default), an unresolved reference must still be flagged");
+    }
+
+    // ===== Cached artifact index invalidation (Change 2) =====
+
+    /** Runs diagnostics with a caller-supplied participant so its artifact-index cache persists across calls. */
+    private List<Diagnostic> diagnoseAtPathWith(SynapseDiagnosticsParticipant participant, String xml,
+                                                Path xmlFilePath) throws Exception {
+        Files.createDirectories(xmlFilePath.getParent());
+        Files.writeString(xmlFilePath, xml);
+        TextDocument textDocument = new TextDocument(xml, xmlFilePath.toUri().toString());
+        DOMDocument document = DOMParser.getInstance().parse(textDocument, null);
+        List<Diagnostic> diagnostics = new ArrayList<>();
+        participant.doDiagnostics(document, diagnostics, null, () -> {});
+        return diagnostics;
+    }
+
+    @Test
+    public void testInvalidateArtifactIndexCacheRebuildsAfterFileChange(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path consumer = tempDir.resolve("consumer");
+        Path apiXml = consumer.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        String api = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<sequence key=\"sibling\"/></inSequence></resource></api>";
+
+        // Reuse one participant so its cross-file index cache survives across calls (as in production).
+        SynapseDiagnosticsParticipant participant = new SynapseDiagnosticsParticipant();
+
+        // 1. Sibling does not exist yet -> unresolved, and the index is now cached for this project.
+        List<Diagnostic> first = diagnoseAtPathWith(participant, api, apiXml);
+        assertEquals(1, diagnosticsWithCode(first, "UnresolvedArtifactReference").size(),
+                "Sibling 'sibling' does not exist yet -> should be flagged unresolved");
+
+        // 2. Write the sibling on disk. Within the TTL and without invalidation the cache is stale.
+        Path siblingXml = consumer.resolve("src/main/wso2mi/artifacts/sequences/sibling.xml");
+        Files.createDirectories(siblingXml.getParent());
+        Files.writeString(siblingXml, "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"sibling\"><log/></sequence>");
+
+        List<Diagnostic> stale = diagnoseAtPathWith(participant, api, apiXml);
+        assertEquals(1, diagnosticsWithCode(stale, "UnresolvedArtifactReference").size(),
+                "Within the TTL and without invalidation, the stale cached index still flags it unresolved");
+
+        // 3. Invalidate -> the next run rebuilds the index and resolves the now-present sibling.
+        SynapseDiagnosticsParticipant.invalidateArtifactIndexCache();
+        List<Diagnostic> fresh = diagnoseAtPathWith(participant, api, apiXml);
+        assertTrue(diagnosticsWithCode(fresh, "UnresolvedArtifactReference").isEmpty(),
+                "After invalidation the rebuilt index includes the new sibling -> no longer unresolved");
+    }
+
+    @Test
+    public void testStaleCrossFileStateNotLeakedWhenIndexUnavailable(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path project = tempDir.resolve("proj");
+        // Two artifacts sharing a name -> "DupSeq" becomes a known duplicate for this project.
+        Path seqA = project.resolve("src/main/wso2mi/artifacts/sequences/a.xml");
+        Path seqB = project.resolve("src/main/wso2mi/artifacts/sequences/b.xml");
+        Files.createDirectories(seqA.getParent());
+        Files.writeString(seqA, "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"DupSeq\"><log/></sequence>");
+        Files.writeString(seqB, "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"DupSeq\"><log/></sequence>");
+
+        // Reuse one participant so its instance-level cross-file state persists across requests.
+        SynapseDiagnosticsParticipant participant = new SynapseDiagnosticsParticipant();
+
+        // Request A: validate a doc inside the project so the duplicate index is built into the
+        // participant's instance state (duplicateArtifactNames = { "DupSeq" }).
+        Path apiXml = project.resolve("src/main/wso2mi/artifacts/apis/cvh.xml");
+        diagnoseAtPathWith(participant, "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence><respond/></inSequence></resource></api>",
+                apiXml);
+
+        // Request B (same participant): a doc named "DupSeq" whose project path is not derivable, so
+        // the cross-file index is unavailable. The stale duplicate state must be cleared, not reused.
+        TextDocument textB = new TextDocument(
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"DupSeq\"><log/></sequence>", "test.xml");
+        DOMDocument docB = DOMParser.getInstance().parse(textB, null);
+        List<Diagnostic> diagsB = new ArrayList<>();
+        participant.doDiagnostics(docB, diagsB, null, () -> {});
+        assertTrue(diagnosticsWithCode(diagsB, "DuplicateArtifactName").isEmpty(),
+                "Stale cross-file duplicate state must not leak to a request with no project index");
     }
 }

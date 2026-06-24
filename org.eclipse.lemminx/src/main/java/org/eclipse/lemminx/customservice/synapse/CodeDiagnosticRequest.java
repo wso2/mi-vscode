@@ -17,6 +17,8 @@ package org.eclipse.lemminx.customservice.synapse;
 public class CodeDiagnosticRequest {
 
     private String code;
+    private String fileName;
+    private boolean skipCrossFileValidation;
 
     public String getCode() {
 
@@ -26,5 +28,31 @@ public class CodeDiagnosticRequest {
     public void setCode(String code) {
 
         this.code = code;
+    }
+
+    public String getFileName() {
+
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+
+        this.fileName = fileName;
+    }
+
+    /**
+     * When true, cross-file reference checks (which depend on other artifact files existing) are
+     * skipped for this request. Defaults to false, so the editor and the explicit "validate all"
+     * path are unaffected. The MI Copilot agent sets it for per-file auto-validation after a write,
+     * where a referenced sibling artifact may not exist on disk yet.
+     */
+    public boolean isSkipCrossFileValidation() {
+
+        return skipCrossFileValidation;
+    }
+
+    public void setSkipCrossFileValidation(boolean skipCrossFileValidation) {
+
+        this.skipCrossFileValidation = skipCrossFileValidation;
     }
 }

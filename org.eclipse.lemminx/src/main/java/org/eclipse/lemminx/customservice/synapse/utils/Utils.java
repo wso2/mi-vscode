@@ -270,7 +270,24 @@ public class Utils {
 
     public static DOMDocument getDOMDocument(String content, URIResolverExtensionManager resolverExtensionManager) {
 
-        TextDocument document = new TextDocument(content, "temp");
+        return getDOMDocument(content, "temp", resolverExtensionManager);
+    }
+
+    /**
+     * Get the DOM document from the given xml content, using the provided URI as the document's
+     * system id. The URI matters for diagnostics that are gated on the document path (e.g.
+     * SynapseExpressionValidator only runs for files under src/main/wso2mi/artifacts), so callers
+     * that have a real file path should pass it instead of relying on the "temp" fallback.
+     *
+     * @param content                  the xml content
+     * @param uri                      the URI to assign to the parsed document
+     * @param resolverExtensionManager the URI resolver extension manager
+     * @return the DOM document for the given xml content
+     */
+    public static DOMDocument getDOMDocument(String content, String uri,
+                                             URIResolverExtensionManager resolverExtensionManager) {
+
+        TextDocument document = new TextDocument(content, uri);
         return DOMParser.getInstance().parse(document, resolverExtensionManager);
     }
 
