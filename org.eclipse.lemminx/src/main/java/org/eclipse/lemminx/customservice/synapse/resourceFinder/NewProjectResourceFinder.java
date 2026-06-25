@@ -54,6 +54,7 @@ public class NewProjectResourceFinder extends AbstractResourceFinder {
                 mergeResourceResponses(response, dependentResponse);
             }
         }
+        applyProtocolFilters(response, types);
         return response;
     }
 
