@@ -601,7 +601,8 @@ public class XMLTextDocumentService implements TextDocumentService {
 		computeAsync((monitor) -> {
 			// A document was saved, collect documents to revalidate
 			String savedUri = params.getTextDocument().getUri();
-			if (savedUri != null && savedUri.contains("src/main/wso2mi")) {
+			// LSP document URIs use '/', but normalize defensively so a backslash path also matches on Windows.
+			if (savedUri != null && savedUri.replace('\\', '/').contains("src/main/wso2mi")) {
 				// An artifact/resource file was saved — drop the cached cross-file index so the
 				// revalidation below (and sibling files) sees the updated set instead of stale data.
 				SynapseDiagnosticsParticipant.invalidateArtifactIndexCache();
