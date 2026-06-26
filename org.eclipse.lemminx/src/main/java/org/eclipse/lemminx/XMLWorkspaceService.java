@@ -100,7 +100,8 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 			} else if (change.getUri().contains(Constant.CONNECTORS) && change.getUri().contains(".zip")) {
 				((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateConnectors();
 			} else {
-				if (change.getUri().contains("src/main/wso2mi")) {
+				// LSP URIs use '/', but normalize defensively so a backslash path also matches on Windows.
+				if (change.getUri().replace('\\', '/').contains("src/main/wso2mi")) {
 					// An artifact/resource file changed on disk — drop the cached cross-file index so
 					// the next diagnostics run rebuilds it (otherwise a just-written sibling stays
 					// "unresolved" for up to the cache TTL).
