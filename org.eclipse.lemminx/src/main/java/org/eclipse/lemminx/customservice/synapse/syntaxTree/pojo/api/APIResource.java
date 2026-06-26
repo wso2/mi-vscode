@@ -30,6 +30,7 @@ public class APIResource extends STNode {
     String faultSequenceAttribute;
     String uriTemplate;
     String urlMapping;
+    String bindsTo;
 
     public String getApi() {
 
@@ -139,6 +140,16 @@ public class APIResource extends STNode {
     public void setUrlMapping(String urlMapping) {
 
         this.urlMapping = urlMapping;
+    }
+
+    public String getBindsTo() {
+
+        return bindsTo;
+    }
+
+    public void setBindsTo(String bindsTo) {
+
+        this.bindsTo = bindsTo;
     }
 
     public void addMethod(String method) {

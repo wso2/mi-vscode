@@ -672,6 +672,34 @@ public abstract class AbstractResourceFinder {
      */
     public abstract Map<String, ResourceResponse> findAllResources(String projectPath);
 
+    /**
+     * For each requested resource that declares a protocols filter, drops resources of that
+     * type whose protocol attribute is not in the list. Unfiltered types are left untouched.
+     *
+     * @param response           the response whose resource list is filtered in place
+     * @param requestedResources the requested resources and protocol filters if any
+     */
+    protected void applyProtocolFilters(ResourceResponse response, List<RequestedResource> requestedResources) {
+
+        if (response.getResources() == null) {
+            return;
+        }
+        for (RequestedResource requested : requestedResources) {
+            List<String> protocols = requested.getProtocols();
+            if (protocols == null || protocols.isEmpty()) {
+                continue;
+            }
+            response.getResources().removeIf(resource -> {
+                if (!requested.getType().equals(resource.getType())) {
+                    return false;
+                }
+                String protocol = resource instanceof ArtifactResource
+                        ? ((ArtifactResource) resource).getProtocol() : null;
+                return protocol == null || protocols.stream().noneMatch(p -> p.equalsIgnoreCase(protocol.trim()));
+            });
+        }
+    }
+
     protected List<Resource> findResourceInArtifacts(Path artifactsPath, List<RequestedResource> types) {
 
         List<Resource> resources = new ArrayList<>();
@@ -1025,6 +1053,7 @@ public abstract class AbstractResourceFinder {
             artifact.setFrom(ARTIFACTS);
             ((ArtifactResource) artifact).setLocalEntry(isLocalEntry);
             ((ArtifactResource) artifact).setMcpInbound(Utils.isMcpInboundEndpoint(rootElement));
+            ((ArtifactResource) artifact).setProtocol(rootElement.getAttribute(Constant.PROTOCOL));
             ((ArtifactResource) artifact).setArtifactPath(file.getName());
             ((ArtifactResource) artifact).setAbsolutePath(file.getAbsolutePath());
             return artifact;

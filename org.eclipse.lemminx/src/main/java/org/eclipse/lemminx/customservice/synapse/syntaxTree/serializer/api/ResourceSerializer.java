@@ -51,6 +51,10 @@ public class ResourceSerializer {
             resourceElt.addAttribute("url-mapping", resource.getUrlMapping(), null);
         }
 
+        if (resource.getBindsTo() != null) {
+            resourceElt.addAttribute(Constant.BINDS_TO, resource.getBindsTo(), null);
+        }
+
         if (resource.getInSequenceAttribute() != null) {
             resourceElt.addAttribute("inSequence", resource.getInSequenceAttribute(), null);
         } else {

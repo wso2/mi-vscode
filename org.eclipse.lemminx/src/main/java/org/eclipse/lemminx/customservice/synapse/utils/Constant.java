@@ -293,6 +293,7 @@ public class Constant {
     public static final String HOSTNAME = "hostname";
     public static final String VERSION_TYPE = "version-type";
     public static final String PUBLISH_SWAGGER = "publishSwagger";
+    public static final String BINDS_TO = "binds-to";
     public static final String URL_MAPPING = "url-mapping";
     public static final String SPACE = " ";
     public static final String WSDL_IMPORT = "wsdl:import";

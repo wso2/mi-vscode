@@ -75,6 +75,8 @@
             </xs:annotation>
         </xs:attribute>
 
+        <xs:attribute name="binds-to" type="xs:string" use="optional"/>
+
         <xs:attributeGroup ref="templateOrMapping"/>
     </xs:complexType>
 

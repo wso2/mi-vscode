@@ -14,10 +14,13 @@
 
 package org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo;
 
+import java.util.List;
+
 public class RequestedResource {
 
     public String type;
     public boolean needRegistry = true;
+    public List<String> protocols;
 
     public RequestedResource() {
 
@@ -47,5 +50,15 @@ public class RequestedResource {
     public void setNeedRegistry(boolean needRegistry) {
 
         this.needRegistry = needRegistry;
+    }
+
+    public List<String> getProtocols() {
+
+        return protocols;
+    }
+
+    public void setProtocols(List<String> protocols) {
+
+        this.protocols = protocols;
     }
 }
