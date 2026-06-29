@@ -44,6 +44,10 @@ export function AICodeGenerator({ isUsageExceeded = false }: AICodeGeneratorProp
   // Bedrock specifically — used by SettingsPanel to gate the Tavily/web-search controls.
   // Distinct from isByok (which is true for any "pays-per-request" auth method).
   const [isAwsBedrock, setIsAwsBedrock] = useState(false);
+  // Whether the BYOK / Bedrock check has completed. isByok starts false and
+  // resolves asynchronously, so SettingsPanel must wait for this before locking
+  // model switches — otherwise BYOK users briefly see the WSO2 lock state.
+  const [byokResolved, setByokResolved] = useState(false);
   const mainContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -70,6 +74,7 @@ export function AICodeGenerator({ isUsageExceeded = false }: AICodeGeneratorProp
               const isBedrock = machineView?.loginMethod === LoginMethod.AWS_BEDROCK;
               setIsByok(!!hasApiKey || isBedrock);
               setIsAwsBedrock(isBedrock);
+              setByokResolved(true);
           } catch (error) {
               console.error('[AICodeGenerator] Failed to resolve BYOK / Bedrock state', error);
           }
@@ -181,7 +186,7 @@ export function AICodeGenerator({ isUsageExceeded = false }: AICodeGeneratorProp
   if (showSettings) {
       return (
           <AIChatView>
-              <SettingsPanel onClose={() => setShowSettings(false)} isByok={isByok} isAwsBedrock={isAwsBedrock} />
+              <SettingsPanel onClose={() => setShowSettings(false)} isByok={isByok} byokResolved={byokResolved} isAwsBedrock={isAwsBedrock} />
           </AIChatView>
       );
   }

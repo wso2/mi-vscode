@@ -29,6 +29,12 @@ interface SettingsPanelProps {
      */
     isByok: boolean;
     /**
+     * True once the BYOK / Bedrock check has completed. Until then `isByok` is
+     * still at its default, so model-switch locking is deferred to avoid briefly
+     * showing BYOK users the WSO2 lock state.
+     */
+    byokResolved: boolean;
+    /**
      * True only for AWS Bedrock auth. Gates the Tavily / web-search controls
      * since Bedrock has no first-party web tools.
      */
@@ -55,7 +61,7 @@ const SUB_AGENT_OPTIONS: { value: SubModelPreset; label: string; model: string; 
 const DEFAULT_MAIN: MainModelPreset = "sonnet";
 const DEFAULT_SUB: SubModelPreset = "haiku";
 
-const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, isAwsBedrock }) => {
+const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokResolved, isAwsBedrock }) => {
     const {
         rpcClient,
         modelSettings,
@@ -220,7 +226,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, isAwsBed
 
     // WSO2 (MI Copilot / MI_INTEL) login is the only non-BYOK method. The MI Copilot
     // proxy manages the model set (and blocks Opus), so model switching is locked here.
-    const isMiCopilotPlan = !isByok;
+    // Gate on byokResolved so we don't lock (or flash the lock note) before the auth
+    // method is known — isByok resolves asynchronously and starts false.
+    const isMiCopilotPlan = byokResolved && !isByok;
 
     // On the WSO2 plan the main agent can't use Opus (proxy-blocked), so always show
     // the non-Opus default — even if an 'opus' preset carried over from a prior BYOK
