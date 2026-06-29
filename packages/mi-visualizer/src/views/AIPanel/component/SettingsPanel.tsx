@@ -77,10 +77,16 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     const handleResetDefaults = () => {
         updateModelSettings({
             ...modelSettings,
-            mainModelPreset: DEFAULT_MAIN,
-            subModelPreset: DEFAULT_SUB,
-            mainModelCustomId: undefined,
-            subModelCustomId: undefined,
+            // On the locked MI Copilot plan the model presets are managed by the
+            // proxy and the selectors are disabled, so reset must leave them as-is —
+            // otherwise it's a hidden model-switch path. Only reset what the user can
+            // actually control here (thinking, below).
+            ...(isMiCopilotPlan ? {} : {
+                mainModelPreset: DEFAULT_MAIN,
+                subModelPreset: DEFAULT_SUB,
+                mainModelCustomId: undefined,
+                subModelCustomId: undefined,
+            }),
         });
         setIsThinkingEnabled(true);
     };
@@ -217,13 +223,6 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     // Bedrock: web search is "enabled" when a key is saved or the user is in the middle of entering one.
     const isBedrockWebSearchOn = !!tavilyKey || tavilyInputOpen;
 
-    const isDefault =
-        modelSettings.mainModelPreset === DEFAULT_MAIN &&
-        modelSettings.subModelPreset === DEFAULT_SUB &&
-        !modelSettings.mainModelCustomId &&
-        !modelSettings.subModelCustomId &&
-        isThinkingEnabled;
-
     // WSO2 (MI Copilot / MI_INTEL) login is the only non-BYOK method. The MI Copilot
     // proxy manages the model set (and blocks Opus), so model switching is locked here.
     // Gate on byokResolved so we don't lock (or flash the lock note) before the auth
@@ -235,6 +234,17 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     // applies. Once resolved, isMiCopilotPlan drives the lock as usual.
     const isPlanResolutionPending = !byokResolved;
     const modelControlsDisabled = isMiCopilotPlan || isPlanResolutionPending;
+
+    const modelSettingsAreDefault =
+        modelSettings.mainModelPreset === DEFAULT_MAIN &&
+        modelSettings.subModelPreset === DEFAULT_SUB &&
+        !modelSettings.mainModelCustomId &&
+        !modelSettings.subModelCustomId;
+    // On the locked MI Copilot plan the presets aren't user-controllable, so a
+    // carried-over preset must not keep the reset button active — clicking it would
+    // rewrite the (locked) presets, a hidden model-switch path. There, "default"
+    // depends only on the thinking toggle.
+    const isDefault = (isMiCopilotPlan || modelSettingsAreDefault) && isThinkingEnabled;
 
     // On the WSO2 plan the main agent can't use Opus (proxy-blocked), so always show
     // the non-Opus default — even if an 'opus' preset carried over from a prior BYOK
