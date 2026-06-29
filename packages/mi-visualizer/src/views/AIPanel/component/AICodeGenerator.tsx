@@ -63,6 +63,9 @@ export function AICodeGenerator({ isUsageExceeded = false }: AICodeGeneratorProp
           if (!rpcClient) {
               return;
           }
+          // Re-gate from scratch on every lookup (e.g. rpcClient change) so a prior
+          // session's resolved state can't leak into the new one before this settles.
+          setByokResolved(false);
           try {
               const [hasApiKey, machineView] = await Promise.all([
                   rpcClient.getMiAiPanelRpcClient().hasAnthropicApiKey(),
@@ -77,6 +80,11 @@ export function AICodeGenerator({ isUsageExceeded = false }: AICodeGeneratorProp
               setByokResolved(true);
           } catch (error) {
               console.error('[AICodeGenerator] Failed to resolve BYOK / Bedrock state', error);
+              if (!cancelled) {
+                  // Settle even on failure so the settings UI doesn't stay pending
+                  // (controls disabled) forever; falls back to the managed-plan view.
+                  setByokResolved(true);
+              }
           }
       };
       checkByok();

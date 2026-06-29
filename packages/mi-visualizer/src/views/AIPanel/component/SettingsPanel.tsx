@@ -229,6 +229,12 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     // Gate on byokResolved so we don't lock (or flash the lock note) before the auth
     // method is known — isByok resolves asynchronously and starts false.
     const isMiCopilotPlan = byokResolved && !isByok;
+    // While the auth method is still being resolved, keep the model controls
+    // neutral — disabled, but without the WSO2 lock note — so neither plan can
+    // toggle a preset (or see the high-intelligence warning) before we know which
+    // applies. Once resolved, isMiCopilotPlan drives the lock as usual.
+    const isPlanResolutionPending = !byokResolved;
+    const modelControlsDisabled = isMiCopilotPlan || isPlanResolutionPending;
 
     // On the WSO2 plan the main agent can't use Opus (proxy-blocked), so always show
     // the non-Opus default — even if an 'opus' preset carried over from a prior BYOK
@@ -294,7 +300,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
                     <ToggleGroup
                         options={MAIN_AGENT_OPTIONS.map(o => o.label)}
                         selected={currentMainOption.label}
-                        disabled={isMiCopilotPlan}
+                        disabled={modelControlsDisabled}
                         onSelect={(label) => {
                             const option = MAIN_AGENT_OPTIONS.find(o => o.label === label);
                             if (option) {
@@ -317,7 +323,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
                     <ToggleGroup
                         options={SUB_AGENT_OPTIONS.map(o => o.label)}
                         selected={currentSubOption.label}
-                        disabled={isMiCopilotPlan}
+                        disabled={modelControlsDisabled}
                         onSelect={(label) => {
                             const option = SUB_AGENT_OPTIONS.find(o => o.label === label);
                             if (option) {
@@ -335,9 +341,9 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
                     </div>
                 </SettingsSection>
 
-                {/* High intelligence warning — not shown on the WSO2 plan, where the
-                    model is locked to the plan default. */}
-                {!isMiCopilotPlan && (modelSettings.mainModelPreset === "opus" || modelSettings.subModelPreset === "sonnet") && (
+                {/* High intelligence warning — not shown on the WSO2 plan (model is
+                    locked to the plan default) nor while plan resolution is pending. */}
+                {byokResolved && !isMiCopilotPlan && (modelSettings.mainModelPreset === "opus" || modelSettings.subModelPreset === "sonnet") && (
                     <InfoNote
                         icon="info"
                         variant="info"
