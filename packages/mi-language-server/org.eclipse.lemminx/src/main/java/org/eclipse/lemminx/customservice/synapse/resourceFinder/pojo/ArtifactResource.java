@@ -19,6 +19,8 @@ public class ArtifactResource extends Resource {
     private String artifactPath;
     private String absolutePath;
     private boolean isLocalEntry;
+    private boolean isMcpInbound;
+    private String protocol;
 
     public String getArtifactPath() {
 
@@ -48,5 +50,25 @@ public class ArtifactResource extends Resource {
     public void setLocalEntry(boolean localEntry) {
 
         isLocalEntry = localEntry;
+    }
+
+    public boolean isMcpInbound() {
+
+        return isMcpInbound;
+    }
+
+    public void setMcpInbound(boolean mcpInbound) {
+
+        isMcpInbound = mcpInbound;
+    }
+
+    public String getProtocol() {
+
+        return protocol;
+    }
+
+    public void setProtocol(String protocol) {
+
+        this.protocol = protocol;
     }
 }

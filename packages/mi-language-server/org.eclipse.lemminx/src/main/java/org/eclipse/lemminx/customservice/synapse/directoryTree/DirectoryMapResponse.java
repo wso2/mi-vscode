@@ -70,7 +70,7 @@ public class DirectoryMapResponse {
 
         String[] artifactNames = {"apis", "endpoints", "sequences", "proxyServices", "inboundEndpoints",
                 "messageStores", "messageProcessors", "tasks", "localEntries", "connections", "templates",
-                "dataServices", "dataSources"};
+                "dataServices", "dataSources", "mcpServers"};
         processLocalEntries(jsonObject);
         for (String element : artifactNames) {
             artifacts.add(element, jsonObject.get(element));

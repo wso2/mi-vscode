@@ -55,8 +55,12 @@ public class OverviewModelGenerator {
         NewProjectResourceFinder newProjectResourceFinder = new NewProjectResourceFinder();
         ResourceResponse response = newProjectResourceFinder.getAvailableResources(projectPath, Either.forRight(requiredResources));
         for (Resource resource : response.getResources()) {
+            if (((ArtifactResource) resource).isMcpInbound()) {
+                continue;
+            }
+            String absolutePath = ((ArtifactResource) resource).getAbsolutePath();
             DependencyScanner dependencyScanner = new DependencyScanner(projectPath);
-            DependencyTree dependencyTree = dependencyScanner.analyzeArtifact(((ArtifactResource) resource).getAbsolutePath());
+            DependencyTree dependencyTree = dependencyScanner.analyzeArtifact(absolutePath);
             dependencyTreeList.add(dependencyTree);
         }
         return convertDataToOverviewModel(Paths.get(projectPath).getFileName().toString(), dependencyTreeList);

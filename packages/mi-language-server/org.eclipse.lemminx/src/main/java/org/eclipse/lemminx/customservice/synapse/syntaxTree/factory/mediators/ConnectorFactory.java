@@ -38,6 +38,10 @@ public class ConnectorFactory extends AbstractMediatorFactory {
         if (configKey != null) {
             ((Connector) node).setConfigKey(configKey);
         }
+        String description = element.getAttribute(Constant.DESCRIPTION);
+        if (description != null) {
+            ((Connector) node).setDescription(description);
+        }
         addConnectorParameters((Connector) node, element);
     }
 

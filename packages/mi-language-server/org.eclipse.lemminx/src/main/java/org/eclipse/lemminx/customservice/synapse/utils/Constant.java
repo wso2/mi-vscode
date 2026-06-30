@@ -173,6 +173,7 @@ public class Constant {
     public static final String STATISTICS = "statistics";
     public static final String TRACE = "trace";
     public static final String PARAMETERS = "parameters";
+    public static final String HAS_PARAMETERS = "hasParameters";
     public static final String PARAMETER = "parameter";
     public static final String LOCKED = "locked";
     public static final String SRC = "src";
@@ -292,6 +293,7 @@ public class Constant {
     public static final String HOSTNAME = "hostname";
     public static final String VERSION_TYPE = "version-type";
     public static final String PUBLISH_SWAGGER = "publishSwagger";
+    public static final String BINDS_TO = "binds-to";
     public static final String URL_MAPPING = "url-mapping";
     public static final String SPACE = " ";
     public static final String WSDL_IMPORT = "wsdl:import";
@@ -496,6 +498,7 @@ public class Constant {
     public static final String TASK_UPPERCASE = "TASK";
     public static final String INBOUND_UPPERCASE = "INBOUND_ENDPOINT";
     public static final String INBOUND_DASH_ENDPOINT = "inbound-endpoint";
+    public static final String MCP_INBOUND_LISTENER_CLASS = "org.wso2.carbon.inbound.sse.McpInboundListener";
     public static final String CONNECTION_UPPERCASE = "CONNECTION";
     public static final String OTHER = "other";
     public static final String SCHEDULED_TASK = "schedule-task";
@@ -549,6 +552,7 @@ public class Constant {
     public static final String WSO2_MI = ".wso2-mi";
     public static final String M2 = ".m2";
     public static final String DOWNLOADED = "Downloaded";
+    public static final String HTTP_CONNECTOR_ARTIFACT_ID = "mi-connector-http";
     public static final String EXTRACTED = "Extracted";
     public static final String PARALLEL_EXECUTION = "parallelExecution";
     public static final String CONTINUE_WITHOUT_AGGREGATION = "continueWithoutAggregation";

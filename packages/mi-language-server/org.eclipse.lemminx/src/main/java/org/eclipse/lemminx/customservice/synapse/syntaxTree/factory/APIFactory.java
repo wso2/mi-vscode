@@ -103,6 +103,10 @@ public class APIFactory extends AbstractFactory {
         if (Objects.nonNull(traceEnum)) {
             api.setTrace(traceEnum);
         }
+        String bindsTo = element.getAttribute(Constant.BINDS_TO);
+        if (Objects.nonNull(bindsTo)) {
+            api.setBindsTo(bindsTo);
+        }
     }
 
     public STNode createAPIResource(DOMNode node, String apiName) {

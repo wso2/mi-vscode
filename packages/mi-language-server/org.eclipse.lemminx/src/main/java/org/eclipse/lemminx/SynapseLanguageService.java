@@ -150,6 +150,7 @@ import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.customservice.synapse.idp.PdfToImagesRequest;
 import org.eclipse.lemminx.dom.DOMDocument;
 import org.eclipse.lemminx.extensions.contentmodel.settings.XMLValidationSettings;
+import org.eclipse.lemminx.extensions.synapse.SynapseDiagnosticsParticipant;
 import org.eclipse.lemminx.services.extensions.completion.ICompletionResponse;
 import org.eclipse.lemminx.settings.SharedSettings;
 import org.eclipse.lemminx.uriresolver.URIResolverExtensionManager;
@@ -346,8 +347,21 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<PublishDiagnosticsParams> codeDiagnostic(CodeDiagnosticRequest param) {
 
         return CompletableFuture.supplyAsync(() -> {
-            DOMDocument xmlDocument = Utils.getDOMDocument(param.getCode(), uriResolverExtensionManager);
-            return doDiagnostics(xmlDocument, NULL_CANCEL_CHECKER);
+            // Use the real file path (when supplied) as the document URI. Several diagnostics are
+            // gated on the document path — e.g. SynapseExpressionValidator only runs for files under
+            // src/main/wso2mi/artifacts — so the literal "temp" fallback would silently drop them.
+            // Treat a blank fileName as missing, otherwise an unusable URI would skip those checks.
+            String uri = StringUtils.isBlank(param.getFileName()) ? "temp" : param.getFileName();
+            // Opt-out (default off) for cross-file reference checks: the agent validates a file
+            // before its referenced siblings are written, so those checks would fire spuriously.
+            // Set/clear around doDiagnostics on this thread; the editor never sets it.
+            try {
+                SynapseDiagnosticsParticipant.setSkipCrossFileValidation(param.isSkipCrossFileValidation());
+                DOMDocument xmlDocument = Utils.getDOMDocument(param.getCode(), uri, uriResolverExtensionManager);
+                return doDiagnostics(xmlDocument, NULL_CANCEL_CHECKER);
+            } finally {
+                SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
+            }
         });
     }
 
@@ -1044,7 +1058,10 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                         connectorGenReq.connectorProjectPath, projectServerVersion, projectUri);
             }
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Error occurred while generating the connector", e);
+			String errorMsg = "Error occurred while generating the connector: " + e.getMessage();
+            log.log(Level.SEVERE, errorMsg, e);
+            ConnectorGeneratorResponse errorResponse = new ConnectorGeneratorResponse(false, null, errorMsg);
+            return CompletableFuture.supplyAsync(() -> errorResponse);
         }
         ConnectorGeneratorResponse response = new ConnectorGeneratorResponse(filePath != null, filePath);
         return CompletableFuture.supplyAsync(() -> response);
@@ -1202,6 +1219,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         });
     }
 
+    @Override
+    public CompletableFuture<String> fetchInboundConnectors() {
+
+        return CompletableFuture.supplyAsync(() -> inboundConnectorHolder.getCustomInboundConnectors());
+    }
+
     public String getProjectUri() {
         return projectUri;
     }
@@ -1233,7 +1256,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     private void packHttpConnector() {
 
-        if (Utils.compareVersions(projectServerVersion, Constant.MI_440_VERSION) >= 0) {
+        if (Utils.compareVersions(projectServerVersion, Constant.MI_440_VERSION) >= 0
+                && Utils.hasDependency(projectUri, Constant.HTTP_CONNECTOR_ARTIFACT_ID)) {
             String projectId = new File(projectUri).getName() + "_" + Utils.getHash(projectUri);
             String connectorDownloadPath = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
                     Constant.CONNECTORS, projectId, Constant.DOWNLOADED).toString();

@@ -441,4 +441,68 @@ public class ExpressionValidatorTest {
         List<ExpressionError> errors = ExpressionValidator.validate("payload[0]");
         assertTrue(errors.isEmpty(), "Zero array index should produce no warnings");
     }
+
+    // ===== Operator precedence: logical operator (and/or) as a comparison operand =====
+    // In the Synapse expression grammar 'and'/'or' bind TIGHTER than the comparison operators,
+    // so 'a <= 0 or b > 10' parses as 'a <= (0 or b) > 10' rather than '(a <= 0) or (b > 10)'.
+
+    @Test
+    public void testOrBindsTighterThanComparisonWarns() {
+        // Parses as payload.id <= (0 or payload.id) > 10 — almost certainly not intended.
+        List<ExpressionError> errors = ExpressionValidator.validate("payload.id <= 0 or payload.id > 10");
+        assertEquals(1, errors.size(), "Mixing 'or' with comparisons without parentheses should warn once");
+        assertTrue(errors.get(0).getMessage().contains("Operator precedence"),
+                "Should warn about operator precedence: " + errors.get(0).getMessage());
+        assertTrue(errors.get(0).isWarning(), "Precedence issue should be a warning, not an error");
+    }
+
+    @Test
+    public void testCopilotPrecedenceExampleWarns() {
+        // The exact expression MI Copilot generated (Issue #1).
+        List<ExpressionError> errors = ExpressionValidator.validate(
+                "integer(params.queryParams.id) <= 0 or integer(params.queryParams.id) > 10");
+        assertTrue(errors.stream().anyMatch(e -> e.getMessage().contains("Operator precedence")),
+                "Copilot precedence example should produce a precedence warning");
+        assertTrue(errors.stream().filter(e -> e.getMessage().contains("Operator precedence"))
+                        .allMatch(ExpressionError::isWarning),
+                "Precedence diagnostic should be a warning");
+    }
+
+    @Test
+    public void testAndBindsTighterThanComparisonWarns() {
+        // Parses as (payload.a and payload.b) <= 5.
+        List<ExpressionError> errors = ExpressionValidator.validate("payload.a and payload.b <= 5");
+        assertEquals(1, errors.size(), "Mixing 'and' with a comparison without parentheses should warn once");
+        assertTrue(errors.get(0).getMessage().contains("Operator precedence"),
+                "Should warn about operator precedence: " + errors.get(0).getMessage());
+        assertTrue(errors.get(0).isWarning(), "Precedence issue should be a warning, not an error");
+    }
+
+    @Test
+    public void testParenthesizedComparisonsNoWarning() {
+        // The corrected form: each comparison wrapped in parentheses. No precedence ambiguity.
+        List<ExpressionError> errors = ExpressionValidator.validate(
+                "(payload.id <= 0) or (payload.id > 10)");
+        assertTrue(errors.isEmpty(), "Parenthesized comparisons should produce no precedence warning");
+    }
+
+    @Test
+    public void testPureLogicalExpressionNoWarning() {
+        // No comparison operator present — pure logical expression, nothing to flag.
+        List<ExpressionError> errors = ExpressionValidator.validate("payload.a and payload.b");
+        assertTrue(errors.isEmpty(), "Pure logical expression without a comparison should not warn");
+    }
+
+    @Test
+    public void testPureComparisonNoWarning() {
+        // No logical operator present — pure comparison, nothing to flag.
+        List<ExpressionError> errors = ExpressionValidator.validate("payload.x <= 10");
+        assertTrue(errors.isEmpty(), "Pure comparison without a logical operator should not warn");
+    }
+
+    @Test
+    public void testComparisonBetweenTwoAccessesNoWarning() {
+        List<ExpressionError> errors = ExpressionValidator.validate("payload.x < payload.y");
+        assertTrue(errors.isEmpty(), "Comparison between two accesses should not warn");
+    }
 }

@@ -30,6 +30,7 @@ public class API extends STNode {
     String description;
     EnableDisable statistics;
     EnableDisable trace;
+    String bindsTo;
 
     public APIResource[] getResource() {
 
@@ -149,5 +150,15 @@ public class API extends STNode {
     public void setTrace(EnableDisable trace) {
 
         this.trace = trace;
+    }
+
+    public String getBindsTo() {
+
+        return bindsTo;
+    }
+
+    public void setBindsTo(String bindsTo) {
+
+        this.bindsTo = bindsTo;
     }
 }
