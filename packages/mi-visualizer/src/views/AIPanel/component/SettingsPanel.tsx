@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Codicon } from "@wso2/ui-toolkit";
 import { useMICopilotContext } from "./MICopilotContext";
 import type { MainModelPreset, SubModelPreset, ManagedSkillItem } from "@wso2/mi-rpc-client/src/rpc-clients/agent-mode/rpc-client";
@@ -62,12 +62,20 @@ const DEFAULT_MAIN: MainModelPreset = "sonnet";
 const DEFAULT_SUB: SubModelPreset = "haiku";
 
 /**
- * Drill-down navigation: the root is a category list; selecting a category pushes
- * a full-width sub-page. The back arrow walks the stack (sub-page → root → chat),
- * which keeps the panel usable at the narrow width of a VS Code sidebar webview
- * (a persistent side-rail would eat too much horizontal space here).
+ * Settings navigation adapts to the panel width:
+ *  - Wide (e.g. Copilot docked as an editor tab): a persistent left nav rail +
+ *    content pane, like the Claude desktop app.
+ *  - Narrow (docked in the VS Code sidebar, where a rail would be cramped): a
+ *    drill-down — the root is a category list; selecting one pushes a full-width
+ *    sub-page, and the back arrow walks the stack (sub-page → root → chat).
  */
 type SettingsView = "root" | "models" | "skills" | "web" | "account";
+
+/**
+ * Container width (px) at or above which we show the nav-rail layout. Below it,
+ * the rail + content can't both stay usable, so we fall back to drill-down.
+ */
+const WIDE_LAYOUT_BREAKPOINT_PX = 560;
 
 const VIEW_TITLES: Record<SettingsView, string> = {
     root: "Settings",
@@ -90,6 +98,26 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     const [view, setView] = useState<SettingsView>("root");
     const isRoot = view === "root";
     const handleBack = () => (isRoot ? onClose() : setView("root"));
+
+    // Track the panel width to switch between the rail and drill-down layouts.
+    // useLayoutEffect measures before paint so the first frame already picks the
+    // right layout (no flash of the wrong one).
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isWide, setIsWide] = useState(false);
+    useLayoutEffect(() => {
+        const el = containerRef.current;
+        if (!el) { return; }
+        const measure = (width: number) => setIsWide(width >= WIDE_LAYOUT_BREAKPOINT_PX);
+        measure(el.getBoundingClientRect().width);
+        const ro = new ResizeObserver((entries) => {
+            for (const entry of entries) { measure(entry.contentRect.width); }
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+    // In the rail layout the nav is always visible, so there is no 'root' page —
+    // it collapses onto the first category.
+    const activeCategory: Exclude<SettingsView, "root"> = view === "root" ? "models" : view;
 
     const handleLogout = async () => {
         await rpcClient?.getMiDiagramRpcClient().logoutFromMIAccount();
@@ -350,15 +378,376 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
     const currentMainOption = MAIN_AGENT_OPTIONS.find(o => o.value === effectiveMainPreset) || MAIN_AGENT_OPTIONS[0];
     const currentSubOption = SUB_AGENT_OPTIONS.find(o => o.value === modelSettings.subModelPreset) || SUB_AGENT_OPTIONS[0];
 
+    // In the rail layout the header back arrow always returns to chat (the rail
+    // handles category switching); in drill-down it walks the stack.
+    const headerTitle = isWide ? "Settings" : VIEW_TITLES[view];
+    const headerBackLabel = isWide || isRoot ? "Back to chat" : "Back to settings";
+    const onHeaderBack = isWide ? onClose : handleBack;
+
+    // --- Category bodies. Each is self-contained (owns its own spacing) so it can
+    // render either inside a drill-down sub-page or inside the rail content pane. ---
+
+    const renderModels = () => (
+        <div className="space-y-6">
+            {/* WSO2 plan: model selection is managed by the proxy and locked here. */}
+            {isMiCopilotPlan && (
+                <div
+                    className="flex items-start gap-1.5 px-3 py-2 rounded-md"
+                    style={{
+                        fontSize: "11px",
+                        lineHeight: 1.4,
+                        color: "var(--vscode-foreground)",
+                        backgroundColor: "color-mix(in srgb, var(--vscode-foreground) 6%, transparent)",
+                        border: "1px solid var(--vscode-panel-border)",
+                    }}
+                >
+                    <span className="shrink-0 mt-px" style={{ color: "var(--vscode-editorInfo-foreground, #3794ff)" }}>
+                        <Codicon name="lock" />
+                    </span>
+                    <span>
+                        Sign in with your own Anthropic API key or AWS Bedrock to change models.
+                    </span>
+                </div>
+            )}
+
+            {/* Main Agent Intelligence */}
+            <SettingsSection title="Main Agent Intelligence">
+                <ToggleGroup
+                    options={MAIN_AGENT_OPTIONS.map(o => o.label)}
+                    selected={currentMainOption.label}
+                    disabled={modelControlsDisabled}
+                    onSelect={(label) => {
+                        const option = MAIN_AGENT_OPTIONS.find(o => o.label === label);
+                        if (option) {
+                            updateModelSettings({ ...modelSettings, mainModelPreset: option.value });
+                        }
+                    }}
+                />
+                <div className="mt-2 space-y-0.5">
+                    <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                        {currentMainOption.description}
+                    </p>
+                    <p className="text-[11px] font-medium" style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}>
+                        Uses {currentMainOption.model}
+                    </p>
+                </div>
+            </SettingsSection>
+
+            {/* Sub-Agent Intelligence */}
+            <SettingsSection title="Sub-Agent Intelligence">
+                <ToggleGroup
+                    options={SUB_AGENT_OPTIONS.map(o => o.label)}
+                    selected={currentSubOption.label}
+                    disabled={modelControlsDisabled}
+                    onSelect={(label) => {
+                        const option = SUB_AGENT_OPTIONS.find(o => o.label === label);
+                        if (option) {
+                            updateModelSettings({ ...modelSettings, subModelPreset: option.value });
+                        }
+                    }}
+                />
+                <div className="mt-2 space-y-0.5">
+                    <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                        {currentSubOption.description}
+                    </p>
+                    <p className="text-[11px] font-medium" style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}>
+                        Uses {currentSubOption.model}
+                    </p>
+                </div>
+            </SettingsSection>
+
+            {/* High intelligence warning — not shown on the WSO2 plan (model is
+                locked to the plan default) nor while plan resolution is pending. */}
+            {byokResolved && !isMiCopilotPlan && (modelSettings.mainModelPreset === "opus" || modelSettings.subModelPreset === "sonnet") && (
+                <InfoNote
+                    icon="info"
+                    variant="info"
+                    text={isByok
+                        ? "High intelligence can increase API cost and latency."
+                        : "High intelligence uses free quota faster and may hit usage limits sooner."}
+                />
+            )}
+
+            {/* Thinking Mode */}
+            <SettingsSection title="Thinking Mode">
+                <div className="flex items-center justify-between">
+                    <span className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>
+                        Adaptive Thinking
+                    </span>
+                    <ToggleGroup
+                        options={["Off", "On"]}
+                        selected={isThinkingEnabled ? "On" : "Off"}
+                        onSelect={(label) => setIsThinkingEnabled(label === "On")}
+                        compact
+                    />
+                </div>
+                {isThinkingEnabled && (
+                    <InfoNote
+                        icon="info"
+                        variant="info"
+                        text="Disable if the agent overthinks or feels too slow on simple requests."
+                    />
+                )}
+            </SettingsSection>
+
+            {/* Reset is scoped to model & thinking settings, so it lives on this page. */}
+            <div className="pt-3 flex justify-end" style={{ borderTop: "1px solid var(--vscode-panel-border)" }}>
+                <button
+                    className="flex items-center gap-1 text-[11px] font-medium transition-colors"
+                    style={{
+                        color: isDefault ? "var(--vscode-descriptionForeground)" : "var(--vscode-textLink-foreground)",
+                        opacity: isDefault ? 0.5 : 1,
+                        cursor: isDefault ? "default" : "pointer",
+                        background: "transparent",
+                        border: "none",
+                    }}
+                    onClick={isDefault ? undefined : handleResetDefaults}
+                    disabled={isDefault}
+                >
+                    <Codicon name="discard" />
+                    Reset to defaults
+                </button>
+            </div>
+        </div>
+    );
+
+    const renderSkills = () =>
+        managedSkills === null ? (
+            <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                Loading skills…
+            </p>
+        ) : managedSkills.length === 0 ? (
+            <InfoNote
+                icon="info"
+                variant="info"
+                text="No skills found. Add a SKILL.md under .agents/skills/ (project) or ~/.agents/skills/ (global)."
+            />
+        ) : (
+            <div className="space-y-4">
+                {(["project", "user"] as const).map((scope) => {
+                    const group = managedSkills.filter((s) => s.scope === scope);
+                    if (group.length === 0) {
+                        return null;
+                    }
+                    return (
+                        <div key={scope} className="space-y-1">
+                            <p
+                                className="text-[11px] font-medium"
+                                style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}
+                            >
+                                {scope === "project" ? "Project" : "Global"}
+                            </p>
+                            {scope === "user" && (
+                                <p className="text-[10px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                                    Global skills are off by default — enable the ones you want to use.
+                                </p>
+                            )}
+                            {group.map((skill, i) => (
+                                <SkillRow
+                                    key={`${skill.scope}:${skill.name}:${i}`}
+                                    skill={skill}
+                                    busy={busySkills.has(`${skill.scope}:${skill.name.toLowerCase()}`)}
+                                    onToggle={(enabled) => handleToggleSkill(skill, enabled)}
+                                    onDelete={() => handleDeleteSkill(skill)}
+                                />
+                            ))}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+
+    const renderWeb = () => (
+        <div className="space-y-3">
+            {/* Bedrock: enable toggle (gated on Tavily key). */}
+            <div className="flex items-center justify-between">
+                <div className="pr-3">
+                    <p className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>
+                        Enable web search
+                    </p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                        AWS Bedrock has no built-in web tools. Provide a Tavily API key to enable web_search and web_fetch.
+                    </p>
+                </div>
+                <ToggleGroup
+                    options={["Off", "On"]}
+                    selected={isBedrockWebSearchOn ? "On" : "Off"}
+                    onSelect={(label) => handleBedrockWebSearchToggle(label === "On")}
+                    compact
+                    disabled={tavilyStatus.kind === 'saving'}
+                />
+            </div>
+
+            {tavilyInputOpen && (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                        <input
+                            type={showTavilyKey ? "text" : "password"}
+                            value={tavilyDraft}
+                            onChange={(e) => {
+                                setTavilyDraft(e.target.value);
+                                if (tavilyStatus.kind !== 'idle') {
+                                    setTavilyStatus({ kind: 'idle' });
+                                }
+                            }}
+                            aria-label="Tavily API key"
+                            placeholder="tvly-..."
+                            className="flex-1 px-2 py-1 text-[12px] rounded-md"
+                            style={{
+                                backgroundColor: "var(--vscode-input-background)",
+                                color: "var(--vscode-input-foreground)",
+                                border: "1px solid var(--vscode-input-border)",
+                                outline: "none",
+                            }}
+                            spellCheck={false}
+                            autoComplete="off"
+                            autoFocus
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowTavilyKey((v) => !v)}
+                            className="flex items-center justify-center w-7 h-7 rounded-md"
+                            style={{
+                                background: "transparent",
+                                color: "var(--vscode-descriptionForeground)",
+                                border: "1px solid transparent",
+                                cursor: "pointer",
+                            }}
+                            aria-label={showTavilyKey ? "Hide key" : "Show key"}
+                            title={showTavilyKey ? "Hide key" : "Show key"}
+                        >
+                            <Codicon name={showTavilyKey ? "eye-closed" : "eye"} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleTavilySave}
+                            disabled={!tavilyDirty || tavilyStatus.kind === 'saving' || !tavilyDraft.trim()}
+                            className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
+                            style={{
+                                backgroundColor: tavilyDirty && tavilyDraft.trim() ? "var(--vscode-button-background)" : "var(--vscode-button-secondaryBackground)",
+                                color: tavilyDirty && tavilyDraft.trim() ? "var(--vscode-button-foreground)" : "var(--vscode-button-secondaryForeground)",
+                                border: "none",
+                                cursor: tavilyDirty && tavilyDraft.trim() && tavilyStatus.kind !== 'saving' ? "pointer" : "not-allowed",
+                                opacity: tavilyDirty && tavilyDraft.trim() ? 1 : 0.6,
+                            }}
+                        >
+                            {tavilyStatus.kind === 'saving' ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {!tavilyInputOpen && tavilyKey && (
+                <div className="flex items-center justify-between">
+                    <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                        Tavily key saved.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={handleEditTavilyKey}
+                        className="text-[11px] inline-flex items-center gap-1 transition-colors"
+                        style={{
+                            color: "var(--vscode-textLink-foreground)",
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
+                        }}
+                    >
+                        <Codicon name="edit" />
+                        Edit key
+                    </button>
+                </div>
+            )}
+
+            {tavilyStatus.kind === 'saved' && (
+                <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                    {tavilyStatus.message}
+                </p>
+            )}
+            {tavilyStatus.kind === 'error' && (
+                <p className="text-[11px]" style={{ color: "var(--vscode-errorForeground)" }}>
+                    {tavilyStatus.message}
+                </p>
+            )}
+
+            <button
+                type="button"
+                onClick={handleOpenTavilySignup}
+                className="text-[11px] inline-flex items-center gap-1 transition-colors"
+                style={{
+                    color: "var(--vscode-textLink-foreground)",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                }}
+            >
+                <Codicon name="link-external" />
+                Get a free Tavily API key
+            </button>
+            <button
+                type="button"
+                onClick={handleOpenTavilyMarketplace}
+                className="text-[11px] inline-flex items-center gap-1 transition-colors"
+                style={{
+                    color: "var(--vscode-textLink-foreground)",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    cursor: "pointer",
+                }}
+                title="Subscribe to Tavily Enterprise via AWS Marketplace and bill through your AWS account. Paste the issued API key above."
+            >
+                <Codicon name="link-external" />
+                Or subscribe via AWS Marketplace
+            </button>
+        </div>
+    );
+
+    const renderAccount = () => (
+        <div className="flex items-center justify-between">
+            <div>
+                <p className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>Sign out</p>
+                <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                    {isByok
+                        ? "Clear MI Copilot credentials stored by this extension"
+                        : "Sign out of MI Copilot while staying signed in to the WSO2 platform"}
+                </p>
+            </div>
+            <button
+                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium shrink-0 ml-4 transition-colors"
+                style={{
+                    color: "var(--vscode-errorForeground)",
+                    backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+                    border: "1px solid var(--vscode-inputValidation-errorBorder)",
+                }}
+                onClick={handleLogout}
+            >
+                <Codicon name="sign-out" />
+                Sign out
+            </button>
+        </div>
+    );
+
+    const categoryContent = (category: Exclude<SettingsView, "root">) => {
+        switch (category) {
+            case "models": return renderModels();
+            case "skills": return renderSkills();
+            case "web": return isAwsBedrock ? renderWeb() : null;
+            case "account": return renderAccount();
+        }
+    };
+
     return (
-        <div className="flex flex-col h-full" style={{ backgroundColor: "var(--vscode-sideBar-background)" }}>
-            {/* Header — back arrow walks the drill-down stack (sub-page → root → chat). */}
+        <div ref={containerRef} className="flex flex-col h-full" style={{ backgroundColor: "var(--vscode-sideBar-background)" }}>
+            {/* Header */}
             <div
                 className="flex items-center gap-2 px-4 py-3 shrink-0"
                 style={{ borderBottom: "1px solid var(--vscode-panel-border)" }}
             >
                 <button
-                    onClick={handleBack}
+                    onClick={onHeaderBack}
                     className="flex items-center justify-center w-7 h-7 rounded-md transition-colors"
                     style={{ color: "var(--vscode-foreground)" }}
                     onMouseEnter={(e) => {
@@ -367,18 +756,61 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
                     onMouseLeave={(e) => {
                         (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
                     }}
-                    title={isRoot ? "Back to chat" : "Back to settings"}
-                    aria-label={isRoot ? "Back to chat" : "Back to settings"}
+                    title={headerBackLabel}
+                    aria-label={headerBackLabel}
                 >
                     <Codicon name="arrow-left" />
                 </button>
                 <span className="text-sm font-semibold" style={{ color: "var(--vscode-foreground)" }}>
-                    {VIEW_TITLES[view]}
+                    {headerTitle}
                 </span>
             </div>
 
-            {/* Root — category list */}
-            {view === "root" && (
+            {isWide ? (
+                /* Wide: persistent nav rail + content pane (Claude-desktop style). */
+                <div className="flex flex-1 min-h-0">
+                    <nav
+                        className="shrink-0 overflow-y-auto p-2 space-y-0.5"
+                        style={{ width: 184, borderRight: "1px solid var(--vscode-panel-border)" }}
+                    >
+                        <CategoryRow
+                            icon="hubot"
+                            label="Models & Thinking"
+                            active={activeCategory === "models"}
+                            showChevron={false}
+                            onClick={() => setView("models")}
+                        />
+                        <CategoryRow
+                            icon="extensions"
+                            label="Skills"
+                            badge={managedSkills?.length ?? null}
+                            active={activeCategory === "skills"}
+                            showChevron={false}
+                            onClick={() => setView("skills")}
+                        />
+                        {isAwsBedrock && (
+                            <CategoryRow
+                                icon="search"
+                                label="Web Search"
+                                active={activeCategory === "web"}
+                                showChevron={false}
+                                onClick={() => setView("web")}
+                            />
+                        )}
+                        <CategoryRow
+                            icon="account"
+                            label="Account"
+                            active={activeCategory === "account"}
+                            showChevron={false}
+                            onClick={() => setView("account")}
+                        />
+                    </nav>
+                    <div className="flex-1 overflow-y-auto p-5 min-w-0">
+                        {categoryContent(activeCategory)}
+                    </div>
+                </div>
+            ) : view === "root" ? (
+                /* Narrow root: category list that pushes a sub-page. */
                 <div className="flex-1 overflow-y-auto p-3">
                     <div className="space-y-0.5">
                         <CategoryRow icon="hubot" label="Models & Thinking" onClick={() => setView("models")} />
@@ -397,364 +829,10 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
                         Settings persist across sessions
                     </p>
                 </div>
-            )}
-
-            {/* Models & Thinking */}
-            {view === "models" && (
-                <>
-                    <div className="flex-1 overflow-y-auto p-5 space-y-6">
-                        {/* WSO2 plan: model selection is managed by the proxy and locked here. */}
-                        {isMiCopilotPlan && (
-                            <div
-                                className="flex items-start gap-1.5 px-3 py-2 rounded-md"
-                                style={{
-                                    fontSize: "11px",
-                                    lineHeight: 1.4,
-                                    color: "var(--vscode-foreground)",
-                                    backgroundColor: "color-mix(in srgb, var(--vscode-foreground) 6%, transparent)",
-                                    border: "1px solid var(--vscode-panel-border)",
-                                }}
-                            >
-                                <span className="shrink-0 mt-px" style={{ color: "var(--vscode-editorInfo-foreground, #3794ff)" }}>
-                                    <Codicon name="lock" />
-                                </span>
-                                <span>
-                                    Sign in with your own Anthropic API key or AWS Bedrock to change models.
-                                </span>
-                            </div>
-                        )}
-
-                        {/* Main Agent Intelligence */}
-                        <SettingsSection title="Main Agent Intelligence">
-                            <ToggleGroup
-                                options={MAIN_AGENT_OPTIONS.map(o => o.label)}
-                                selected={currentMainOption.label}
-                                disabled={modelControlsDisabled}
-                                onSelect={(label) => {
-                                    const option = MAIN_AGENT_OPTIONS.find(o => o.label === label);
-                                    if (option) {
-                                        updateModelSettings({ ...modelSettings, mainModelPreset: option.value });
-                                    }
-                                }}
-                            />
-                            <div className="mt-2 space-y-0.5">
-                                <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                                    {currentMainOption.description}
-                                </p>
-                                <p className="text-[11px] font-medium" style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}>
-                                    Uses {currentMainOption.model}
-                                </p>
-                            </div>
-                        </SettingsSection>
-
-                        {/* Sub-Agent Intelligence */}
-                        <SettingsSection title="Sub-Agent Intelligence">
-                            <ToggleGroup
-                                options={SUB_AGENT_OPTIONS.map(o => o.label)}
-                                selected={currentSubOption.label}
-                                disabled={modelControlsDisabled}
-                                onSelect={(label) => {
-                                    const option = SUB_AGENT_OPTIONS.find(o => o.label === label);
-                                    if (option) {
-                                        updateModelSettings({ ...modelSettings, subModelPreset: option.value });
-                                    }
-                                }}
-                            />
-                            <div className="mt-2 space-y-0.5">
-                                <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                                    {currentSubOption.description}
-                                </p>
-                                <p className="text-[11px] font-medium" style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}>
-                                    Uses {currentSubOption.model}
-                                </p>
-                            </div>
-                        </SettingsSection>
-
-                        {/* High intelligence warning — not shown on the WSO2 plan (model is
-                            locked to the plan default) nor while plan resolution is pending. */}
-                        {byokResolved && !isMiCopilotPlan && (modelSettings.mainModelPreset === "opus" || modelSettings.subModelPreset === "sonnet") && (
-                            <InfoNote
-                                icon="info"
-                                variant="info"
-                                text={isByok
-                                    ? "High intelligence can increase API cost and latency."
-                                    : "High intelligence uses free quota faster and may hit usage limits sooner."}
-                            />
-                        )}
-
-                        {/* Thinking Mode */}
-                        <SettingsSection title="Thinking Mode">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>
-                                    Adaptive Thinking
-                                </span>
-                                <ToggleGroup
-                                    options={["Off", "On"]}
-                                    selected={isThinkingEnabled ? "On" : "Off"}
-                                    onSelect={(label) => setIsThinkingEnabled(label === "On")}
-                                    compact
-                                />
-                            </div>
-                            {isThinkingEnabled && (
-                                <InfoNote
-                                    icon="info"
-                                    variant="info"
-                                    text="Disable if the agent overthinks or feels too slow on simple requests."
-                                />
-                            )}
-                        </SettingsSection>
-                    </div>
-
-                    {/* Reset is scoped to model & thinking settings, so it lives on this page. */}
-                    <div
-                        className="px-5 py-3 flex items-center justify-end text-[11px] shrink-0"
-                        style={{
-                            borderTop: "1px solid var(--vscode-panel-border)",
-                            color: "var(--vscode-descriptionForeground)",
-                        }}
-                    >
-                        <button
-                            className="flex items-center gap-1 font-medium transition-colors"
-                            style={{
-                                color: isDefault ? "var(--vscode-descriptionForeground)" : "var(--vscode-textLink-foreground)",
-                                opacity: isDefault ? 0.5 : 1,
-                                cursor: isDefault ? "default" : "pointer",
-                            }}
-                            onClick={isDefault ? undefined : handleResetDefaults}
-                            disabled={isDefault}
-                        >
-                            <Codicon name="discard" />
-                            Reset to defaults
-                        </button>
-                    </div>
-                </>
-            )}
-
-            {/* Skills — list / enable-disable / delete project & global skills */}
-            {view === "skills" && (
+            ) : (
+                /* Narrow sub-page: the selected category, full width. */
                 <div className="flex-1 overflow-y-auto p-5">
-                    {managedSkills === null ? (
-                        <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                            Loading skills…
-                        </p>
-                    ) : managedSkills.length === 0 ? (
-                        <InfoNote
-                            icon="info"
-                            variant="info"
-                            text="No skills found. Add a SKILL.md under .agents/skills/ (project) or ~/.agents/skills/ (global)."
-                        />
-                    ) : (
-                        <div className="space-y-4">
-                            {(["project", "user"] as const).map((scope) => {
-                                const group = managedSkills.filter((s) => s.scope === scope);
-                                if (group.length === 0) {
-                                    return null;
-                                }
-                                return (
-                                    <div key={scope} className="space-y-1">
-                                        <p
-                                            className="text-[11px] font-medium"
-                                            style={{ color: "var(--vscode-foreground)", opacity: 0.7 }}
-                                        >
-                                            {scope === "project" ? "Project" : "Global"}
-                                        </p>
-                                        {scope === "user" && (
-                                            <p className="text-[10px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                                                Global skills are off by default — enable the ones you want to use.
-                                            </p>
-                                        )}
-                                        {group.map((skill, i) => (
-                                            <SkillRow
-                                                key={`${skill.scope}:${skill.name}:${i}`}
-                                                skill={skill}
-                                                busy={busySkills.has(`${skill.scope}:${skill.name.toLowerCase()}`)}
-                                                onToggle={(enabled) => handleToggleSkill(skill, enabled)}
-                                                onDelete={() => handleDeleteSkill(skill)}
-                                            />
-                                        ))}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {/* Web Search — Bedrock only: Tavily key controls. Anthropic/Proxy auth uses
-                Anthropic's first-party web tools and needs no UI. */}
-            {view === "web" && isAwsBedrock && (
-                <div className="flex-1 overflow-y-auto p-5 space-y-3">
-                    {/* Bedrock: enable toggle (gated on Tavily key). */}
-                    <div className="flex items-center justify-between">
-                        <div className="pr-3">
-                            <p className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>
-                                Enable web search
-                            </p>
-                            <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                                AWS Bedrock has no built-in web tools. Provide a Tavily API key to enable web_search and web_fetch.
-                            </p>
-                        </div>
-                        <ToggleGroup
-                            options={["Off", "On"]}
-                            selected={isBedrockWebSearchOn ? "On" : "Off"}
-                            onSelect={(label) => handleBedrockWebSearchToggle(label === "On")}
-                            compact
-                            disabled={tavilyStatus.kind === 'saving'}
-                        />
-                    </div>
-
-                    {tavilyInputOpen && (
-                        <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type={showTavilyKey ? "text" : "password"}
-                                    value={tavilyDraft}
-                                    onChange={(e) => {
-                                        setTavilyDraft(e.target.value);
-                                        if (tavilyStatus.kind !== 'idle') {
-                                            setTavilyStatus({ kind: 'idle' });
-                                        }
-                                    }}
-                                    aria-label="Tavily API key"
-                                    placeholder="tvly-..."
-                                    className="flex-1 px-2 py-1 text-[12px] rounded-md"
-                                    style={{
-                                        backgroundColor: "var(--vscode-input-background)",
-                                        color: "var(--vscode-input-foreground)",
-                                        border: "1px solid var(--vscode-input-border)",
-                                        outline: "none",
-                                    }}
-                                    spellCheck={false}
-                                    autoComplete="off"
-                                    autoFocus
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowTavilyKey((v) => !v)}
-                                    className="flex items-center justify-center w-7 h-7 rounded-md"
-                                    style={{
-                                        background: "transparent",
-                                        color: "var(--vscode-descriptionForeground)",
-                                        border: "1px solid transparent",
-                                        cursor: "pointer",
-                                    }}
-                                    aria-label={showTavilyKey ? "Hide key" : "Show key"}
-                                    title={showTavilyKey ? "Hide key" : "Show key"}
-                                >
-                                    <Codicon name={showTavilyKey ? "eye-closed" : "eye"} />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleTavilySave}
-                                    disabled={!tavilyDirty || tavilyStatus.kind === 'saving' || !tavilyDraft.trim()}
-                                    className="px-3 py-1 rounded-md text-xs font-medium transition-colors"
-                                    style={{
-                                        backgroundColor: tavilyDirty && tavilyDraft.trim() ? "var(--vscode-button-background)" : "var(--vscode-button-secondaryBackground)",
-                                        color: tavilyDirty && tavilyDraft.trim() ? "var(--vscode-button-foreground)" : "var(--vscode-button-secondaryForeground)",
-                                        border: "none",
-                                        cursor: tavilyDirty && tavilyDraft.trim() && tavilyStatus.kind !== 'saving' ? "pointer" : "not-allowed",
-                                        opacity: tavilyDirty && tavilyDraft.trim() ? 1 : 0.6,
-                                    }}
-                                >
-                                    {tavilyStatus.kind === 'saving' ? 'Saving…' : 'Save'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {!tavilyInputOpen && tavilyKey && (
-                        <div className="flex items-center justify-between">
-                            <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                                Tavily key saved.
-                            </p>
-                            <button
-                                type="button"
-                                onClick={handleEditTavilyKey}
-                                className="text-[11px] inline-flex items-center gap-1 transition-colors"
-                                style={{
-                                    color: "var(--vscode-textLink-foreground)",
-                                    background: "transparent",
-                                    border: "none",
-                                    padding: 0,
-                                    cursor: "pointer",
-                                }}
-                            >
-                                <Codicon name="edit" />
-                                Edit key
-                            </button>
-                        </div>
-                    )}
-
-                    {tavilyStatus.kind === 'saved' && (
-                        <p className="text-[11px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                            {tavilyStatus.message}
-                        </p>
-                    )}
-                    {tavilyStatus.kind === 'error' && (
-                        <p className="text-[11px]" style={{ color: "var(--vscode-errorForeground)" }}>
-                            {tavilyStatus.message}
-                        </p>
-                    )}
-
-                    <button
-                        type="button"
-                        onClick={handleOpenTavilySignup}
-                        className="text-[11px] inline-flex items-center gap-1 transition-colors"
-                        style={{
-                            color: "var(--vscode-textLink-foreground)",
-                            background: "transparent",
-                            border: "none",
-                            padding: 0,
-                            cursor: "pointer",
-                        }}
-                    >
-                        <Codicon name="link-external" />
-                        Get a free Tavily API key
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleOpenTavilyMarketplace}
-                        className="text-[11px] inline-flex items-center gap-1 transition-colors"
-                        style={{
-                            color: "var(--vscode-textLink-foreground)",
-                            background: "transparent",
-                            border: "none",
-                            padding: 0,
-                            cursor: "pointer",
-                        }}
-                        title="Subscribe to Tavily Enterprise via AWS Marketplace and bill through your AWS account. Paste the issued API key above."
-                    >
-                        <Codicon name="link-external" />
-                        Or subscribe via AWS Marketplace
-                    </button>
-                </div>
-            )}
-
-            {/* Account */}
-            {view === "account" && (
-                <div className="flex-1 overflow-y-auto p-5">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>Sign out</p>
-                            <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                                {isByok
-                                    ? "Clear MI Copilot credentials stored by this extension"
-                                    : "Sign out of MI Copilot while staying signed in to the WSO2 platform"}
-                            </p>
-                        </div>
-                        <button
-                            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium shrink-0 ml-4 transition-colors"
-                            style={{
-                                color: "var(--vscode-errorForeground)",
-                                backgroundColor: "var(--vscode-inputValidation-errorBackground)",
-                                border: "1px solid var(--vscode-inputValidation-errorBorder)",
-                            }}
-                            onClick={handleLogout}
-                        >
-                            <Codicon name="sign-out" />
-                            Sign out
-                        </button>
-                    </div>
+                    {categoryContent(activeCategory)}
                 </div>
             )}
         </div>
@@ -763,38 +841,49 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
 
 // --- Helper Components ---
 
-/** Tappable row in the settings root that pushes a category sub-page. */
+/**
+ * Category entry — doubles as a drill-down list row (chevron, navigates on click)
+ * and a nav-rail item (`active` highlight, `showChevron={false}`).
+ */
 function CategoryRow({
     icon,
     label,
     badge,
     onClick,
+    active = false,
+    showChevron = true,
 }: {
     icon: string;
     label: string;
     /** Optional count shown as a pill (e.g. number of skills). null/0 hides it. */
     badge?: number | null;
     onClick: () => void;
+    /** Highlight as the selected item (rail layout). */
+    active?: boolean;
+    /** Trailing chevron — shown in the drill-down list, hidden in the rail. */
+    showChevron?: boolean;
 }) {
     const [hover, setHover] = useState(false);
+    const backgroundColor = active
+        ? "var(--vscode-list-activeSelectionBackground)"
+        : hover
+            ? "var(--vscode-list-hoverBackground)"
+            : "transparent";
+    const color = active ? "var(--vscode-list-activeSelectionForeground)" : "var(--vscode-foreground)";
     return (
         <button
             type="button"
             onClick={onClick}
+            aria-current={active ? "page" : undefined}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left"
-            style={{
-                backgroundColor: hover ? "var(--vscode-list-hoverBackground)" : "transparent",
-                color: "var(--vscode-foreground)",
-                border: "none",
-                cursor: "pointer",
-            }}
+            style={{ backgroundColor, color, border: "none", cursor: "pointer" }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
         >
-            <span className="shrink-0 flex items-center justify-center" style={{ width: 18, opacity: 0.85 }}>
+            <span className="shrink-0 flex items-center justify-center" style={{ width: 18, opacity: active ? 1 : 0.85 }}>
                 <Codicon name={icon} />
             </span>
-            <span className="flex-1 text-[13px] font-medium">{label}</span>
+            <span className="flex-1 text-[13px] font-medium truncate">{label}</span>
             {badge != null && badge > 0 && (
                 <span
                     className="text-[10px] px-1.5 py-px rounded-full shrink-0"
@@ -803,9 +892,11 @@ function CategoryRow({
                     {badge}
                 </span>
             )}
-            <span className="shrink-0" style={{ opacity: 0.5 }}>
-                <Codicon name="chevron-right" />
-            </span>
+            {showChevron && (
+                <span className="shrink-0" style={{ opacity: 0.5 }}>
+                    <Codicon name="chevron-right" />
+                </span>
+            )}
         </button>
     );
 }
