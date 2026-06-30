@@ -1,3 +1,0 @@
-<!ELEMENT author (#PCDATA)>
-<!ENTITY writer PUBLIC "public id" "entity uri">
-<!ENTITY copyright SYSTEM "uri">

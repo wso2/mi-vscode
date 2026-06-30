@@ -1,2 +1,0 @@
-<!ELEMENT mixedElement (#PCDATA)>
-<!ELEMENT notMixed ANY>

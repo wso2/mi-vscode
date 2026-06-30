@@ -1,5 +1,0 @@
-element foo {
-  element bar {
-    attribute xml:base{text}
-  }
-}

@@ -1,5 +1,0 @@
-<{{tag}} {{#configKey}}configKey="{{{configKey}}}"{{/configKey}}>
-    {{#parameters}}
-    <{{{name}}} {{#value}}{{#namespaces}} xmlns:{{{prefix}}}="{{{uri}}}"{{/namespaces}}>{{#isCDATA}}<![CDATA[{{{value}}}]]>{{/isCDATA}}{{^isCDATA}}{{#isExpression}}{{value}}{{/isExpression}}{{^isExpression}}{{{value}}}{{/isExpression}}{{/isCDATA}}{{/value}}</{{{name}}}>
-    {{/parameters}}
-</{{tag}}>

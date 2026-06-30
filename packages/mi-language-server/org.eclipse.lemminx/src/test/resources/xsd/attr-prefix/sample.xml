@@ -1,4 +1,0 @@
-<!-- sample.xml (✘error version) -->
-<sample xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xmlns:test="test-attrs" xsi:noNamespaceSchemaLocation="sample.xsd"
-	test:label="" />

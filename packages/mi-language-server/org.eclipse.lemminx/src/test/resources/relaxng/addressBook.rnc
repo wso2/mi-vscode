@@ -1,8 +1,0 @@
-element addressBook {
-  element card {
-    element name { text },
-    element email { text },
-    element age { text }*,
-    attribute id { text }*
-  }*
-}
