@@ -705,28 +705,86 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
         </div>
     );
 
+    // Auth method shown on the Account page. Derived from the same signals as the
+    // header AuthProviderChip: isByok = own Anthropic key OR Bedrock; isAwsBedrock
+    // narrows to Bedrock. Neither = signed in via WSO2 (free with quota).
+    const authMethod = isAwsBedrock
+        ? {
+            icon: "cloud",
+            label: "AWS Bedrock",
+            detail: "Using your AWS Bedrock credentials — usage is billed to your AWS account.",
+        }
+        : isByok
+            ? {
+                icon: "key",
+                label: "Anthropic API key",
+                detail: "Using your own Anthropic API key — usage is billed to you.",
+            }
+            : {
+                icon: "account",
+                label: "WSO2 (MI Copilot)",
+                detail: "Signed in via WSO2 — free with a usage quota.",
+            };
+
     const renderAccount = () => (
-        <div className="flex items-center justify-between">
+        <div className="space-y-5">
+            {/* How the user is authenticated */}
             <div>
-                <p className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>Sign out</p>
-                <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
-                    {isByok
-                        ? "Clear MI Copilot credentials stored by this extension"
-                        : "Sign out of MI Copilot while staying signed in to the WSO2 platform"}
-                </p>
+                <h3
+                    className="text-[11px] font-medium uppercase tracking-wider mb-2"
+                    style={{ color: "var(--vscode-descriptionForeground)" }}
+                >
+                    Signed in with
+                </h3>
+                <div
+                    className="flex items-center gap-3 p-3 rounded-md"
+                    style={{ border: "1px solid var(--vscode-panel-border)" }}
+                >
+                    <span
+                        className="shrink-0 flex items-center justify-center rounded-md"
+                        style={{
+                            width: 32,
+                            height: 32,
+                            backgroundColor: "var(--vscode-badge-background)",
+                            color: "var(--vscode-badge-foreground)",
+                        }}
+                    >
+                        <Codicon name={authMethod.icon} />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[13px] font-medium" style={{ color: "var(--vscode-foreground)" }}>
+                            {authMethod.label}
+                        </p>
+                        <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                            {authMethod.detail}
+                        </p>
+                    </div>
+                </div>
             </div>
-            <button
-                className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium shrink-0 ml-4 transition-colors"
-                style={{
-                    color: "var(--vscode-errorForeground)",
-                    backgroundColor: "var(--vscode-inputValidation-errorBackground)",
-                    border: "1px solid var(--vscode-inputValidation-errorBorder)",
-                }}
-                onClick={handleLogout}
-            >
-                <Codicon name="sign-out" />
-                Sign out
-            </button>
+
+            {/* Sign out */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <p className="text-[13px]" style={{ color: "var(--vscode-foreground)" }}>Sign out</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: "var(--vscode-descriptionForeground)" }}>
+                        {isByok
+                            ? "Clear MI Copilot credentials stored by this extension"
+                            : "Sign out of MI Copilot while staying signed in to the WSO2 platform"}
+                    </p>
+                </div>
+                <button
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium shrink-0 ml-4 transition-colors"
+                    style={{
+                        color: "var(--vscode-errorForeground)",
+                        backgroundColor: "var(--vscode-inputValidation-errorBackground)",
+                        border: "1px solid var(--vscode-inputValidation-errorBorder)",
+                    }}
+                    onClick={handleLogout}
+                >
+                    <Codicon name="sign-out" />
+                    Sign out
+                </button>
+            </div>
         </div>
     );
 
