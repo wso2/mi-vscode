@@ -1,0 +1,89 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: release
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+        cache: 'maven'
+    - name: Build on Linux
+      if: runner.os == 'Linux'
+      run: ./mvnw -B clean install
+
+    - name: Get version
+      id: ls
+      run: |
+        filePath=$(ls org.eclipse.lemminx/target/mi-language-server-*.jar | grep -v tests | head -n 1)
+        file=$(basename "$filePath")
+        fileName=${file%.jar}
+        version=${fileName#mi-language-server-}
+
+        echo $version
+        echo "version=$version" >> $GITHUB_OUTPUT
+        echo "fileName=$fileName" >> $GITHUB_OUTPUT
+
+    - name: zip the LS files
+      run: zip -r ${{ steps.ls.outputs.fileName }}.zip org.eclipse.lemminx/target/*.jar -x org.eclipse.lemminx/target/*tests.jar -y
+
+    - name: Save ls
+      uses: actions/upload-artifact@v4
+      id: artifact-upload
+      with:
+        path: ${{ steps.ls.outputs.fileName }}.zip
+        name: ${{ steps.ls.outputs.fileName }}.zip
+    - name: Create a release in repo
+      run: |
+        set -euo pipefail
+        createResponse=$(curl --fail-with-body -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization:token ${{ secrets.GIT_BOT_TOKEN }}" \
+          -d '{"tag_name":"v${{ steps.ls.outputs.version }}", "draft":false, "name": "Release v${{ steps.ls.outputs.version }}", "prerelease":true}' \
+          https://api.github.com/repos/${{ github.repository }}/releases)
+        id=$(echo "$createResponse" | jq -r '.id // empty')
+        if [ -z "$id" ]; then
+          echo "Failed to parse release id from response:"
+          echo "$createResponse"
+          exit 1
+        fi
+        curl --fail-with-body -X POST \
+          -H "Authorization:token ${{ secrets.GIT_BOT_TOKEN }}" \
+          -H "Content-Type:application/octet-stream" \
+          --data-binary @${{ steps.ls.outputs.fileName }}.zip \
+          "https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=${{ steps.ls.outputs.fileName }}.zip"
+
+    - name: Create sync PR from stable/mi to main
+      if: github.ref == 'refs/heads/stable/mi'
+      env:
+        GH_TOKEN: ${{ secrets.GIT_BOT_TOKEN }}
+      run: |
+        git fetch --unshallow origin main stable/mi 2>/dev/null || git fetch origin main stable/mi
+        commits=$(git rev-list --count origin/main..origin/stable/mi)
+        if [ "$commits" -eq 0 ]; then
+          echo "No new commits on stable/mi compared to main — skipping PR creation."
+          exit 0
+        fi
+        existing=$(gh pr list --repo ${{ github.repository }} --base main --head stable/mi --state open --json number --jq '.[0].number // empty')
+        if [ -n "$existing" ]; then
+          echo "An open PR from stable/mi to main already exists: #$existing"
+          exit 0
+        fi
+        gh pr create \
+          --repo ${{ github.repository }} \
+          --base main \
+          --head stable/mi \
+          --title "Sync stable/mi to main after release v${{ steps.ls.outputs.version }}" \
+          --body "Automated PR to sync \`stable/mi\` into \`main\` following the successful release of v${{ steps.ls.outputs.version }}."

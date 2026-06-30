@@ -1,0 +1,110 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "oneOf": [
+        {
+            "id": "http://wso2jsonschema.org",
+            "type": "object",
+            "properties": {
+                "CreditCard": {
+                    "id": "http://wso2jsonschema.org/CreditCard",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "CreditCard"
+            ]
+        },
+        {
+            "id": "http://wso2jsonschema.org",
+            "type": "object",
+            "properties": {
+                "DigitalWallet": {
+                    "oneOf": [
+                        {
+                            "id": "http://wso2jsonschema.org/DigitalWallet",
+                            "type": "object",
+                            "properties": {
+                                "PayPal": {
+                                    "id": "http://wso2jsonschema.org/DigitalWallet/PayPal",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "PayPal"
+                            ]
+                        },
+                        {
+                            "id": "http://wso2jsonschema.org/DigitalWallet",
+                            "type": "object",
+                            "properties": {
+                                "CryptoWallet": {
+                                    "oneOf": [
+                                        {
+                                            "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet",
+                                            "type": "object",
+                                            "properties": {
+                                                "Bitcoin": {
+                                                    "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet/Bitcoin",
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "Bitcoin"
+                                            ]
+                                        },
+                                        {
+                                            "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet",
+                                            "type": "object",
+                                            "properties": {
+                                                "Ethereum": {
+                                                    "oneOf": [
+                                                        {
+                                                            "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet/Ethereum",
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "ERC20Token": {
+                                                                    "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet/Ethereum/ERC20Token",
+                                                                    "type": "string"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "ERC20Token"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet/Ethereum",
+                                                            "type": "object",
+                                                            "properties": {
+                                                                "NativeETH": {
+                                                                    "id": "http://wso2jsonschema.org/DigitalWallet/CryptoWallet/Ethereum/NativeETH",
+                                                                    "type": "number"
+                                                                }
+                                                            },
+                                                            "required": [
+                                                                "NativeETH"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "Ethereum"
+                                            ]
+                                        }
+                                    ]
+                                }
+                            },
+                            "required": [
+                                "CryptoWallet"
+                            ]
+                        }
+                    ]
+                }
+            },
+            "required": [
+                "DigitalWallet"
+            ]
+        }
+    ],
+    "title": "PaymentMethod"
+}

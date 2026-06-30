@@ -1,0 +1,15 @@
+{{#isRegistry}}
+    {{#hasScriptKeys}}
+    <script {{#description}}description="{{description}}" {{/description}}{{#mediateFunction}}function="{{mediateFunction}}" {{/mediateFunction}}{{#scriptKey}}key="{{value}}"{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}} {{/scriptKey}}{{#scriptLanguage}}language="{{scriptLanguage}}"{{/scriptLanguage}} >
+        {{#scriptKeys}}
+        <include {{#keyName}}key="{{keyName}}"{{/keyName}} />
+        {{/scriptKeys}}
+    </script>
+    {{/hasScriptKeys}}
+    {{^hasScriptKeys}}
+    <script {{#description}}description="{{description}}" {{/description}}{{#mediateFunction}}function="{{mediateFunction}}" {{/mediateFunction}}{{#scriptKey}}key="{{value}}"{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}} {{/scriptKey}}{{#scriptLanguage}}language="{{scriptLanguage}}"{{/scriptLanguage}}/>
+    {{/hasScriptKeys}}
+    {{/isRegistry}}
+    {{^isRegistry}}
+    <script {{#description}}description="{{description}}" {{/description}}{{#scriptLanguage}}language="{{scriptLanguage}}" {{/scriptLanguage}}><![CDATA[{{#scriptBody}}{{{scriptBody}}}{{/scriptBody}}]]></script>
+    {{/isRegistry}}

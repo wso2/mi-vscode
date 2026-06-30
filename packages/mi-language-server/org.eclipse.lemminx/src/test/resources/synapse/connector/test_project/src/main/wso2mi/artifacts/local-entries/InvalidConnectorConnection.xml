@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<localEntry key="HttpsCon" xmlns="http://ws.apache.org/ns/synapse">
+  <invalid.init>
+    <connectionType>HTTPS</connectionType>
+    <name>Invalid_Conn</name>
+  </invalid.init>
+</localEntry>

@@ -1,0 +1,41 @@
+<query id="select_all_student_query" useConfig="TestDS">
+        <sql>SELECT name, id FROM student</sql>
+        <result element="studentCollection" rowName="student">
+            <element column="name" name="name" xsdType="xs:string"/>
+            <element column="id" name="id" xsdType="xs:numeric"/>
+        </result>
+    </query>
+    <resource method="GET" path="student">
+        <call-query href="select_all_student_query"/>
+    </resource>
+    <query id="insert_student_query" useConfig="TestDS">
+        <sql>INSERT INTO student (name,id) VALUES (?,?)</sql>
+        <param name="name" ordinal="1" paramType="SCALAR" sqlType="STRING" type="IN"/>
+        <param name="id" ordinal="2" paramType="SCALAR" sqlType="NUMERIC" type="IN"/>
+    </query>
+    <resource method="POST" path="student">
+        <call-query href="insert_student_query">
+            <with-param name="name" query-param="name"/>
+            <with-param name="id" query-param="id"/>
+        </call-query>
+    </resource>
+    <query id="update_teacher_query" useConfig="TestDS">
+        <sql>UPDATE teacher SET name=? WHERE id=?</sql>
+        <param name="name" ordinal="1" paramType="SCALAR" sqlType="STRING" type="IN"/>
+        <param name="id" ordinal="2" paramType="SCALAR" sqlType="NUMERIC" type="IN"/>
+    </query>
+    <resource method="PUT" path="teacher">
+        <call-query href="update_teacher_query">
+            <with-param name="name" query-param="name"/>
+            <with-param name="id" query-param="id"/>
+        </call-query>
+    </resource>
+    <query id="delete_teacher_query" useConfig="TestDS">
+        <sql>DELETE FROM teacher WHERE id=?</sql>
+        <param name="id" ordinal="1" paramType="SCALAR" sqlType="NUMERIC" type="IN"/>
+    </query>
+    <resource method="DELETE" path="teacher">
+        <call-query href="delete_teacher_query">
+            <with-param name="id" query-param="id"/>
+        </call-query>
+    </resource>

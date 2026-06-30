@@ -1,0 +1,18 @@
+    <dataServiceCall {{#description}}description="{{description}}"{{/description}} {{#serviceName}}serviceName="{{serviceName}}"{{/serviceName}}>
+        {{^hasOperations}}
+        <operations type="{{operationType}}"/>
+        {{/hasOperations}}
+        {{#hasOperations}}
+        <operations type="{{operationType}}">
+            {{#operations}}
+            <operation name="{{operationName}}">
+                {{#DSSProperties}}
+                <param name="{{propertyName}}" {{#propertyValue}}value="{{propertyValue}}"{{/propertyValue}} {{#propertyExpression}}expression="{{propertyExpression}}" evaluator="xml"{{/propertyExpression}} />
+                {{/DSSProperties}}
+            </operation>
+            {{/operations}}
+        </operations>
+        {{/hasOperations}}
+        <source type="{{sourceType}}"/>
+        <target {{#targetProperty}}name="{{targetProperty}}" {{/targetProperty}}{{#targetType}}type="{{targetType}}{{/targetType}}"/>
+    </dataServiceCall>

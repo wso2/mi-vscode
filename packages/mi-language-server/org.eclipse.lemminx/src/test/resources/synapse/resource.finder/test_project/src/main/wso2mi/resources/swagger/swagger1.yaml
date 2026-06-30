@@ -1,0 +1,55 @@
+openapi: 3.0.1
+info:
+  title: CurrencyConversionAPI
+  description: API Definition of CalculatorAPI
+  version: 1.0.0
+servers:
+- url: http://localhost:8290/currencyConversion
+paths:
+  /convert:
+    get:
+      parameters:
+      - name: from1
+        in: query
+        schema:
+          type: string
+      - name: to
+        in: query
+        schema:
+          type: string
+      responses:
+        default:
+          description: Default response
+  /sample:
+    get:
+      responses:
+        default:
+          description: Default response
+    put:
+      requestBody:
+        description: Sample Payload
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: object
+        required: false
+      responses:
+        default:
+          description: Default response31313
+    post:
+      requestBody:
+        description: Sample Payload131414
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: object
+        required: false
+      responses:
+        default:
+          description: Default response1441

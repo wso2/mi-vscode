@@ -1,0 +1,24 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "id": "http://wso2jsonschema.org",
+    "type": "object",
+    "properties": {
+        "bigInt": {
+            "id": "http://wso2jsonschema.org/bigInt",
+            "type": "number"
+        },
+        "smallInt": {
+            "id": "http://wso2jsonschema.org/smallInt",
+            "type": "number"
+        },
+        "largeFloat": {
+            "id": "http://wso2jsonschema.org/largeFloat",
+            "type": "number"
+        },
+        "smallFloat": {
+            "id": "http://wso2jsonschema.org/smallFloat",
+            "type": "number"
+        }
+    },
+    "title": "root"
+}

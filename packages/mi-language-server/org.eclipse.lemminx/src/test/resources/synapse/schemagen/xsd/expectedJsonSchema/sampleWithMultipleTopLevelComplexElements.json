@@ -1,0 +1,72 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "oneOf": [
+        {
+            "id": "http://wso2jsonschema.org/Address",
+            "type": "object",
+            "properties": {
+                "Street": {
+                    "id": "http://wso2jsonschema.org/Address/Street",
+                    "type": "string"
+                },
+                "City": {
+                    "id": "http://wso2jsonschema.org/Address/City",
+                    "type": "string"
+                },
+                "PostalCode": {
+                    "id": "http://wso2jsonschema.org/Address/PostalCode",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "Street",
+                "City",
+                "PostalCode"
+            ],
+            "title": "Address"
+        },
+        {
+            "id": "http://wso2jsonschema.org/Contact",
+            "type": "object",
+            "properties": {
+                "Email": {
+                    "id": "http://wso2jsonschema.org/Contact/Email",
+                    "type": "string"
+                },
+                "Phone": {
+                    "id": "http://wso2jsonschema.org/Contact/Phone",
+                    "type": "string"
+                }
+            },
+            "required": [
+                "Email",
+                "Phone"
+            ],
+            "title": "Contact"
+        },
+        {
+            "id": "http://wso2jsonschema.org/Person",
+            "type": "object",
+            "properties": {
+                "FirstName": {
+                    "id": "http://wso2jsonschema.org/Person/FirstName",
+                    "type": "string"
+                },
+                "LastName": {
+                    "id": "http://wso2jsonschema.org/Person/LastName",
+                    "type": "string"
+                },
+                "Age": {
+                    "id": "http://wso2jsonschema.org/Person/Age",
+                    "type": "number"
+                }
+            },
+            "required": [
+                "FirstName",
+                "LastName",
+                "Age"
+            ],
+            "title": "Person"
+        }
+    ]
+}

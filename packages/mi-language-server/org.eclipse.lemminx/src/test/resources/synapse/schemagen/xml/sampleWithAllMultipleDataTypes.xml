@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+ ~  Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ ~
+ ~  WSO2 LLC. licenses this file to you under the Apache License,
+ ~  Version 2.0 (the "License"); you may not use this file except
+ ~  in compliance with the License.
+ ~  You may obtain a copy of the License at
+ ~
+ ~    http://www.apache.org/licenses/LICENSE-2.0
+ ~
+ ~  Unless required by applicable law or agreed to in writing,
+ ~  software distributed under the License is distributed on an
+ ~  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ ~  KIND, either express or implied.  See the License for the
+ ~  specific language governing permissions and limitations
+ ~  under the License.
+-->
+
+<SampleData>
+    <StringValue>John Doe</StringValue>
+    <NormalizedStringValue>John_Doe</NormalizedStringValue>
+    <TokenValue>JohnDoe123</TokenValue>
+    <IDValue>ID_001</IDValue>
+    <IDREFValue>IDREF_001</IDREFValue>
+    <NCNameValue>NCName_JohnDoe</NCNameValue>
+    <NMTOKENValue>Token_ABC123</NMTOKENValue>
+    <IntegerValue>12345</IntegerValue>
+    <UnsignedIntValue>4294967295</UnsignedIntValue>
+    <LongValue>9223372036854775807</LongValue>
+    <BooleanValue>false</BooleanValue>
+    <DecimalValue>98765.4321</DecimalValue>
+    <FloatValue>12345.67</FloatValue>
+    <DoubleValue>3.141592653589793</DoubleValue>
+    <DateValue>2025-03-24</DateValue>
+    <TimeValue>18:30:45</TimeValue>
+    <DateTimeValue>2025-03-24T18:30:45</DateTimeValue>
+    <DurationValue>P2Y6M5DT12H35M30S</DurationValue>
+</SampleData>

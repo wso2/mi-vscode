@@ -1,0 +1,81 @@
+{
+  "name": "NTLM",
+  "type":"mediator",
+  "title": "NTLM Mediator",
+  "help": "Enables access to NTLM-protected services.",
+  "elements": [
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Properties",
+        "elements": [
+          {
+            "type": "attribute",
+            "value": {
+              "name": "username",
+              "displayName": "Username",
+              "inputType": "stringOrExpression",
+              "expressionType":"xpath/jsonPath",
+              "required": true,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "password",
+              "displayName": "Password",
+              "inputType": "stringOrExpression",
+              "expressionType":"xpath/jsonPath",
+              "required": true,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "host",
+              "displayName": "Host",
+              "inputType": "stringOrExpression",
+              "expressionType":"xpath/jsonPath",
+              "required": true,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "domain",
+              "displayName": "Domain",
+              "inputType": "stringOrExpression",
+              "expressionType":"xpath/jsonPath",
+              "required": true,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "ntlmVersion",
+              "displayName": "NTLM Version",
+              "inputType": "stringOrExpression",
+              "expressionType":"xpath/jsonPath",
+              "required": true,
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "description",
+              "displayName": "Description",
+              "inputType": "string",
+              "required": false,
+              "helpTip": ""
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

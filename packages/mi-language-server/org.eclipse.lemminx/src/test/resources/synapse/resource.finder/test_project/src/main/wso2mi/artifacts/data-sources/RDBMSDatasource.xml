@@ -1,0 +1,11 @@
+<datasource>
+    <name>RDBMSDatasource</name>
+    <definition type="RDBMS">
+        <configuration>
+            <driverClassName>com.mysql.jdbc.Driver</driverClassName>
+            <url>jdbc:mysql://localhost:3306/TestDB</url>
+            <username>root</username>
+            <password>root</password>
+        </configuration>
+    </definition>
+</datasource>

@@ -1,0 +1,10 @@
+<propertyGroup {{#description}}description="{{description}}"{{/description}}>
+    {{#properties}}
+    {{#isInlineOMValue}}
+    <property {{#newPropertyName}}name="{{newPropertyName}}" {{/newPropertyName}}{{#propertyScope}}scope="{{propertyScope}}" {{/propertyScope}}{{#propertyDataType}}type="{{propertyDataType}}" {{/propertyDataType}}{{#expression}}expression="{{expression}}" {{/expression}}{{#propertyAction}}action="{{propertyAction}}" {{/propertyAction}}{{#description}}description="{{description}}" {{/description}}{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}>{{{OMValue}}}</property>
+    {{/isInlineOMValue}}
+    {{^isInlineOMValue}}
+    <property {{#newPropertyName}}name="{{newPropertyName}}" {{/newPropertyName}}{{#propertyScope}}scope="{{propertyScope}}" {{/propertyScope}}{{#propertyDataType}}type="{{propertyDataType}}" {{/propertyDataType}}{{#expression}}expression="{{expression}}" {{/expression}}{{#propertyAction}}action="{{propertyAction}}" {{/propertyAction}}{{#description}}description="{{description}}" {{/description}}{{#value}}value="{{value}}" {{/value}}{{#valueStringPattern}}pattern="{{valueStringPattern}}" {{/valueStringPattern}}{{#valueStringCapturingGroup}}group="{{valueStringCapturingGroup}}" {{/valueStringCapturingGroup}}{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}/>
+    {{/isInlineOMValue}}
+    {{/properties}}
+</propertyGroup>

@@ -1,0 +1,32 @@
+    {{#isNewMediator}}
+    <iterate {{#preservePayload}}{{#attachPath}} attachPath="{{attachPath}}"{{/attachPath}}{{/preservePayload}} {{#continueParent}}continueParent="{{continueParent}}"{{/continueParent}} expression="{{iterateExpression}}"{{#iterateID}} id="{{iterateID}}"{{/iterateID}}{{#preservePayload}} preservePayload="{{preservePayload}}"{{/preservePayload}} {{#sequentialMediation}}sequential="{{sequentialMediation}}"{{/sequentialMediation}} {{#description}}description="{{description}}"{{/description}}{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}>
+        {{#isAnnonymousSequence}}
+        <target>
+            <sequence></sequence>
+        </target>
+        {{/isAnnonymousSequence}}
+        {{^isAnnonymousSequence}}
+        <target sequence="{{sequenceKey}}" />
+        {{/isAnnonymousSequence}}
+    </iterate>
+    {{/isNewMediator}}
+    {{^isNewMediator}}
+    {{#editIterate}}
+    {{#isSelfClosed}}
+    <iterate {{#preservePayload}}{{#attachPath}} attachPath="{{attachPath}}"{{/attachPath}}{{/preservePayload}} {{#continueParent}}continueParent="{{continueParent}}"{{/continueParent}} expression="{{iterateExpression}}"{{#iterateID}} id="{{iterateID}}"{{/iterateID}} {{#preservePayload}}preservePayload="{{preservePayload}}"{{/preservePayload}} {{#sequentialMediation}}sequential="{{sequentialMediation}}" {{/sequentialMediation}} {{#description}}description="{{description}}"{{/description}}{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}/>
+    {{/isSelfClosed}}
+    {{^isSelfClosed}}
+    <iterate {{#preservePayload}}{{#attachPath}} attachPath="{{attachPath}}"{{/attachPath}}{{/preservePayload}} {{#continueParent}}continueParent="{{continueParent}}"{{/continueParent}} expression="{{iterateExpression}}"{{#iterateID}} id="{{iterateID}}"{{/iterateID}} {{#preservePayload}}preservePayload="{{preservePayload}}"{{/preservePayload}} {{#sequentialMediation}}sequential="{{sequentialMediation}}" {{/sequentialMediation}} {{#description}}description="{{description}}"{{/description}}{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}>
+    {{/isSelfClosed}}
+    {{/editIterate}}
+    {{#editTarget}}
+    {{#isAnnonymousSequence}}
+    <target>
+        <sequence></sequence>
+    </target>
+    {{/isAnnonymousSequence}}
+    {{^isAnnonymousSequence}}
+    <target sequence="{{sequenceKey}}" />
+    {{/isAnnonymousSequence}}
+    {{/editTarget}}
+    {{/isNewMediator}}

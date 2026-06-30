@@ -1,0 +1,18 @@
+    <brs:rule description="{{description}}" xmlns:brs="http://wso2.org/carbon/rules">
+        <brs:source {{#sourceXPath}}xpath="{{value}}"{{#namespaces}} xmlns:{{prefix}}="{{uri}}"{{/namespaces}}{{/sourceXPath}}>{{sourceValue}}</brs:source>
+        <brs:target action="{{targetAction}}" resultXpath="{{targetResultXPath}}" xpath="{{targetXPath}}"{{#targetNamespaces}} xmlns:{{prefix}}="{{uri}}"{{/targetNamespaces}}>{{targetValue}}</brs:target>
+        <brs:ruleSet>
+            <brs:properties />
+            <brs:rule resourceType="{{ruleSetType}}"  sourceType="{{ruleSetSourceType}}">{{#ruleSetSourceCode}}<![CDATA[{{{ruleSetSourceCode}}}]]>{{/ruleSetSourceCode}}{{#inlineRegistryKey}}{{inlineRegistryKey}}{{/inlineRegistryKey}}{{#ruleSetURL}}{{ruleSetURL}}{{/ruleSetURL}}</brs:rule>
+        </brs:ruleSet>
+        <brs:input {{#inputNamespace}}namespace="{{inputNamespace}}"{{/inputNamespace}} {{#inputWrapperName}}wrapperElementName="{{inputWrapperName}}"{{/inputWrapperName}} >
+            {{#facts}}
+            <brs:fact elementName="{{elementName}}" {{#inputNamespace}}namespace="{{inputNamespace}}"{{/inputNamespace}} type="{{factType}}" xpath="{{propertyExpression}}" />
+            {{/facts}}
+        </brs:input>
+        <brs:output {{#outputNamespace}}namespace="{{outputNamespace}}"{{/outputNamespace}} {{#outputWrapperName}}wrapperElementName="{{outputWrapperName}}"{{/outputWrapperName}} >
+            {{#results}}
+            <brs:fact elementName="{{resultName}}" {{#outputNamespace}}namespace="{{outputNamespace}}"{{/outputNamespace}} type="{{resultType}}" />
+            {{/results}}
+        </brs:output>
+    </brs:rule>

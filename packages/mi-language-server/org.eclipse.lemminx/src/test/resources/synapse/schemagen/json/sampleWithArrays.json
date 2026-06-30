@@ -1,0 +1,16 @@
+{
+    "employees": [
+        {
+            "name": "John Doe",
+            "role": "Developer"
+        },
+        {
+            "name": "Jane Smith",
+            "role": "Manager"
+        }
+    ],
+    "locations": [
+        "Techville",
+        "Innovate City"
+    ]
+}

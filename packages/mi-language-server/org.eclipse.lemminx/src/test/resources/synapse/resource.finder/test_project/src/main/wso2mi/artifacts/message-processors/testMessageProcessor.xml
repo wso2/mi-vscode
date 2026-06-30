@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<messageProcessor class="org.apache.synapse.message.processor.impl.sampler.SamplingProcessor" name="testMessageProcessor" messageStore="" xmlns="http://ws.apache.org/ns/synapse">
+	<parameter name="sequence">testSequence1</parameter>
+	<parameter name="interval">1000</parameter>
+	<parameter name="is.active">true</parameter>
+	<parameter name="concurrency">1</parameter>
+</messageProcessor>

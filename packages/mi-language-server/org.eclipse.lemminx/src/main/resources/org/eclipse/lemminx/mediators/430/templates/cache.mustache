@@ -1,0 +1,76 @@
+    {{#isNewMediator}}
+    {{#isCollector}}
+    <cache collector="true" {{#description}}description="{{description}}"{{/description}} {{#is611Compatible}}scope="{{scope}}"{{/is611Compatible}} />
+    {{/isCollector}}
+    {{^isCollector}}
+    {{#is611Compatible}}
+    <cache collector="false" {{#description}}description="{{description}}"{{/description}} hashGenerator="{{hashGeneratorAttribute}}" id="{{id}}" maxMessageSize="{{maxMessageSize}}" scope="{{scope}}" timeout="{{cacheTimeout}}">
+        <onCacheHit {{#sequenceKey}}sequence="{{sequenceKey}}"{{/sequenceKey}} />
+        <implementation maxSize="{{maxEntryCount}}" type="{{implementationType}}" />
+    </cache>
+    {{/is611Compatible}}
+    {{^is611Compatible}}
+    <cache collector="false" {{#description}}description="{{description}}"{{/description}} maxMessageSize="{{maxMessageSize}}" timeout="{{cacheTimeout}}">
+        {{#isAnonymousSequence}}<onCacheHit></onCacheHit>{{/isAnonymousSequence}}
+        {{^isAnonymousSequence}}<onCacheHit sequence="{{sequenceKey}}" />{{/isAnonymousSequence}}
+        {{^isCollector}}
+        {{^is611Compatible}}
+        <protocol type="{{cacheProtocolType}}">
+            <methods>{{cacheProtocolMethods}}</methods>
+            {{#hasHeadersToExcludeInHash}}<headersToExcludeInHash>{{headersToExcludeInHash}}</headersToExcludeInHash>{{/hasHeadersToExcludeInHash}}
+            {{^hasHeadersToExcludeInHash}}<headersToExcludeInHash/>{{/hasHeadersToExcludeInHash}}
+            {{#hasHeadersToIncludeInHash}}<headersToIncludeInHash>{{headersToIncludeInHash}}</headersToIncludeInHash>{{/hasHeadersToIncludeInHash}}
+            {{^hasHeadersToIncludeInHash}}<headersToIncludeInHash/>{{/hasHeadersToIncludeInHash}}
+            <responseCodes>{{responseCodes}}</responseCodes>
+            <enableCacheControl>{{enableCacheControl}}</enableCacheControl>
+            <includeAgeHeader>{{includeAgeHeader}}</includeAgeHeader>
+            <hashGenerator>{{hashGenerator}}</hashGenerator>
+        </protocol>
+        {{/is611Compatible}}
+        {{/isCollector}}
+        <implementation maxSize="{{maxEntryCount}}" />
+    </cache>
+    {{/is611Compatible}}
+    {{/isCollector}}
+    {{/isNewMediator}}
+    {{^isNewMediator}}
+    {{#isEditCache}}
+    {{#isCollector}}
+    <cache collector="true" {{#description}}description="{{description}}"{{/description}} {{#is611Compatible}}scope="{{scope}}"{{/is611Compatible}} />
+    {{/isCollector}}
+    {{^isCollector}}
+    {{#is611Compatible}}
+    <cache collector="false" {{#description}}description="{{description}}"{{/description}} hashGenerator="{{hashGeneratorAttribute}}" id="{{id}}" maxMessageSize="{{maxMessageSize}}" scope="{{scope}}" timeout="{{cacheTimeout}}">
+    {{/is611Compatible}}
+    {{^is611Compatible}}
+    <cache collector="false" {{#description}}description="{{description}}"{{/description}} maxMessageSize="{{maxMessageSize}}" timeout="{{cacheTimeout}}">
+    {{/is611Compatible}}
+    {{/isCollector}}
+    {{/isEditCache}}
+    {{#isEditProtocol}}
+    {{^isCollector}}
+    {{^is611Compatible}}
+    <protocol type="{{cacheProtocolType}}">
+    <methods>{{cacheProtocolMethods}}</methods>
+    {{#hasHeadersToExcludeInHash}}<headersToExcludeInHash>{{headersToExcludeInHash}}</headersToExcludeInHash>{{/hasHeadersToExcludeInHash}}
+    {{^hasHeadersToExcludeInHash}}<headersToExcludeInHash/>{{/hasHeadersToExcludeInHash}}
+    {{#hasHeadersToIncludeInHash}}<headersToIncludeInHash>{{headersToIncludeInHash}}</headersToIncludeInHash>{{/hasHeadersToIncludeInHash}}
+    {{^hasHeadersToIncludeInHash}}<headersToIncludeInHash/>{{/hasHeadersToIncludeInHash}}
+<responseCodes>{{responseCodes}}</responseCodes>
+    <enableCacheControl>{{enableCacheControl}}</enableCacheControl>
+    <includeAgeHeader>{{includeAgeHeader}}</includeAgeHeader>
+    <hashGenerator>{{hashGenerator}}</hashGenerator>
+</protocol>
+    {{/is611Compatible}}
+    {{/isCollector}}
+    {{/isEditProtocol}}
+    {{#isEditImplementation}}
+    {{^isCollector}}
+    <implementation maxSize="{{maxEntryCount}}"{{#is611Compatible}} type="{{implementationType}}"{{/is611Compatible}}/>
+    {{/isCollector}}
+    {{/isEditImplementation}}
+    {{#isEditOnCacheHit}}
+    {{#isAnonymousSequence}}<onCacheHit></onCacheHit>{{/isAnonymousSequence}}
+    {{^isAnonymousSequence}}<onCacheHit sequence="{{sequenceKey}}" />{{/isAnonymousSequence}}
+    {{/isEditOnCacheHit}}
+    {{/isNewMediator}}

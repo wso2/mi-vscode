@@ -1,0 +1,135 @@
+{
+  "name": "log",
+  "type": "mediator",
+  "title": "Log Mediator",
+  "canTryOut": true,
+  "help": "Generates logs for messages. Log details are customisable.",
+  "elements": [
+    {
+      "type": "attribute",
+      "value": {
+        "name": "category",
+        "displayName": "Log Category",
+        "inputType": "combo",
+        "defaultValue": "INFO",
+        "comboValues": [
+          "INFO",
+          "TRACE",
+          "DEBUG",
+          "WARN",
+          "ERROR",
+          "FATAL"
+        ],
+        "required": "true",
+        "helpTip": "Log Category"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "logMessageID",
+        "displayName": "Append Message ID",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Logs the Message ID alongside other selected details.",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "logFullPayload",
+        "displayName": "Append Payload",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Logs the full message payload alongside other selected details.",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "message",
+        "displayName": "Message",
+        "inputType": "expressionTextArea",
+        "defaultValue": "",
+        "required": "false",
+        "helpTip": "You can define a string template like 'Message with ID: ${payload.id}' to generate the log message."
+      }
+    },
+    {
+      "type": "attributeGroup",
+      "value": {
+        "groupName": "Additional Parameters",
+        "isCollapsed": "true",
+        "elements": [
+          {
+            "type": "table",
+            "value": {
+              "name": "properties",
+              "displayName": "Parameters",
+              "description": "Key value pairs to be logged in addition to the message",
+              "tableKey": "propertyName",
+              "tableValue": "propertyValue",
+              "elements": [
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "propertyName",
+                    "displayName": "Name",
+                    "inputType": "string",
+                    "required": false,
+                    "helpTip": ""
+                  }
+                },
+                {
+                  "type": "attribute",
+                  "value": {
+                    "name": "propertyValue",
+                    "displayName": "Value",
+                    "inputType": "stringOrExpression",
+                    "required": false,
+                    "helpTip": ""
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "separator",
+              "displayName": "Parameter Separator",
+              "inputType": "string",
+              "defaultValue": "",
+              "required": "false",
+              "helpTip": "Separator to be used between the additional parameters. By default, a comma is used and the parameters are logged as name1 = value1, name2 = value2"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "traceFilter",
+        "displayName": "Enable Trace Filter",
+        "inputType": "checkbox",
+        "defaultValue": "false",
+        "helpTip": "Enable Trace Filter",
+        "required": "false"
+      }
+    },
+    {
+      "type": "attribute",
+      "value": {
+        "name": "description",
+        "displayName": "Description",
+        "inputType": "string",
+        "defaultValue": "",
+        "required": "false",
+        "helpTip": "Description"
+      }
+    }
+  ]
+}

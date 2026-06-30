@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<endpoint name="testEndpoint1" xmlns="http://ws.apache.org/ns/synapse">
+	<default>
+		<suspendOnFailure>
+			<initialDuration>-1</initialDuration>
+			<progressionFactor>1</progressionFactor>
+		</suspendOnFailure>
+		<markForSuspension>
+			<retriesBeforeSuspension>0</retriesBeforeSuspension>
+		</markForSuspension>
+	</default>
+</endpoint>

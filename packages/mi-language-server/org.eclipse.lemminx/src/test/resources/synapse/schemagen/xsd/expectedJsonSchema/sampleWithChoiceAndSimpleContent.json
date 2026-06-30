@@ -1,0 +1,52 @@
+{
+    "$schema": "http://wso2.org/json-schema/wso2-data-mapper-v5.0.0/schema#",
+    "oneOf": [
+        {
+            "id": "http://wso2jsonschema.org",
+            "type": "object",
+            "properties": {
+                "coloredText": {
+                    "id": "http://wso2jsonschema.org/coloredText",
+                    "type": "object",
+                    "properties": {
+                        "attr_color": {
+                            "id": "http://wso2jsonschema.org/coloredText/attr_color",
+                            "type": "string"
+                        },
+                        "_ELEMVAL": {
+                            "id": "http://wso2jsonschema.org/coloredText/_ELEMVAL",
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "required": [
+                "coloredText"
+            ]
+        },
+        {
+            "id": "http://wso2jsonschema.org",
+            "type": "object",
+            "properties": {
+                "numericValue": {
+                    "id": "http://wso2jsonschema.org/numericValue",
+                    "type": "object",
+                    "properties": {
+                        "attr_unit": {
+                            "id": "http://wso2jsonschema.org/numericValue/attr_unit",
+                            "type": "string"
+                        },
+                        "_ELEMVAL": {
+                            "id": "http://wso2jsonschema.org/numericValue/_ELEMVAL",
+                            "type": "number"
+                        }
+                    }
+                }
+            },
+            "required": [
+                "numericValue"
+            ]
+        }
+    ],
+    "title": "message"
+}

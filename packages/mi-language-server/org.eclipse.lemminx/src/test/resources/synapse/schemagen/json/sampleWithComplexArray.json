@@ -1,0 +1,32 @@
+{
+    "projects": [
+        {
+            "projectId": 101,
+            "projectName": "Website Redesign",
+            "team": [
+                {
+                    "name": "Alice",
+                    "role": "Lead"
+                },
+                {
+                    "name": "Bob",
+                    "role": "Developer"
+                }
+            ]
+        },
+        {
+            "projectId": 102,
+            "projectName": "App Development",
+            "team": [
+                {
+                    "name": "Charlie",
+                    "role": "Manager"
+                },
+                {
+                    "name": "David",
+                    "role": "Designer"
+                }
+            ]
+        }
+    ]
+}

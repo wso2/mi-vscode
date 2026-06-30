@@ -1,0 +1,133 @@
+{
+  "inbound-connector-data": [
+    {
+      "name": "HTTP",
+      "id": "http",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 1,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/http.zip",
+      "description": "Inbuilt HTTP Event Listener",
+      "icon": "http-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/http-inbound.gif"
+    },
+    {
+      "name": "HTTPS",
+      "id": "https",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 2,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/https.zip",
+      "description": "Inbuilt HTTPS Event Listener",
+      "icon": "https-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/https-inbound.gif"
+    },
+    {
+      "name": "JMS",
+      "id": "jms",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 3,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/jms.zip",
+      "description": "Inbuilt JMS Event Listener",
+      "icon": "jms-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/jms-inbound.gif"
+    },
+    {
+      "name": "File",
+      "id": "file",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 4,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/file.zip",
+      "description": "Inbuilt File Event Listener",
+      "icon": "file-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/file-inbound.gif"
+    },
+    {
+      "name": "RabbitMQ",
+      "id": "rabbitmq",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 5,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/rabbitmq.zip",
+      "description": "Inbuilt RabbitMQ Event Listener",
+      "icon": "rabbitmq-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/rabbitmq-inbound.gif"
+    },
+    {
+      "name": "Websocket",
+      "id": "ws",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 6,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/ws.zip",
+      "description": "Inbuilt Websocket Event Listener",
+      "icon": "ws-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/ws-inbound.gif"
+    },
+    {
+      "name": "Secure Websocket",
+      "id": "wss",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 7,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/wss.zip",
+      "description": "Inbuilt Secure Websocket Event Listener",
+      "icon": "wss-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/wss-inbound.gif"
+    },
+    {
+      "name": "MQTT",
+      "id": "mqtt",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 8,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/mqtt.zip",
+      "description": "Inbuilt MQTT Event Listener",
+      "icon": "mqtt-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/mqtt-inbound.gif"
+    },
+    {
+      "name": "HL7",
+      "id": "hl7",
+      "type": "builtin-inbound-endpoint",
+      "version": "1.0.0",
+      "rank": 9,
+      "download_url": "https://github.com/wso2/integration-studio/raw/main/SamplesForVSCode/InbuiltInboundEndpoints/hl7.zip",
+      "description": "Inbuilt HL7 Event Listener",
+      "icon": "hl7-inbound.gif",
+      "icon_url": "https://mi-connectors.wso2.com/icons/hl7-inbound.gif"
+    },
+    {
+      "name": "Amazon Simple Queue Service (Inbound)",
+      "id": "org.wso2.carbon.inbound.amazonsqs.AmazonSQSPollingConsumer",
+      "type": "inbound-endpoint"
+    },
+    {
+      "name": "ISO8583 (Inbound)",
+      "id": "org.wso2.carbon.inbound.iso8583.listening.ISO8583MessageConsumer",
+      "type": "inbound-endpoint"
+    },
+    {
+      "name": "SMPP (Inbound)",
+      "id": "org.wso2.carbon.inbound.smpp.SMPPListeningConsumer",
+      "type": "inbound-endpoint"
+    },
+    {
+      "name": "CDC (Inbound)",
+      "id": "org.wso2.carbon.inbound.cdc.CDCPollingConsumer",
+      "type": "inbound-endpoint"
+    },
+    {
+      "name": "Kafka (Inbound)",
+      "id": "org.wso2.carbon.inbound.kafka.KafkaMessageConsumer",
+      "type": "inbound-endpoint"
+    },
+    {
+      "name": "Salesforce (Inbound)",
+      "id": "org.wso2.carbon.inbound.salesforce.poll.SalesforceStreamData",
+      "type": "inbound-endpoint"
+    }
+  ]
+}
