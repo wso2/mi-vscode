@@ -11,7 +11,9 @@ jobs:
       mi: true
       runTests: true
       runMIE2ETests: true
+      runLSTests: true
       continueOnTrivyFailure: true
+      continueOnLSTestFailure: true
 
   NotifyEditorSuccess:
     name: Notify Editor Team
