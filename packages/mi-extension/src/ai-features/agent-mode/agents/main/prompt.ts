@@ -264,8 +264,16 @@ export interface UserPromptParams {
      * Pre-formatted `<skill_content>` block for a skill the user explicitly
      * invoked via `/skill-name`. When set, it is rendered as a leading
      * `# Activated Skill` reminder so the model follows it for this turn.
+     * When `userActivatedSkillFailed` is set, this instead holds a failure
+     * instruction rendered as a plain `<system-reminder>`.
      */
     userActivatedSkillContent?: string;
+    /**
+     * True when `/skill-name` activation failed to load the skill. Renders
+     * `userActivatedSkillContent` as a plain failure instruction rather than
+     * under the "# Activated Skill / follow the instructions below" framing.
+     */
+    userActivatedSkillFailed?: boolean;
 }
 
 // ============================================================================
@@ -1025,9 +1033,15 @@ ${list}`;
  * substituted, resources listed) — we just frame it so the model treats it as
  * an activated skill and proceeds.
  */
-function buildUserActivatedSkillBlockText(skillContent: string | undefined): string | undefined {
+function buildUserActivatedSkillBlockText(skillContent: string | undefined, failed?: boolean): string | undefined {
     if (!skillContent) {
         return undefined;
+    }
+    // On activation failure `skillContent` is a failure instruction, not skill
+    // instructions — emit it as-is (the template wraps it in <system-reminder>)
+    // rather than under the "follow them for this task" success framing.
+    if (failed) {
+        return skillContent;
     }
     return `# Activated Skill
 The user invoked a skill. Its full instructions are below — follow them for this task.
@@ -1097,7 +1111,7 @@ export async function getUserPrompt(params: UserPromptParams): Promise<UserPromp
     const payloadsBlock = buildPayloadsBlockText(snapshot.tryoutPayloads, blockStatuses.payloads);
     const agentsMdBlock = buildAgentsMdBlockText(snapshot, blockStatuses.agentsMd);
     const skillsBlock = buildSkillsBlockText(snapshot.skills, blockStatuses.skills);
-    const userActivatedSkillBlock = buildUserActivatedSkillBlockText(params.userActivatedSkillContent);
+    const userActivatedSkillBlock = buildUserActivatedSkillBlockText(params.userActivatedSkillContent, params.userActivatedSkillFailed);
     const fullModePolicyBlock = buildFullModePolicyBlockText(
         mode,
         fullModePolicy,

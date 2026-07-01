@@ -682,6 +682,7 @@ export async function executeAgent(
         // here so the model receives the skill deterministically (Claude Code
         // parity) without having to call the `skill` tool itself.
         let userActivatedSkillContent: string | undefined;
+        let userActivatedSkillFailed = false;
         const slashSkill = detectSlashSkillInvocation(request.query, sessionContextResult.snapshot.skills);
         if (slashSkill) {
             try {
@@ -691,14 +692,16 @@ export async function executeAgent(
             } catch (error) {
                 logError(`[Agent] Failed to activate skill '${slashSkill.entry.name}' from /skill-name`, error);
                 // Surface the failure instead of silently proceeding as if no
-                // skill was requested. Fed through the same activated-skill
-                // block so the model tells the user in-chat rather than acting
-                // on instructions that never loaded.
+                // skill was requested. Rendered as a plain <system-reminder>
+                // instruction (not under the "# Activated Skill / follow the
+                // instructions below" success framing) so the model tells the
+                // user in-chat rather than acting on instructions that never loaded.
                 const detail = error instanceof Error ? error.message : String(error);
+                userActivatedSkillFailed = true;
                 userActivatedSkillContent =
-                    `NOTE: Skill activation failed. The user invoked "${slashSkill.entry.name}" via /skill-name, ` +
-                    `but its instructions could not be loaded (${detail}). There are no skill instructions to follow. ` +
-                    `Briefly tell the user the skill failed to activate, then continue with their request without it.`;
+                    `The user invoked the skill "${slashSkill.entry.name}" via /skill-name, but it could not be loaded ` +
+                    `(${detail}). There are no skill instructions to apply — briefly tell the user the skill failed to ` +
+                    `activate, then continue with their request without it.`;
             }
         }
 
@@ -718,6 +721,7 @@ export async function executeAgent(
             previousMode,
             precomputedContext: sessionContextResult,
             userActivatedSkillContent,
+            userActivatedSkillFailed,
         };
         const userPromptBlocks = await getUserPrompt(userPromptParams);
 
