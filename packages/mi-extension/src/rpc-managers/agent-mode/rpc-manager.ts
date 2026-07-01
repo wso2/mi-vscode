@@ -1725,6 +1725,23 @@ export class MIAgentPanelRpcManager implements MIAgentPanelAPI {
         }
     }
 
+    /**
+     * Validate a skill scope from an RPC request and enforce the workspace-trust
+     * policy: reject unknown scope values (rather than silently coercing them to
+     * 'user') and block project-scope mutations in an untrusted workspace, where
+     * project skills are hidden and never loaded anyway. Keeps the mutation RPCs
+     * consistent with the trust gate used by discovery/listing.
+     */
+    private resolveSkillScope(rawScope: unknown): { scope: SkillScope } | { error: string } {
+        if (rawScope !== 'project' && rawScope !== 'user') {
+            return { error: `Invalid skill scope '${String(rawScope)}'` };
+        }
+        if (rawScope === 'project' && vscode.workspace.isTrusted === false) {
+            return { error: 'Project skills are unavailable in an untrusted workspace' };
+        }
+        return { scope: rawScope };
+    }
+
     /** Enable/disable a skill — persisted in the skill's home scope. */
     async setSkillEnabled(request: SetSkillEnabledRequest): Promise<SetSkillEnabledResponse> {
         try {
@@ -1732,8 +1749,11 @@ export class MIAgentPanelRpcManager implements MIAgentPanelAPI {
             if (!name) {
                 return { success: false, error: 'Missing skill name' };
             }
-            const scope: SkillScope = request.scope === 'project' ? 'project' : 'user';
-            await setSkillEnabledState(this.projectUri, scope, name, request.enabled);
+            const resolved = this.resolveSkillScope(request.scope);
+            if ('error' in resolved) {
+                return { success: false, error: resolved.error };
+            }
+            await setSkillEnabledState(this.projectUri, resolved.scope, name, request.enabled);
             return { success: true };
         } catch (error) {
             logError('[AgentPanel] Failed to set skill enabled state', error);
@@ -1752,7 +1772,11 @@ export class MIAgentPanelRpcManager implements MIAgentPanelAPI {
             if (!name) {
                 return { success: false, deleted: false, error: 'Missing skill name' };
             }
-            const scope: SkillScope = request.scope === 'project' ? 'project' : 'user';
+            const resolved = this.resolveSkillScope(request.scope);
+            if ('error' in resolved) {
+                return { success: false, deleted: false, error: resolved.error };
+            }
+            const scope = resolved.scope;
             const includeProjectScope = vscode.workspace.isTrusted !== false;
             const entry = discoverManagedSkills(this.projectUri, { includeProjectScope })
                 .find((s) => s.scope === scope && s.name.toLowerCase() === name.toLowerCase());

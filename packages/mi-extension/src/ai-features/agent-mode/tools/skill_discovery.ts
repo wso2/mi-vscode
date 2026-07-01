@@ -91,6 +91,14 @@ const MAX_SKILLS = 200;
 const SKILLS_SUBDIR = path.join('skills');
 
 /**
+ * A skill identifier that can be invoked via `/skill-name`. Must stay in sync
+ * with the slash parser in `agents/main/agent.ts` (`detectSlashSkillInvocation`)
+ * so every discovered skill is actually invocable, and is safe to embed in the
+ * `<skill_content name="…">` wrapper (no quotes/angle brackets/spaces).
+ */
+const SLASH_SAFE_SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/**
  * Ordered list of skill roots. Order defines collision precedence: the first
  * occurrence of a given name wins, later duplicates are shadowed. Project
  * scopes come before user scopes (project overrides user, per the spec).
@@ -234,6 +242,19 @@ function readSkill(skillMdPath: string, dirName: string, scope: SkillScope): Ski
     if (name.length > 64) {
         logWarn(`[Skills] ${skillMdPath}: name exceeds 64 characters (loading anyway).`);
     }
+    // The name must be invocable via `/skill-name` and safe to embed in the
+    // `<skill_content name="…">` wrapper. If the frontmatter name isn't
+    // slash-safe, fall back to the directory name; skip the skill entirely when
+    // neither is a valid identifier.
+    if (!SLASH_SAFE_SKILL_NAME.test(name)) {
+        if (name !== dirName && SLASH_SAFE_SKILL_NAME.test(dirName)) {
+            logWarn(`[Skills] ${skillMdPath}: name '${name}' is not a valid skill identifier ([A-Za-z0-9_-]); using directory name '${dirName}'.`);
+            name = dirName;
+        } else {
+            logWarn(`[Skills] Skipping ${skillMdPath}: skill name '${name}' is not a valid identifier ([A-Za-z0-9_-], starting alphanumeric) and cannot be invoked via /skill-name.`);
+            return undefined;
+        }
+    }
 
     return {
         name,
@@ -313,28 +334,48 @@ function resolveEnabled(scope: SkillScope, name: string, states: Record<string, 
     return explicit !== undefined ? explicit : DEFAULT_ENABLED_BY_SCOPE[scope];
 }
 
-/** Async read-modify-write of a scope's overrides file. */
+// Serializes read-modify-write cycles per state file so overlapping enable/
+// disable actions can't clobber each other (both starting from the same
+// snapshot, the later write silently dropping the earlier change).
+const skillStateWriteChains = new Map<string, Promise<void>>();
+
+/** Async, per-file-serialized read-modify-write of a scope's overrides file. */
 async function mutateSkillStates(
     projectPath: string,
     scope: SkillScope,
     mutate: (states: Record<string, boolean>) => void,
 ): Promise<void> {
     const file = getSkillsStatePath(scope, projectPath);
-    let states: Record<string, boolean> = {};
+    // Chain onto any in-flight write to the same file. `.catch` so a prior
+    // failure doesn't wedge every subsequent update.
+    const run = (skillStateWriteChains.get(file) ?? Promise.resolve())
+        .catch(() => { /* prior failure is logged by its own caller */ })
+        .then(async () => {
+            let states: Record<string, boolean> = {};
+            try {
+                states = parseSkillStates(JSON.parse(await fsp.readFile(file, 'utf8')));
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+                    logError('[Skills] Failed to read skills-state for update', error);
+                }
+            }
+            mutate(states);
+            await fsp.mkdir(path.dirname(file), { recursive: true });
+            await fsp.writeFile(
+                file,
+                JSON.stringify({ states, updatedAt: new Date().toISOString() }, null, 2),
+                'utf8',
+            );
+        });
+    skillStateWriteChains.set(file, run);
     try {
-        states = parseSkillStates(JSON.parse(await fsp.readFile(file, 'utf8')));
-    } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-            logError('[Skills] Failed to read skills-state for update', error);
+        await run;
+    } finally {
+        // Drop the chain entry once quiescent so the map doesn't grow unbounded.
+        if (skillStateWriteChains.get(file) === run) {
+            skillStateWriteChains.delete(file);
         }
     }
-    mutate(states);
-    await fsp.mkdir(path.dirname(file), { recursive: true });
-    await fsp.writeFile(
-        file,
-        JSON.stringify({ states, updatedAt: new Date().toISOString() }, null, 2),
-        'utf8',
-    );
 }
 
 /**

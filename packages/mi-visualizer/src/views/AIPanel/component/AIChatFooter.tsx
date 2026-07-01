@@ -449,6 +449,10 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
     const [slashSuggestions, setSlashSuggestions] = useState<SkillSuggestion[]>([]);
     const [activeSlashIndex, setActiveSlashIndex] = useState(0);
     const allSkillsRef = useRef<SkillSuggestion[] | null>(null);
+    // Tracks whether the slash menu was open on the previous effect run, so the
+    // skill list can be refetched each time it (re)opens — skills can be
+    // enabled/disabled/deleted in Settings while the panel stays mounted.
+    const wasSlashOpenRef = useRef(false);
 
     // Context usage tracking (always visible)
     const CONTEXT_TOKEN_THRESHOLD = 200000;
@@ -1902,10 +1906,19 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
 
     // Skill autocomplete: load the skill list once (lazily), filter client-side.
     useEffect(() => {
-        if (!slashContext || backendRequestTriggered || isUsageExceeded) {
+        if (!rpcClient || !slashContext || backendRequestTriggered || isUsageExceeded) {
             setSlashSuggestions([]);
+            wasSlashOpenRef.current = false;
             return;
         }
+
+        // Menu just (re)opened → drop the cached list so enable/disable/delete
+        // actions taken in Settings since the last open are reflected. During
+        // typing within one open session the cache is reused (no refetch per keystroke).
+        if (!wasSlashOpenRef.current) {
+            allSkillsRef.current = null;
+        }
+        wasSlashOpenRef.current = true;
 
         let cancelled = false;
 
@@ -2789,7 +2802,7 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
                             }}
                         >
                             {allSkillsRef.current && allSkillsRef.current.length === 0
-                                ? "No skills available. Add a SKILL.md under .agents/skills/ (project) or ~/.agents/skills/ (user)."
+                                ? "No skills available. Add a SKILL.md under .agents/skills or .claude/skills (project), or ~/.wso2-mi/skills (global)."
                                 : "No matching skills"}
                         </div>
                     ) : (
