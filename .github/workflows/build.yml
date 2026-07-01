@@ -76,6 +76,9 @@ jobs:
           if [[ ${{ inputs.isReleaseBuild }} = 'true' ]]; then
             git fetch origin main
             CHANGED_DIRS=$(git diff --name-only HEAD..refs/remotes/origin/main | grep -E "^/*" || true)
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git fetch origin ${{ github.base_ref }}
+            CHANGED_DIRS=$(git diff --name-only refs/remotes/origin/${{ github.base_ref }}...HEAD | grep -E "^/*" || true)
           else
             CHANGED_DIRS=$(git diff --name-only HEAD^..HEAD | grep -E "^/*" || true)
           fi
@@ -103,7 +106,7 @@ jobs:
           echo "runMIExtTests=${{ steps.diff.outputs.hasMIDiff }}" >> $GITHUB_OUTPUT
           echo "LS Tests: ${{ steps.diff.outputs.hasLSDiff }}"
 
-          if [[ "${{ inputs.runLSTests }}" == "true" || ("${{ github.base_ref }}" == "stable/mi" && "${{ steps.diff.outputs.hasLSDiff }}" == "true") ]]; then
+          if [[ "${{ inputs.runLSTests }}" == "true" || ("${{ github.event_name }}" == "pull_request" && "${{ steps.diff.outputs.hasLSDiff }}" == "true") ]]; then
             echo "runLSTests=true" >> $GITHUB_OUTPUT
           else
             echo "runLSTests=false" >> $GITHUB_OUTPUT
