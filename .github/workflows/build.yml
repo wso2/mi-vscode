@@ -43,6 +43,14 @@ on:
         type: boolean
         required: false
         default: false
+      runLSTests:
+        type: boolean
+        required: false
+        default: false
+      continueOnLSTestFailure:
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   Build_Stage:
@@ -51,6 +59,7 @@ jobs:
     runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
     outputs:
       runMIExtTests: ${{ steps.testMatrix.outputs.runMIExtTests }}
+      runLSTests: ${{ steps.testMatrix.outputs.runLSTests }}
       uiTestMatrix: ${{ steps.testMatrix.outputs.uiTestMatrix }}
     steps:
       - uses: actions/checkout@v2
@@ -62,6 +71,7 @@ jobs:
         id: diff
         run: |
           echo "hasMIDiff=false" >> $GITHUB_OUTPUT
+          echo "hasLSDiff=false" >> $GITHUB_OUTPUT
 
           if [[ ${{ inputs.isReleaseBuild }} = 'true' ]]; then
             git fetch origin main
@@ -76,6 +86,10 @@ jobs:
             echo "hasMIDiff=true" >> $GITHUB_OUTPUT
           fi
 
+          if [[ "${CHANGED_DIRS[@]}" =~ "packages/mi-language-server/" ]]; then
+            echo "hasLSDiff=true" >> $GITHUB_OUTPUT
+          fi
+
           if [[ "${CHANGED_DIRS[@]}" =~ "submodules/vscode-extensions" || "${CHANGED_DIRS[@]}" =~ "common/" || "${CHANGED_DIRS[@]}" =~ ".github/" || "${CHANGED_DIRS[@]}" =~ "package.json" || "${CHANGED_DIRS[@]}" =~ "pnpm-workspace.yaml" || "${CHANGED_DIRS[@]}" =~ "rush.json" ]]; then
             echo "Have shared repo changes"
             echo "hasMIDiff=true" >> $GITHUB_OUTPUT
@@ -87,6 +101,13 @@ jobs:
         run: |
           echo "MI Tests: ${{ steps.diff.outputs.hasMIDiff }}"
           echo "runMIExtTests=${{ steps.diff.outputs.hasMIDiff }}" >> $GITHUB_OUTPUT
+          echo "LS Tests: ${{ steps.diff.outputs.hasLSDiff }}"
+
+          if [[ "${{ inputs.runLSTests }}" == "true" || ("${{ github.base_ref }}" == "stable/mi" && "${{ steps.diff.outputs.hasLSDiff }}" == "true") ]]; then
+            echo "runLSTests=true" >> $GITHUB_OUTPUT
+          else
+            echo "runLSTests=false" >> $GITHUB_OUTPUT
+          fi
 
           matrix=$(jq -n '{"include": []}')
 
@@ -140,6 +161,57 @@ jobs:
       - name: Note Trivy warning
         if: ${{ inputs.continueOnTrivyFailure && steps.trivy.outcome == 'failure' }}
         run: echo "Trivy found vulnerabilities, but the workflow continued so the daily build could still run the tests." >> $GITHUB_STEP_SUMMARY
+
+  LSTest:
+    name: Run LS tests (${{ matrix.os }})
+    needs: Build_Stage
+    if: ${{ needs.Build_Stage.outputs.runLSTests == 'true' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Run LS tests on Linux
+        id: ls_tests_linux
+        if: runner.os == 'Linux'
+        continue-on-error: ${{ inputs.continueOnLSTestFailure }}
+        run: |
+          cd packages/mi-language-server
+          ./mvnw -B clean verify
+
+      - name: Run LS tests on Windows
+        id: ls_tests_windows
+        if: runner.os == 'Windows'
+        continue-on-error: ${{ inputs.continueOnLSTestFailure }}
+        shell: cmd
+        run: |
+          cd packages\mi-language-server
+          mvnw.cmd -B -Dlemminx.cacheInRepoDir clean verify
+
+      - name: Upload LS test reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ls-test-results-${{ runner.os }}-${{ github.run_attempt }}
+          path: packages/mi-language-server/**/surefire-reports/**
+          retention-days: 5
+          if-no-files-found: ignore
+
+      - name: Note LS test warning
+        if: ${{ inputs.continueOnLSTestFailure && (steps.ls_tests_linux.outcome == 'failure' || steps.ls_tests_windows.outcome == 'failure') }}
+        shell: bash
+        run: echo "LS tests failed on ${{ runner.os }}, but the workflow continued so the daily build could still complete." >> $GITHUB_STEP_SUMMARY
 
   ExtTest_MI:
     name: Run MI diagram tests
