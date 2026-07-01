@@ -101,6 +101,11 @@ import {
     createDeepWikiExecute,
 } from '../../tools/deepwiki_tools';
 import { createToolSearchTool } from '../../tools/tool_load';
+import {
+    createSkillTool,
+    createSkillExecute,
+} from '../../tools/skill_tools';
+import { type SkillCatalogEntry } from '../../tools/skill_discovery';
 import { AnthropicModel } from '../../../connection';
 import { AgentMode, ModelSettings } from '@wso2/mi-core';
 import { persistOversizedToolResult } from '../../tools/tool-result-persistence';
@@ -134,6 +139,7 @@ import {
     DEEPWIKI_ASK_QUESTION_TOOL_NAME,
     READ_SERVER_LOGS_TOOL_NAME,
     TOOL_LOAD_TOOL_NAME,
+    SKILL_TOOL_NAME,
     ShellApprovalRuleStore,
     DEFERRED_TOOLS,
 } from '../../tools/types';
@@ -171,6 +177,7 @@ export {
     DEEPWIKI_ASK_QUESTION_TOOL_NAME,
     READ_SERVER_LOGS_TOOL_NAME,
     TOOL_LOAD_TOOL_NAME,
+    SKILL_TOOL_NAME,
 };
 import { AgentEventHandler } from './agent';
 
@@ -215,6 +222,18 @@ export interface CreateToolsParams {
     abortSignal?: AbortSignal;
     /** Model settings for this session (main model + sub-agent model overrides) */
     modelSettings?: ModelSettings;
+    /**
+     * Discovered Agent Skills for this project (from the session-context
+     * snapshot). The `skill` tool is registered only when at least one
+     * model-invocable skill exists; its `skill` parameter is constrained to
+     * their names.
+     */
+    skills?: SkillCatalogEntry[];
+    /**
+     * Per-run set of activated skill names (lowercased) shared with the
+     * `/skill-name` path so the `skill` tool dedups already-activated skills.
+     */
+    activatedSkills?: Set<string>;
 }
 
 const READ_ONLY_MODE_ALLOWED_TOOLS = new Set<string>([
@@ -229,6 +248,7 @@ const READ_ONLY_MODE_ALLOWED_TOOLS = new Set<string>([
     DEEPWIKI_ASK_QUESTION_TOOL_NAME,
     SERVER_MANAGEMENT_TOOL_NAME,
     READ_SERVER_LOGS_TOOL_NAME,
+    SKILL_TOOL_NAME,
 ]);
 
 const PLAN_MODE_ALLOWED_TOOLS = new Set<string>([
@@ -580,6 +600,8 @@ export function createAgentTools(params: CreateToolsParams) {
         undoCheckpointManager,
         abortSignal,
         modelSettings,
+        skills,
+        activatedSkills,
     } = params;
 
     const getWrappedExecute = <T extends (...args: any[]) => Promise<ToolResult>>(
@@ -741,6 +763,22 @@ export function createAgentTools(params: CreateToolsParams) {
         // Tool Search (local — returns tool-reference blocks for deferred tool discovery)
         [TOOL_LOAD_TOOL_NAME]: createToolSearchTool(),
     };
+
+    // Skills (Agent Skills). Register the `skill` tool only when at least one
+    // model-invocable skill exists (don't expose a tool with no valid options),
+    // and constrain its `skill` parameter to those names. `disable-model-invocation`
+    // skills are excluded here — they stay user-invocable via `/skill-name`.
+    const modelInvocableSkills = (skills ?? []).filter((s) => !s.disableModelInvocation);
+    if (modelInvocableSkills.length > 0) {
+        (allTools as Record<string, unknown>)[SKILL_TOOL_NAME] = createSkillTool(
+            getWrappedExecute(
+                SKILL_TOOL_NAME,
+                createSkillExecute(modelInvocableSkills, activatedSkills ?? new Set<string>()),
+                false,
+            ),
+            modelInvocableSkills.map((s) => s.name),
+        );
+    }
 
     // Mark deferred tools — schemas hidden from initial prompt, loaded on-demand
     // via tool_search returning tool-reference content blocks.

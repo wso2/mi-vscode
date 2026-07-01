@@ -38,6 +38,12 @@ import {
     DeleteSessionResponse,
     SearchMentionablePathsRequest,
     SearchMentionablePathsResponse,
+    ListSkillsResponse,
+    ListManagedSkillsResponse,
+    SetSkillEnabledRequest,
+    SetSkillEnabledResponse,
+    DeleteSkillRequest,
+    DeleteSkillResponse,
     GetAgentRunStatusRequest,
     GetAgentRunStatusResponse,
 } from "./types";
@@ -123,6 +129,26 @@ export const deleteSession: RequestType<DeleteSessionRequest, DeleteSessionRespo
 // Search mentionable file/folder paths for @mentions in chat input
 export const searchMentionablePaths: RequestType<SearchMentionablePathsRequest, SearchMentionablePathsResponse> = {
     method: `${_prefix}/searchMentionablePaths`
+};
+
+// List discovered Agent Skills for /skill-name autocomplete
+export const listSkills: RequestType<void, ListSkillsResponse> = {
+    method: `${_prefix}/listSkills`
+};
+
+// List all skills (incl. disabled) with management metadata for the settings UI
+export const listManagedSkills: RequestType<void, ListManagedSkillsResponse> = {
+    method: `${_prefix}/listManagedSkills`
+};
+
+// Enable/disable a skill (persisted in the skill's home scope)
+export const setSkillEnabled: RequestType<SetSkillEnabledRequest, SetSkillEnabledResponse> = {
+    method: `${_prefix}/setSkillEnabled`
+};
+
+// Delete a skill directory from disk (confirmed in the extension)
+export const deleteSkill: RequestType<DeleteSkillRequest, DeleteSkillResponse> = {
+    method: `${_prefix}/deleteSkill`
 };
 
 // Get current agent run status and buffered events for panel reconnection

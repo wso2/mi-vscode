@@ -73,6 +73,27 @@ export {
     getAvailableContexts,
 } from './context_tools';
 
+// Export skills (Agent Skills — discovery + activation)
+export {
+    discoverSkills,
+    discoverManagedSkills,
+    setSkillEnabledState,
+    clearSkillState,
+    findSkillByName,
+    splitFrontmatter,
+    type SkillCatalogEntry,
+    type ManagedSkillEntry,
+    type DiscoverSkillsOptions,
+    type SkillScope,
+} from './skill_discovery';
+export {
+    createSkillExecute,
+    createSkillTool,
+    readAndFormatSkill,
+    SKILL_MD_MAX_BYTES,
+    type FormattedSkill,
+} from './skill_tools';
+
 // Export project tools
 export {
     // Execute function creators
@@ -214,6 +235,8 @@ export {
     READ_SERVER_LOGS_TOOL_NAME,
     // Tool search
     TOOL_LOAD_TOOL_NAME,
+    // Skills
+    SKILL_TOOL_NAME,
 } from './types';
 
 /**

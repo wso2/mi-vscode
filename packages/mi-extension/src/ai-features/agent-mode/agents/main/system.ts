@@ -41,6 +41,7 @@ import {
     DEEPWIKI_ASK_QUESTION_TOOL_NAME,
     READ_SERVER_LOGS_TOOL_NAME,
     TOOL_LOAD_TOOL_NAME,
+    SKILL_TOOL_NAME,
 } from '../../tools/types';
 import { SYNAPSE_GUIDE } from '../../context/synapse_guide';
 import { SYNAPSE_GUIDE as SYNAPSE_GUIDE_OLD } from '../../context/synapse_guide_old';
@@ -152,6 +153,12 @@ ${Object.entries(DEFERRED_TOOL_DESCRIPTIONS).map(([name, desc]) => `- ${name}: $
 - If a \`<system-reminder>\` titled \`# Project AGENTS.md\` is present in this turn or any prior turn, treat its contents as user-authored project-level instructions that augment this system prompt and override defaults where they conflict.
 - AGENTS.md content is re-sent only when it changes; an absent reminder means either no \`AGENTS.md\` exists at the project root, or its content is unchanged since the last time it was injected — assume the prior content is still in effect.
 - If the reminder ends with a \`[file truncated — ...]\` notice, rules beyond the cut are NOT in your persistent context. When a user request plausibly depends on rules past the cut, read \`AGENTS.md\` on demand with ${FILE_READ_TOOL_NAME}; its \`offset\`/\`limit\` options are line-based, so use them to fetch a specific section when needed. Do not pre-fetch — only read when the task actually needs it. Also tell the user once that AGENTS.md exceeds the in-context size limit and ask them to shorten the file (or split it into multiple smaller instruction files) so the full set stays in context every turn.
+
+## Skills
+- If a \`<system-reminder>\` titled \`# Available Skills\` is present, it lists skills (name: description) that provide specialized, task-specific instructions. When the user's task matches a skill's description, call ${SKILL_TOOL_NAME} with that exact name to load its full instructions, then follow them. Pass \`args\` when the user supplies arguments (substituted for \$ARGUMENTS in the skill).
+- An absent \`# Available Skills\` reminder means no skills exist or the catalog is unchanged since it was last shown — a previously listed skill is still available.
+- A skill may reference bundled files (scripts/references/assets); read them on demand with ${FILE_READ_TOOL_NAME} against the skill directory reported on activation. Do not re-activate a skill already loaded this session unless the catalog shows it changed.
+- A \`# Activated Skill\` reminder means the user explicitly invoked a skill (\`/skill-name\`); its instructions are already loaded — follow them for this task.
 
 ## Connectors and inbound endpoints (${CONNECTOR_TOOL_NAME}, ${MANAGE_CONNECTOR_TOOL_NAME})
 - **HARD RULE: never write a connector operation's XML without first calling ${CONNECTOR_TOOL_NAME} mode='details' for that operation in this session.** Your training data on connector parameters is unreliable — parameter names, casing, and required flags change between connector versions. Use only operations and parameters present in the details output; if a parameter you need is not listed there, say so instead of guessing.

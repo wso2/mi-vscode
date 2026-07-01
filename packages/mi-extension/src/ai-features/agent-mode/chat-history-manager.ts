@@ -80,6 +80,8 @@ export interface SessionContextBlocksState {
     payloads?: string;
     /** sha256-16 of the (possibly truncated) AGENTS.md bytes + truncation banner inputs */
     agentsMd?: string;
+    /** sha256-16 of the model-invocable skill catalog (name/description/location/mtime/size) */
+    skills?: string;
 }
 
 export const TOOL_USE_INTERRUPTION_CONTEXT = `<system-reminder>The user interrupted while a tool was running. The tool use was rejected and any pending mutations were NOT applied. Stop immediately and wait for the user's next message.</system-reminder>`;
