@@ -270,7 +270,24 @@ public class Utils {
 
     public static DOMDocument getDOMDocument(String content, URIResolverExtensionManager resolverExtensionManager) {
 
-        TextDocument document = new TextDocument(content, "temp");
+        return getDOMDocument(content, "temp", resolverExtensionManager);
+    }
+
+    /**
+     * Get the DOM document from the given xml content, using the provided URI as the document's
+     * system id. The URI matters for diagnostics that are gated on the document path (e.g.
+     * SynapseExpressionValidator only runs for files under src/main/wso2mi/artifacts), so callers
+     * that have a real file path should pass it instead of relying on the "temp" fallback.
+     *
+     * @param content                  the xml content
+     * @param uri                      the URI to assign to the parsed document
+     * @param resolverExtensionManager the URI resolver extension manager
+     * @return the DOM document for the given xml content
+     */
+    public static DOMDocument getDOMDocument(String content, String uri,
+                                             URIResolverExtensionManager resolverExtensionManager) {
+
+        TextDocument document = new TextDocument(content, uri);
         return DOMParser.getInstance().parse(document, resolverExtensionManager);
     }
 
@@ -573,6 +590,10 @@ public class Utils {
             }
         }
         return foundNode;
+    }
+
+    public static boolean isMcpInboundEndpoint(DOMElement element) {
+        return Constant.MCP_INBOUND_LISTENER_CLASS.equals(element.getAttribute("class"));
     }
 
     public static String addUnderscoreBetweenWords(String input) {
@@ -1060,6 +1081,36 @@ public class Utils {
         }
         String mapped = Constant.MI_SUPPORTED_VERSION_MAP.get(defaultVersion);
         return mapped != null ? mapped : Constant.DEFAULT_MI_VERSION;
+    }
+
+    public static boolean hasDependency(String projectPath, String artifactId) {
+        try {
+            Path pomPath = Path.of(projectPath, "pom.xml");
+            File pomFile = pomPath.toFile();
+            if (!pomFile.exists()) {
+                return false;
+            }
+            DOMDocument document = getDOMDocument(pomFile);
+            DOMNode dependencies = getChildNodeByName(document.getDocumentElement(), Constant.DEPENDENCIES);
+            if (dependencies == null) {
+                return false;
+            }
+            for (DOMNode dependency : dependencies.getChildren()) {
+                if (!Constant.DEPENDENCY.equalsIgnoreCase(dependency.getNodeName())) {
+                    continue;
+                }
+                DOMNode artifactNode = getChildNodeByName(dependency, Constant.ARTIFACT_ID);
+                if (artifactNode != null) {
+                    String pomArtifactId = getInlineString(artifactNode.getFirstChild());
+                    if (pomArtifactId != null && artifactId.equals(pomArtifactId.trim())) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Error occurred while checking pom dependency: " + artifactId, e);
+        }
+        return false;
     }
 
     public static Map<String, Mustache> getTemplateMap(String resourceFolderName) {

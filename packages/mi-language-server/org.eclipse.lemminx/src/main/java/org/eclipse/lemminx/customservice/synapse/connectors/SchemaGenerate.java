@@ -108,6 +108,7 @@ public class SchemaGenerate {
                     }
                     sb.append("                    </xs:all>\n");
                     sb.append("                    <xs:attribute name=\"configKey\" type=\"xs:string\"/>\n");
+                    sb.append("                    <xs:attribute name=\"description\" type=\"xs:string\"/>\n");
                     sb.append("                </xs:complexType>\n" +
                             "            </xs:element>\n");
                 }

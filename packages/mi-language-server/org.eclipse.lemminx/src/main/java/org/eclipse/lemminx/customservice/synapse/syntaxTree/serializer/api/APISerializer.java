@@ -59,6 +59,9 @@ public class APISerializer {
         if (api.getTrace() != null) {
             apiElt.addAttribute("trace", api.getTrace().name(), null);
         }
+        if (api.getBindsTo() != null) {
+            apiElt.addAttribute(Constant.BINDS_TO, api.getBindsTo(), null);
+        }
     }
 
     public static OMElement serializeVersioningStrategy(API api, OMElement apiElement) {

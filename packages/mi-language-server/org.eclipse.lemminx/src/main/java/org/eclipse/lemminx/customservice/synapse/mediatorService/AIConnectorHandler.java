@@ -555,6 +555,14 @@ public class AIConnectorHandler {
         return toolData;
     }
 
+    private static String unwrapExpression(String value) {
+
+        if (StringUtils.isNotBlank(value) && value.startsWith("${") && value.endsWith("}")) {
+            return value.substring(2, value.length() - 1);
+        }
+        return value;
+    }
+
     /**
      * Generates a unique sequence template name for the newly added tool.
      */
@@ -931,7 +939,7 @@ public class AIConnectorHandler {
 
         JsonObject expression = new JsonObject();
         expression.addProperty(Constant.IS_EXPRESSION, true);
-        expression.addProperty(Constant.VALUE, node.getAttribute(RESULT_EXPRESSION));
+        expression.addProperty(Constant.VALUE, unwrapExpression(node.getAttribute(RESULT_EXPRESSION)));
         toolData.put(TOOL_RESULT_EXPRESSION, expression);
 
         toolData.put(TOOL_DESCRIPTION, node.getAttribute(Constant.DESCRIPTION));
@@ -1408,19 +1416,37 @@ public class AIConnectorHandler {
                 return response;
             }
 
-            BufferedReader reader = new BufferedReader(new StringReader(httpResponse.body()));
-            String line;
-            StringBuilder dataBuffer = new StringBuilder();
-            while ((line = reader.readLine()) != null) {
-                if (line.isEmpty()) {
-                    break;
+            // Handle both "text/event-stream" (SSE framing, JSON carried on "data:" lines) and plain "application/json" responses.
+            String responseBody = httpResponse.body();
+            String contentType = httpResponse.headers().firstValue("Content-Type").orElse(StringUtils.EMPTY);
+
+            String responseJson;
+            if (contentType.toLowerCase().contains("text/event-stream")) {
+                BufferedReader reader = new BufferedReader(new StringReader(responseBody));
+                String line;
+                StringBuilder dataBuffer = new StringBuilder();
+                while ((line = reader.readLine()) != null) {
+                    if (line.isEmpty()) {
+                        // Blank line terminates an SSE event. Therefore stop once we have collected data.
+                        if (dataBuffer.length() > 0) {
+                            break;
+                        }
+                        continue;
+                    }
+                    if (line.startsWith("data:")) {
+                        dataBuffer.append(line.substring(5).trim());
+                    }
                 }
-                if (line.startsWith("data:")) {
-                    dataBuffer.append(line.substring(5).trim());
-                }
+                responseJson = dataBuffer.toString();
+            } else {
+                responseJson = responseBody;
             }
 
-            String responseJson = dataBuffer.toString();
+            if (StringUtils.isBlank(responseJson)) {
+                response.error = "Empty MCP response";
+                return response;
+            }
+
             ObjectMapper mapper = new ObjectMapper();
             JsonNode dataJson = mapper.readTree(responseJson);
 

@@ -131,6 +131,11 @@
       "name": "RabbitMQ (Inbound)",
       "id": "org.wso2.carbon.inbound.rabbitmq.RabbitMQListener",
       "type": "inbound-endpoint"
+    },
+    {
+      "name": "Solace (Inbound)",
+      "id": "org.wso2.carbon.inbound.solace.SolaceEventListener",
+      "type": "inbound-endpoint"
     }
   ]
 }

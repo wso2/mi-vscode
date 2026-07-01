@@ -95,6 +95,10 @@ public class ResourceFactory extends AbstractFactory {
         if (Objects.nonNull(faultSequence)) {
             apiResource.setFaultSequenceAttribute(faultSequence);
         }
+        String bindsTo = element.getAttribute(Constant.BINDS_TO);
+        if (Objects.nonNull(bindsTo)) {
+            apiResource.setBindsTo(bindsTo);
+        }
     }
 
     private STNode createSequence(DOMNode node) {

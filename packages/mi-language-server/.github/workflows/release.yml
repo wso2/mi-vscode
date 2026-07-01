@@ -47,11 +47,43 @@ jobs:
         name: ${{ steps.ls.outputs.fileName }}.zip
     - name: Create a release in repo
       run: |
-        createResponse=`curl -X POST  -H "Accept: application/vnd.github.v3+json" \
-        -H "Authorization:token ${{ secrets.GIT_BOT_TOKEN }}" -d '{"tag_name":"v${{ steps.ls.outputs.version }}", \
-        "draft":false, "name": "Release v${{ steps.ls.outputs.version }}", "prerelease":true}' \
-        https://api.github.com/repos/${{ github.repository }}/releases` \
-          && id=`echo "$createResponse" | sed -n -e 's/"id":\ \([0-9]\+\),/\1/p' | head -n 1 | sed 's/[[:blank:]]//g'` && \
-          uploadResponse=`curl -X POST -H "Authorization:token ${{ secrets.GIT_BOT_TOKEN }}" -H "Content-Type:application/octet-stream" \
+        set -euo pipefail
+        createResponse=$(curl --fail-with-body -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -H "Authorization:token ${{ secrets.GIT_BOT_TOKEN }}" \
+          -d '{"tag_name":"v${{ steps.ls.outputs.version }}", "draft":false, "name": "Release v${{ steps.ls.outputs.version }}", "prerelease":true}' \
+          https://api.github.com/repos/${{ github.repository }}/releases)
+        id=$(echo "$createResponse" | jq -r '.id // empty')
+        if [ -z "$id" ]; then
+          echo "Failed to parse release id from response:"
+          echo "$createResponse"
+          exit 1
+        fi
+        curl --fail-with-body -X POST \
+          -H "Authorization:token ${{ secrets.GIT_BOT_TOKEN }}" \
+          -H "Content-Type:application/octet-stream" \
           --data-binary @${{ steps.ls.outputs.fileName }}.zip \
-          https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=${{ steps.ls.outputs.fileName }}.zip`
+          "https://uploads.github.com/repos/${{ github.repository }}/releases/$id/assets?name=${{ steps.ls.outputs.fileName }}.zip"
+
+    - name: Create sync PR from stable/mi to main
+      if: github.ref == 'refs/heads/stable/mi'
+      env:
+        GH_TOKEN: ${{ secrets.GIT_BOT_TOKEN }}
+      run: |
+        git fetch --unshallow origin main stable/mi 2>/dev/null || git fetch origin main stable/mi
+        commits=$(git rev-list --count origin/main..origin/stable/mi)
+        if [ "$commits" -eq 0 ]; then
+          echo "No new commits on stable/mi compared to main — skipping PR creation."
+          exit 0
+        fi
+        existing=$(gh pr list --repo ${{ github.repository }} --base main --head stable/mi --state open --json number --jq '.[0].number // empty')
+        if [ -n "$existing" ]; then
+          echo "An open PR from stable/mi to main already exists: #$existing"
+          exit 0
+        fi
+        gh pr create \
+          --repo ${{ github.repository }} \
+          --base main \
+          --head stable/mi \
+          --title "Sync stable/mi to main after release v${{ steps.ls.outputs.version }}" \
+          --body "Automated PR to sync \`stable/mi\` into \`main\` following the successful release of v${{ steps.ls.outputs.version }}."

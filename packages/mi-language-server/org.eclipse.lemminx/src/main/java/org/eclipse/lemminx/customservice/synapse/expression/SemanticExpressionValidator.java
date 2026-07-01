@@ -198,6 +198,64 @@ public class SemanticExpressionValidator extends ExpressionParserBaseVisitor<Voi
         return true;
     }
 
+    /**
+     * Detects the operator-precedence pitfall where a logical operator ('and'/'or') is used as a
+     * direct, unparenthesized operand of a comparison operator. In the Synapse expression grammar,
+     * 'and'/'or' bind TIGHTER than the comparison operators (&lt;, &gt;, &lt;=, &gt;=, ==, !=), so an
+     * expression such as {@code a <= 0 or b > 10} parses as {@code a <= (0 or b) > 10} instead of
+     * the usually-intended {@code (a <= 0) or (b > 10)}. A warning is emitted recommending explicit
+     * parentheses. The correctly-parenthesized form parses as a single top-level logical expression
+     * with no comparison operator at this node, so it is never flagged (no false positives).
+     */
+    @Override
+    public Void visitComparisonExpression(ExpressionParser.ComparisonExpressionContext ctx) {
+        if (hasComparisonOperator(ctx)) {
+            for (ExpressionParser.LogicalExpressionContext operand : ctx.logicalExpression()) {
+                TerminalNode logicalOp = operand.AND() != null ? operand.AND() : operand.OR();
+                if (logicalOp != null) {
+                    Token opToken = logicalOp.getSymbol();
+                    String op = opToken.getText();
+                    String message = "Operator precedence: '" + op + "' binds tighter than the comparison "
+                            + "operators (<, >, <=, >=, ==, !=) in Synapse expressions, so '" + op
+                            + "' is evaluated before the comparison. This is likely not the intended "
+                            + "behavior. Add parentheses around each comparison to make the intent "
+                            + "explicit, e.g. (a <= 0) " + op + " (b > 10).";
+                    ExpressionError error = new ExpressionError(opToken.getLine(),
+                            opToken.getCharPositionInLine(), message, opToken, null);
+                    error.setWarning(true);
+                    errors.add(error);
+                    break; // One warning per comparison expression is sufficient.
+                }
+            }
+        }
+        return visitChildren(ctx);
+    }
+
+    /**
+     * Returns true if this comparison expression actually applies a comparison operator, as opposed
+     * to being a pass-through to a single logical expression. Checks the direct children for a
+     * comparison operator token rather than relying on a specific generated accessor.
+     */
+    private boolean hasComparisonOperator(ExpressionParser.ComparisonExpressionContext ctx) {
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            if (ctx.getChild(i) instanceof TerminalNode) {
+                int type = ((TerminalNode) ctx.getChild(i)).getSymbol().getType();
+                switch (type) {
+                    case ExpressionLexer.GT:
+                    case ExpressionLexer.LT:
+                    case ExpressionLexer.GTE:
+                    case ExpressionLexer.LTE:
+                    case ExpressionLexer.EQ:
+                    case ExpressionLexer.NEQ:
+                        return true;
+                    default:
+                        break;
+                }
+            }
+        }
+        return false;
+    }
+
     @Override
     public Void visitArithmeticExpression(ExpressionParser.ArithmeticExpressionContext ctx) {
         List<ExpressionParser.TermContext> terms = ctx.term();
