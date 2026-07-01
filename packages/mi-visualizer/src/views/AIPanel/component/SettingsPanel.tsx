@@ -520,7 +520,7 @@ const SettingsPanel: React.FC<SettingsPanelProps> = ({ onClose, isByok, byokReso
             <InfoNote
                 icon="info"
                 variant="info"
-                text="No skills found. Add a SKILL.md under .agents/skills or .claude/skills (project), or ~/.wso2-mi/skills (global)."
+                text="No skills found. Add a SKILL.md under .agents/skills or .claude/skills (project), or ~/.wso2-mi/copilot/skills (global)."
             />
         ) : (
             <div className="space-y-4">

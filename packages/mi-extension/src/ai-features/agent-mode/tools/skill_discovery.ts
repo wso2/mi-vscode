@@ -22,7 +22,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { parse as parseYaml } from 'yaml';
 import { logDebug, logError, logWarn } from '../../copilot/logger';
-import { getGlobalSkillsStatePath, getProjectSkillsStatePath, getWso2MiHomeDir } from '../storage-paths';
+import { getGlobalSkillsDir, getGlobalSkillsStatePath, getProjectSkillsStatePath } from '../storage-paths';
 
 export type SkillScope = 'project' | 'user';
 
@@ -112,7 +112,7 @@ function getSkillRoots(projectPath: string, includeProjectScope: boolean): Array
     }
     roots.push({ dir: path.join(home, '.agents', SKILLS_SUBDIR), scope: 'user' });
     roots.push({ dir: path.join(home, '.claude', SKILLS_SUBDIR), scope: 'user' });
-    roots.push({ dir: path.join(getWso2MiHomeDir(), SKILLS_SUBDIR), scope: 'user' });
+    roots.push({ dir: getGlobalSkillsDir(), scope: 'user' });
     return roots;
 }
 

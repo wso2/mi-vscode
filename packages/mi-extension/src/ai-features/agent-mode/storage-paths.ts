@@ -76,6 +76,15 @@ export function getCopilotSessionDir(projectPath: string, sessionId: string): st
 }
 
 /**
+ * Global (user-scope) skills directory. Grouped with the Copilot's other
+ * on-disk state under `~/.wso2-mi/copilot/` (alongside its skills-state.json),
+ * rather than the bare MI home which is shared with the runtime/CLI/extension.
+ */
+export function getGlobalSkillsDir(): string {
+    return path.join(getWso2MiHomeDir(), 'copilot', 'skills');
+}
+
+/**
  * Global skills enable/disable state (`{ disabled: string[] }`) — applies to
  * user-scope skills across all projects.
  */

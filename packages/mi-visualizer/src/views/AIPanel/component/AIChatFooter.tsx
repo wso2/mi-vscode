@@ -2802,7 +2802,7 @@ const AIChatFooter: React.FC<AIChatFooterProps> = ({ isUsageExceeded = false }) 
                             }}
                         >
                             {allSkillsRef.current && allSkillsRef.current.length === 0
-                                ? "No skills available. Add a SKILL.md under .agents/skills or .claude/skills (project), or ~/.wso2-mi/skills (global)."
+                                ? "No skills available. Add a SKILL.md under .agents/skills or .claude/skills (project), or ~/.wso2-mi/copilot/skills (global)."
                                 : "No matching skills"}
                         </div>
                     ) : (
