@@ -1201,12 +1201,23 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         } else if ("foreach".equals(name) || "iterate".equals(name)) {
             // foreach/iterate implicitly define a loop counter variable
             // and the collection item is accessible in the flow
+            collectVariableFromAttribute(element, "counter-variable", definedVariables);
+            collectVariableFromAttribute(element, "target-variable", definedVariables);
+        } else if ("scatter-gather".equals(name)) {
+            collectVariableFromAttribute(element, "target-variable", definedVariables);
         } else if ("responseVariable".equals(name)) {
             // <responseVariable>varName</responseVariable> in connector operations and AI mediators
             String varName = getElementTextContent(element);
             if (varName != null) {
                 definedVariables.add(varName);
             }
+        }
+    }
+
+    private void collectVariableFromAttribute(DOMElement element, String attributeName, Set<String> definedVariables) {
+        String varName = element.getAttribute(attributeName);
+        if (varName != null && !varName.isEmpty()) {
+            definedVariables.add(varName);
         }
     }
 
