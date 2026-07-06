@@ -496,18 +496,19 @@ public class DirectoryTreeBuilder {
 
     private static void analyzeInboundConnectorResources(IntegrationDirectoryTree directoryTree) {
 
-        String inboundConnectorPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN
-                + File.separator + WSO2MI + File.separator + RESOURCES + File.separator
-                + Constant.INBOUND_CONNECTORS_DIR;
-        File folder = new File(inboundConnectorPath);
-        File[] listOfFiles = folder.listFiles();
-        if (listOfFiles != null) {
-            for (File file : listOfFiles) {
-                if (Utils.isZipFile(file) && !file.isHidden()) {
-                    String name = file.getName();
-                    String path = file.getAbsolutePath();
-                    Node resource = new Node("inboundConnector", name, path);
-                    directoryTree.getResources().addInboundConnector(resource);
+        String resourcesPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN
+                + File.separator + WSO2MI + File.separator + RESOURCES + File.separator;
+        for (String dirName : new String[]{Constant.INBOUND_ENDPOINTS, Constant.INBOUND_CONNECTORS_DIR}) {
+            File folder = new File(resourcesPath + dirName);
+            File[] listOfFiles = folder.listFiles();
+            if (listOfFiles != null) {
+                for (File file : listOfFiles) {
+                    if (Utils.isZipFile(file) && !file.isHidden()) {
+                        String name = file.getName();
+                        String path = file.getAbsolutePath();
+                        Node resource = new Node("inboundConnector", name, path);
+                        directoryTree.getResources().addInboundConnector(resource);
+                    }
                 }
             }
         }
