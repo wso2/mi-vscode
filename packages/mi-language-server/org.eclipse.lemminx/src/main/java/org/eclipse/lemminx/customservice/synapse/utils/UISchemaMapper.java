@@ -198,6 +198,9 @@ public class UISchemaMapper {
         } else {
             data.addProperty(Constant.CONFIG_REF, connector.getConfigKey());
         }
+        if (StringUtils.isNotEmpty(connector.getDescription())) {
+            data.addProperty(Constant.DESCRIPTION, connector.getDescription());
+        }
         return mapInputToUISchema(data, uiSchema);
     }
 
