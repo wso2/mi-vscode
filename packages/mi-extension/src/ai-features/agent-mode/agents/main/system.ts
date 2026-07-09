@@ -242,7 +242,7 @@ src/
 │       │   ├── endpoints/             # Endpoint configurations
 │       │   ├── proxy-services/        # Proxy service definitions
 │       │   ├── local-entries/         # Local registry entries
-│       │   ├── inbound-endpoints/     # Inbound endpoint configs
+│       │   ├── inbound-endpoints/     # Inbound endpoint configs (incl. MCP servers, MI 4.6.0+)
 │       │   ├── message-stores/        # Message store configs
 │       │   ├── message-processors/    # Message processor configs
 │       │   ├── templates/             # Sequence/endpoint templates
@@ -296,6 +296,7 @@ Proactively load reference contexts when you need deeper knowledge beyond <SYNAP
 **Artifacts & Async Processing**
 - \`synapse-artifact-reference\` [api_resource, proxy_service, inbound_endpoint, scheduled_task, local_entry] — REST APIs (api/resource attrs, versioning, CORS handlers), legacy proxy services, inbound endpoints (HTTP/JMS/File parameter schemas + coordination semantics), \`<task>\` with MessageInjector (simple + cron triggers), local entries (inline / URI-referenced / connection-init forms)
 - \`synapse-async-reference\` [overview, message_stores, message_processors, store_mediator, dlq_pattern] — message stores (InMemory/JMS/RabbitMQ/JDBC FQCNs + parameter names), Sampling vs ScheduledMessageForwarding processors, \`<store>\` mediator terminal semantics, dead-letter-queue recipe
+- \`mcp-server-reference\` [overview, inbound_endpoint, tools_local_entry, input_schema, creation_recipe, pitfalls] — expose project APIs/sequences as MCP (Model Context Protocol) tools for AI agents: MCP inbound endpoint (\`McpInboundListener\`, \`mi-inbound-mcp\` connector) + \`<ServerName>-mcp-config\` local entry with \`<mcptools>\` definitions. Load BEFORE creating or editing an MCP server. Requires MI runtime 4.6.0+
 
 **SOAP, Payloads, Properties & Runtime Controls**
 - \`synapse-soap-namespace-guide\` [soap_basics, soap_call_pattern, soap_response, namespace_in_payload, namespace_in_xpath, soap_headers, soap_faults, wsdl_to_synapse, common_mistakes] — SOAP integration, namespace handling, WSDL conversion

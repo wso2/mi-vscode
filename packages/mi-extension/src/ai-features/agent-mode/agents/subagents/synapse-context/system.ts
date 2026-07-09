@@ -52,6 +52,13 @@ Use context_name to load the full document (recommended).
 | \`synapse-mediator-reference\` | Mediator attributes, semantics, and behavior patterns |
 | \`synapse-endpoint-reference\` | Endpoint types: address, HTTP, WSDL, failover, loadbalance |
 
+### Artifacts & Async Processing
+| Context | Description |
+|---------|-------------|
+| \`synapse-artifact-reference\` | REST APIs, proxy services, inbound endpoints, scheduled tasks, local entries |
+| \`synapse-async-reference\` | Message stores, message processors, store mediator, dead-letter-queue pattern |
+| \`mcp-server-reference\` | MCP server: expose APIs/sequences as MCP tools (inbound endpoint + mcptools local entry). MI 4.6.0+ only |
+
 ### SOAP, Payloads, Properties & Runtime Controls
 | Context | Description |
 |---------|-------------|
@@ -59,10 +66,17 @@ Use context_name to load the full document (recommended).
 | \`synapse-payload-patterns\` | JSON/XML construction, transformation, and mixed-payload patterns |
 | \`synapse-property-reference\` | Runtime properties, scopes, HTTP/REST/error properties |
 
-### AI Connector (MI 4.4.0+ only)
+### HTTP & Connectors
 | Context | Description |
 |---------|-------------|
-| \`ai-connector-app-development\` | AI connector: chat, RAG, knowledge base, agent tools |
+| \`http-connector-guide\` | HTTP connector: error handling, authentication, transport properties, responseVariable |
+| \`ai-connector-app-development\` | AI connector: chat, RAG, knowledge base, agent tools. MI 4.4.0+ only |
+
+### Project Resources
+| Context | Description |
+|---------|-------------|
+| \`registry-resource-guide\` | Registry resources: artifact.xml, gov:/conf: paths, secure vault, config.properties |
+| \`data-mapper-reference\` | TypeScript data mapper .ts format, dmUtils helpers, array handling. MI 4.4.0+ only |
 
 ### Testing
 | Context | Description |

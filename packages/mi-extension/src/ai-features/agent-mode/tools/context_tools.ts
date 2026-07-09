@@ -72,6 +72,10 @@ import {
     SYNAPSE_ASYNC_REFERENCE_SECTIONS,
 } from '../context/synapse-core/synapse_async_reference';
 import {
+    MCP_SERVER_REFERENCE_FULL,
+    MCP_SERVER_REFERENCE_SECTIONS,
+} from '../context/synapse-core/synapse_mcp_server_reference';
+import {
     SYNAPSE_HTTP_CONNECTOR_GUIDE_FULL,
     SYNAPSE_HTTP_CONNECTOR_GUIDE_SECTIONS,
 } from '../context/synapse-core/synapse_http_connector_guide';
@@ -87,7 +91,7 @@ import { logDebug, logWarn } from '../../copilot/logger';
 import { ContextExecuteFn, ToolResult } from './types';
 import { getRuntimeVersionFromPom } from './connector_store_cache';
 import { compareVersions } from '../../../util/onboardingUtils';
-import { RUNTIME_VERSION_440 } from '../../../constants';
+import { RUNTIME_VERSION_440, RUNTIME_VERSION_460 } from '../../../constants';
 
 interface ContextDefinition {
     name: string;
@@ -161,6 +165,14 @@ const CONTEXT_REFERENCES: ContextDefinition[] = [
         content: SYNAPSE_ASYNC_REFERENCE_FULL,
         sections: SYNAPSE_ASYNC_REFERENCE_SECTIONS,
         aliases: ['synapse_async_reference', 'message-stores', 'message-processors'],
+    },
+    {
+        name: 'mcp-server-reference',
+        description: 'MCP server reference: expose MI integrations as Model Context Protocol tools via the MCP inbound endpoint (org.wso2.carbon.inbound.sse.McpInboundListener, mi-inbound-mcp connector) plus a <ServerName>-mcp-config local entry with <mcptools> definitions (API-backed and sequence-backed tools, JSON Schema inputs), including the creation recipe and naming-convention pitfalls. Requires MI runtime 4.6.0+.',
+        content: MCP_SERVER_REFERENCE_FULL,
+        sections: MCP_SERVER_REFERENCE_SECTIONS,
+        minRuntimeVersion: RUNTIME_VERSION_460,
+        aliases: ['mcp_server_reference', 'mcp-server', 'mcp-inbound-endpoint'],
     },
     {
         name: 'synapse-payload-patterns',

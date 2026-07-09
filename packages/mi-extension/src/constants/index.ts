@@ -218,6 +218,7 @@ export const LAST_EXPORTED_CAR_PATH = "last-exported-car-path";
 export const LAST_EXPORTED_ZIP_PATH = "last-exported-zip-path";
 export const RUNTIME_VERSION_440 = "4.4.0";
 export const RUNTIME_VERSION_450 = "4.5.0";
+export const RUNTIME_VERSION_460 = "4.6.0";
 export const DEFAULT_ICON = "https://mi-connectors.wso2.com/icons/wordpress.gif";
 
 export const ERROR_MESSAGES = {

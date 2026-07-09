@@ -1578,6 +1578,118 @@ export const INBOUND_DB = [
         "iconUrl": ""
     },
     {
+        "connectorName": "MCP (Inbound)",
+        "repoName": "mi-inbound-mcp",
+        "description": "The MCP inbound endpoint exposes integrations deployed in WSO2 Micro Integrator as Model Context Protocol (MCP) tools that AI agents can discover and invoke. It starts a listener on a dedicated port serving MCP over streamable HTTP at the /mcp context path; the exposed tools (backed by REST API resources or sequences) are defined in a local entry named <ServerName>-mcp-config referenced via the mcp.tools.localentry parameter. Requires MI runtime 4.6.0+. Load the 'mcp-server-reference' context for the full artifact syntax and creation recipe.",
+        "connectorType": "Inbound",
+        "mavenGroupId": "org.wso2.integration.inbound",
+        "mavenArtifactId": "mi-inbound-mcp",
+        "id": "org.wso2.carbon.inbound.sse.McpInboundListener",
+        "version": {
+            "tagName": "0.1.2",
+            "releaseId": "337024652",
+            "isLatest": true,
+            "isDeprecated": false,
+            "operations": [
+                {
+                    "name": "init",
+                    "description": "Initialize MCP Inbound Endpoint",
+                    "isHidden": false,
+                    "parameters": [
+                        {
+                            "name": "class",
+                            "type": "string",
+                            "required": true,
+                            "description": "",
+                            "defaultValue": "org.wso2.carbon.inbound.sse.McpInboundListener"
+                        },
+                        {
+                            "name": "name",
+                            "type": "string",
+                            "required": true,
+                            "description": "Unique name for the MCP server. The tools local entry must be named <name>-mcp-config.",
+                            "defaultValue": ""
+                        },
+                        {
+                            "name": "inbound.behavior",
+                            "type": "string",
+                            "required": true,
+                            "description": "Inbound behavior",
+                            "defaultValue": "listening"
+                        },
+                        {
+                            "name": "inbound.mcp.port",
+                            "type": "string",
+                            "required": true,
+                            "description": "Port the MCP server listens on. Must not be used by another inbound endpoint. Port offset is not applied unless inbound.port.offset.enable=true is set in deployment.toml.",
+                            "defaultValue": "8300"
+                        },
+                        {
+                            "name": "inbound.http.port",
+                            "type": "string",
+                            "required": true,
+                            "description": "Set to the same value as inbound.mcp.port (used by tooling for port-collision checks).",
+                            "defaultValue": "8300"
+                        },
+                        {
+                            "name": "inbound.http.context",
+                            "type": "string",
+                            "required": true,
+                            "description": "Context path served by the MCP listener. Always /mcp.",
+                            "defaultValue": "/mcp"
+                        },
+                        {
+                            "name": "mcp.tools.localentry",
+                            "type": "string",
+                            "required": true,
+                            "description": "Key of the local entry containing the <mcptools> tool definitions. Convention: <ServerName>-mcp-config.",
+                            "defaultValue": ""
+                        },
+                        {
+                            "name": "inbound.cors.allow.origin",
+                            "type": "string",
+                            "required": false,
+                            "description": "Access-Control-Allow-Origin header value.",
+                            "defaultValue": "*"
+                        },
+                        {
+                            "name": "inbound.cors.allow.methods",
+                            "type": "string",
+                            "required": false,
+                            "description": "Access-Control-Allow-Methods header value.",
+                            "defaultValue": "GET, POST, OPTIONS"
+                        },
+                        {
+                            "name": "inbound.cors.allow.headers",
+                            "type": "string",
+                            "required": false,
+                            "description": "Access-Control-Allow-Headers header value.",
+                            "defaultValue": "Content-Type, Mcp-Session-Id"
+                        },
+                        {
+                            "name": "inbound.cors.expose.headers",
+                            "type": "string",
+                            "required": false,
+                            "description": "Access-Control-Expose-Headers header value.",
+                            "defaultValue": "Mcp-Session-Id"
+                        },
+                        {
+                            "name": "inbound.sse.keepalive.interval",
+                            "type": "string",
+                            "required": false,
+                            "description": "Interval in milliseconds between keep-alive messages sent on open SSE streams.",
+                            "defaultValue": "30000"
+                        }
+                    ]
+                }
+            ],
+            "connections": []
+        },
+        "otherVersions": {},
+        "connectorRank": 15,
+        "iconUrl": ""
+    },
+    {
         "connectorName": "Pulsar (Inbound)",
         "repoName": "mi-inbound-pulsar",
         "description": "Apache Pulsar inbound endpoint acts as a message consumer for Apache Pulsar. It receives messages from configured topics of Apache Pulsar platform and inject them into the mediation flow.",
