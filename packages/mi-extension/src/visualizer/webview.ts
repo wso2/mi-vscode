@@ -151,6 +151,12 @@ export class VisualizerWebview {
         </div>`;
 
         const styles = `
+            body {
+                /* Override VS Code's default webview body padding (0 20px) which
+                   leaves an empty gutter on the left/right of every non-canvas view. */
+                padding: 0;
+                margin: 0;
+            }
             .container {
                 background-color: var(--vscode-editor-background);
                 height: 100vh;

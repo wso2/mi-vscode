@@ -353,6 +353,11 @@ export function activateVisualizer(context: vscode.ExtensionContext, firstProjec
 
     context.subscriptions.push(
         commands.registerCommand(COMMANDS.SHOW_OVERVIEW, async () => {
+            const workspaces = vscode.workspace.workspaceFolders;
+            if (workspaces && workspaces.length > 1) {
+                openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.WorkspaceOverview });
+                return;
+            }
             const projectType: string | undefined = extension.context.workspaceState.get('projectType');
             switch (projectType) {
                 case 'miProject':

@@ -375,7 +375,7 @@ import { replaceFullContentToFile, saveIdpSchemaToFile } from "../../util/worksp
 import { VisualizerWebview, webviews } from "../../visualizer/webview";
 import path = require("path");
 import { importCapp } from "../../util/importCapp";
-import { compareVersions, filterConnectorVersion, generateInitialDependencies, getDefaultProjectPath, getMIVersionFromPom, buildBallerinaModule, updatePomForClassMediator, isConsolidatedProject, getProjectJavaVersion } from "../../util/onboardingUtils";
+import { compareVersions, filterConnectorVersion, generateInitialDependencies, getDefaultProjectPath, getMIVersionFromPom, buildBallerinaModule, updatePomForClassMediator, isConsolidatedProject, isRemoteDeploymentEnabledInConsolidatedProject, getProjectJavaVersion } from "../../util/onboardingUtils";
 import { Range as STRange } from '@wso2/syntax-tree/lib/src';
 import { checkForWso2IntegratorExt } from "../../extension";
 import { getAPIMetadata } from "../../util/template-engine/mustach-templates/API";
@@ -5288,10 +5288,27 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const workspaceFolderUri = vscode.Uri.file(path.resolve(this.projectUri));
             if (workspaceFolderUri) {
-                const config = vscode.workspace.getConfiguration('MI', workspaceFolderUri);
-                const isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED");
+                const consolidatedRoot = path.dirname(this.projectUri);
+                let isRemoteDeploymentEnabled: boolean;
+                if (isConsolidatedProject(consolidatedRoot)) {
+                    isRemoteDeploymentEnabled = isRemoteDeploymentEnabledInConsolidatedProject(consolidatedRoot);
+                } else {
+                    const config = vscode.workspace.getConfiguration('MI', workspaceFolderUri);
+                    isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED") ?? false;
+                }
                 if (isRemoteDeploymentEnabled) {
-                    await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
+                    if (isConsolidatedProject(consolidatedRoot)) {
+                        const subprojects = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
+                        for (const subprojectPath of subprojects) {
+                            await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, subprojectPath, false);
+                        }
+                    } else {
+                        await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
+                    }
+                } else if (isConsolidatedProject(path.dirname(this.projectUri))) {
+                    vscode.window.showInformationMessage(
+                        'Remote deployment is not configured. Use the Workspace Overview page to set up remote deployment.'
+                    );
                 } else {
                     const configure = await vscode.window.showWarningMessage(
                         'Remote deployment is not enabled. Do you want to enable and configure it now?',
@@ -5327,8 +5344,21 @@ ${keyValuesXML}`;
 
             let integrationType: string | undefined;
             if (this.projectUri) {
-                const rootPath = (await this.getProjectRoot({ path: this.projectUri })).path;
-                const resp = await langClient.getProjectIntegrationType(rootPath);
+                const consolidatedRoot = path.dirname(this.projectUri);
+                const consolidated = isConsolidatedProject(consolidatedRoot);
+
+                // Collect integration types across all relevant project paths, deduplicated
+                const projectPaths = consolidated
+                    ? (vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [])
+                    : [this.projectUri];
+
+                const allTypes = new Set<string>();
+                for (const projectPath of projectPaths) {
+                    const rootPath = (await this.getProjectRoot({ path: projectPath })).path;
+                    const types = await langClient.getProjectIntegrationType(rootPath);
+                    types.forEach((t: string) => allTypes.add(t));
+                }
+                const resp = [...allTypes];
 
                 function mapTypeToScope(type: string): string | undefined {
                     switch (type) {
@@ -5348,16 +5378,13 @@ ${keyValuesXML}`;
                 }
 
                 if (resp.length === 1) {
-                    const type = resp[0]
-                    integrationType = mapTypeToScope(type);
+                    integrationType = mapTypeToScope(resp[0]);
                 } else if (resp.length === 0) {
                     window.showErrorMessage("You don't have any artifacts within this project. Please add an artifact and try again.");
                 } else {
-                    // Show a quick pick to select deployment option
                     const selectedScope = await window.showQuickPick(resp, {
                         placeHolder: 'You have different types of artifacts within this project. Select the artifact type to be deployed'
                     });
-
                     if (selectedScope) {
                         integrationType = mapTypeToScope(selectedScope);
                     }
@@ -5367,16 +5394,16 @@ ${keyValuesXML}`;
                     return { success: false };
                 }
 
-                const paramsWithType: ICreateNewIntegrationCmdParams = { 
-                    buildPackLang: "microintegrator", 
-                    workspaceDir: this.projectUri, 
-                    integrations: [{ 
-                        fsPath: this.projectUri, 
-                        name: path.basename(this.projectUri), 
+                const workspaceDir = consolidated ? consolidatedRoot : this.projectUri;
+                const paramsWithType: ICreateNewIntegrationCmdParams = {
+                    buildPackLang: "microintegrator",
+                    workspaceDir,
+                    integrations: [{
+                        fsPath: workspaceDir,
+                        name: path.basename(workspaceDir),
                         supportedIntegrationTypes: [integrationType]
                     }]
-                }
-                
+                };
                 commands.executeCommand(WICommandIds.CreateNewComponent, paramsWithType);
                 resolve({ success: true });
 

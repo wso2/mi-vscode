@@ -377,6 +377,12 @@
         "when": "false"
       },
       {
+        "command": "MI.project-explorer.open-workspace-overview",
+        "title": "Workspace Overview",
+        "icon": "$(folder-library)",
+        "category": "MI"
+      },
+      {
         "command": "MI.project-explorer.open-service-designer",
         "title": "Open Service Designer",
         "icon": "$(mi-design-view)",
@@ -905,8 +911,8 @@
           "group": "navigation"
         },
         {
-          "command": "MI.test.add.suite",
-          "when": "view == workbench.view.testing",
+          "command": "MI.project-explorer.open-workspace-overview",
+          "when": "view == MI.project-explorer && projectOpened && MI.hasMultipleProjects",
           "group": "navigation"
         },
         {

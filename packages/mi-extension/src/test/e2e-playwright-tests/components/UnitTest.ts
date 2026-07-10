@@ -85,9 +85,7 @@ interface UnitTestData {
 }
 
 export class UnitTest {
-    private projectName: string = 'testProject';
-
-    constructor(private _page: Page) {
+    constructor(private _page: Page, private projectName: string = 'testProject') {
     }
 
     public async init() {
@@ -456,12 +454,18 @@ export class UnitTest {
         await form.submit('Create');
     }
 
+    private unitTestTreePath(name: string): string[] {
+        // The test explorer nests suites under a project node and then the
+        // "wso2mi" test-suite directory node: Project > wso2mi > Suite.
+        return [`${this.projectName} (Not yet run)`, `wso2mi (Not yet run)`, `${name} (Not yet run)`];
+    }
+
     private async openAddTestCaseViewOfUnitTest(name: string) {
         console.log('Opening Add Test Case view of Unit Test:', name);
         const testExplorer = new ProjectExplorer(this._page, 'Test Explorer');
         await testExplorer.init();
         await this._page.waitForTimeout(1000);
-        const treeItem = await testExplorer.findItem([`${this.projectName} (Not yet run)`, `${name} (Not yet run)`]) as Locator;
+        const treeItem = await testExplorer.findItem(this.unitTestTreePath(name)) as Locator;
         if (!treeItem) {
             throw new Error(`Unit test "${name}" not found in Test Explorer`);
         }
@@ -475,7 +479,7 @@ export class UnitTest {
         console.log('Opening Edit view of Unit Test:', name);
         const testExplorer = new ProjectExplorer(this._page, 'Test Explorer');
         await testExplorer.init();
-        const treeItem = await testExplorer.findItem([`${this.projectName} (Not yet run)`, `${name} (Not yet run)`]) as Locator;
+        const treeItem = await testExplorer.findItem(this.unitTestTreePath(name)) as Locator;
         if (!treeItem) {
             throw new Error(`Unit test "${name}" not found in Test Explorer`);
         }

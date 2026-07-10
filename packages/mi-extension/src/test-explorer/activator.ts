@@ -55,13 +55,33 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
     };
     createTestsForAllFiles();
 
-    // search for all the tests.
-    startWatchingWorkspace(testFileMatchPattern, createTestsForAllFiles);
+    // search for all the tests. Re-establish the watchers whenever the set of
+    // workspace folders changes so test files in newly added projects are
+    // watched too.
+    let testFileWatchers = startWatchingWorkspace(testFileMatchPattern, createTestsForAllFiles);
 
-    commands.registerCommand(COMMANDS.ADD_TEST_SUITE, (args: any) => {
-        const projectUri = vscode.workspace.workspaceFolders?.[0]?.uri;
-        const webview = [...webviews.values()].find(webview => webview.getWebview()?.active) || [...webviews.values()][0];
-        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestSuite, projectUri: webview ? webview.getProjectUri() : projectUri?.fsPath });
+    // Refresh when projects are added to / removed from the workspace so their
+    // project nodes appear (or disappear) without a manual refresh.
+    extensionContext.subscriptions.push(
+        workspace.onDidChangeWorkspaceFolders(() => {
+            testFileWatchers.forEach(watcher => watcher.dispose());
+            testFileWatchers = startWatchingWorkspace(testFileMatchPattern, createTestsForAllFiles);
+            createTestsForAllFiles();
+        })
+    );
+    extensionContext.subscriptions.push({ dispose: () => testFileWatchers.forEach(watcher => watcher.dispose()) });
+
+    commands.registerCommand(COMMANDS.ADD_TEST_SUITE, (args: TestItem) => {
+        // When triggered from a project/directory node, target that node's project.
+        let projectUri: string | undefined;
+        if (args?.id) {
+            projectUri = getProjectRoot(Uri.file(args.id));
+        }
+        if (!projectUri) {
+            const webview = [...webviews.values()].find(webview => webview.getWebview()?.active) || [...webviews.values()][0];
+            projectUri = webview ? webview.getProjectUri() : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+        }
+        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestSuite, projectUri });
         console.log('Add Test suite');
     });
 
@@ -280,66 +300,75 @@ export async function createTests(uri: Uri) {
 
     const testCases: TestCase[] = await getTestCases(uri);
 
+    // Ensure the project appears as a top-level node, then nest suites under it.
+    const projectNode = getOrCreateProjectNode(projectRoot, projectName);
+    await setStateforTestDirs(projectNode.id);
+
     const testsRoot = path.join(projectRoot, "src", "test");
+    const relativePath = path.relative(testsRoot, uri.fsPath).split(path.sep);
 
-    let relativePath = path.relative(testsRoot, uri.fsPath).toString().split(path.sep);
+    let parent = projectNode;
+    let currentPath = testsRoot;
+    for (let i = 0; i < relativePath.length; i++) {
+        const level = relativePath[i];
+        currentPath = path.join(currentPath, level).toString();
+        const isLeaf = i === relativePath.length - 1;
 
-    const ancestors: TestItem[] = [];
-
-    // uncomment to add project name as parent
-    // if already added to the test explorer.
-    // let projectNode = testController.items.get(testsRoot);
-    // if (!projectNode) {
-    //     projectNode = createTestItem(testController, testsRoot, projectName);
-    //     await setCanAddTestSuite(testsRoot);
-    //     testController.items.add(projectNode);
-    // }
-    // ancestors.push(projectNode);
-
-    // let parentNode: TestItem = projectNode;
-    let parentNode: TestItem | undefined;
-    const testPath = uri.fsPath;
-
-    const currentItems = testController.items;
-    currentItems.forEach((item) => {
-        if (testPath.includes(item.id) && item.canResolveChildren) {
-            parentNode = getParentNode(item, testPath);
+        let node = parent.children.get(currentPath);
+        if (!node) {
+            node = createTestItem(testController, currentPath, isLeaf ? level.split(".xml")[0] : level, !isLeaf);
+            parent.children.add(node);
         }
 
-    });
-
-    if (parentNode) {
-        ancestors.push(parentNode);
-        relativePath = path.relative(parentNode.id, testPath).split(path.sep);
-    }
-
-    // parentNode = getParentNode(projectNode, testPath);
-    // if (projectNode !== parentNode) {
-    //     ancestors.push(parentNode);
-    //     relativePath = path.relative(parentNode.id, testPath).split(path.sep);
-    // }
-
-    for (let i = 0; i < relativePath.length; i++) {
-        const parent = ancestors[ancestors.length - 1];
-        const level = relativePath[i];
-        const currentPath = parent ? path.join(parent.id, level).toString() : path.join(testsRoot, level).toString();
-
-        let node;
-        if (i < relativePath.length - 1) {
-            node = createTestItem(testController, currentPath, i === 0 ? projectName : level, true);
-            await setStateforTestDirs(currentPath);
-        } else {
-            node = createTestItem(testController, currentPath, level.split(".xml")[0], false);
-            testCases.forEach(async (testCase) => {
+        if (isLeaf) {
+            for (const testCase of testCases) {
                 const tcase = createTestCase(testController, currentPath, testCase.name, testCase.range);
                 node.children.add(tcase);
                 await setStateForTestCases(`${currentPath}/${testCase.name}`);
-            });
+            }
             await setStateForTestSuites(currentPath);
+        } else {
+            await setStateforTestDirs(currentPath);
         }
-        parent ? parent.children.add(node) : testController.items.add(node);
-        ancestors.push(node);
+        parent = node;
     }
+}
+
+/**
+ * Create a top-level test item for a project (workspace folder) so the project
+ * is shown in the test explorer even when it has no test suites yet. Mirrors the
+ * mock-services tree, which always lists workspace folders.
+ */
+export async function createProjectNode(uri: Uri) {
+    const projectRoot = getProjectRoot(uri);
+    if (!testController || !projectRoot) {
+        return;
+    }
+
+    let projectName: string | undefined;
+    try {
+        const langClient = await MILanguageClient.getInstance(projectRoot);
+        const projectDetails = await langClient.getProjectDetails();
+        projectName = projectDetails?.primaryDetails?.projectName?.value;
+    } catch {
+        // fall back to the folder name below
+    }
+    projectName = projectName ?? getProjectName(uri) ?? projectRoot;
+
+    const projectNode = getOrCreateProjectNode(projectRoot, projectName);
+    await setStateforTestDirs(projectNode.id);
+}
+
+/**
+ * Get the existing project node for a project root or create one.
+ */
+function getOrCreateProjectNode(projectRoot: string, projectName: string): TestItem {
+    let projectNode = testController.items.get(projectRoot);
+    if (!projectNode) {
+        projectNode = createTestItem(testController, projectRoot, projectName, true);
+        testController.items.add(projectNode);
+    }
+    return projectNode;
 }
 
 async function getTestCaseNamesAndTestSuiteType(uri: Uri) {
@@ -458,21 +487,3 @@ function createTestItem(controller: TestController, id: string, label: string, c
     return item;
 }
 
-/**
- * Get parent node of a test item. This may return invalid parent node 
- * if the parent is not found. Always check the parent id with the returned
- * parent's id to validate.
- */
-function getParentNode(testNode: TestItem, pathToSearch: string):
-    TestItem | undefined {
-    if (!testNode.canResolveChildren) {
-        return;
-    }
-
-    testNode.children.forEach((node) => {
-        if (pathToSearch.includes(node.id)) {
-            return getParentNode(node, pathToSearch);
-        }
-    });
-    return testNode;
-}

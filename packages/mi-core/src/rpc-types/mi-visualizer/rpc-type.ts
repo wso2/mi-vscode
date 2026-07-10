@@ -39,6 +39,7 @@ import {
     OpenExternalRequest,
     OpenExternalResponse,
     ProjectOverviewResponse,
+    WorkspaceProjectSummary,
     ReadmeContentResponse,
     AddConfigurableRequest,
     ProjectDetailsResponse,
@@ -60,7 +61,10 @@ import {
     ExecuteRemoteDeployParams,
     DeployConfigParam,
     McpToolSuggestionRequest,
-    McpToolSuggestionResponse
+    McpToolSuggestionResponse,
+    ConsolidatedProjectDetails,
+    UpdateConsolidatedProjectDetailsRequest,
+    ConsolidatedRemoteDeployConfig
 } from "./types";
 import { GettingStartedData, SampleDownloadRequest } from "./types";
 import { RequestType, NotificationType } from "vscode-messenger-common";
@@ -71,6 +75,7 @@ export const getWorkspaces: RequestType<void, WorkspacesResponse> = { method: `$
 export const findOldProjects: RequestType<void, string[]> = { method: `${_preFix}/findOldProjects` };
 export const getProjectStructure: RequestType<ProjectStructureRequest, ProjectStructureResponse> = { method: `${_preFix}/getProjectStructure` };
 export const getProjectOverview: RequestType<ProjectStructureRequest, ProjectOverviewResponse> = { method: `${_preFix}/getProjectOverview` };
+export const getWorkspaceProjectSummary: RequestType<ProjectStructureRequest, WorkspaceProjectSummary> = { method: `${_preFix}/getWorkspaceProjectSummary` };
 export const getCurrentThemeKind: RequestType<void, ColorThemeKind> = { method: `${_preFix}/getCurrentThemeKind` };
 export const openView: NotificationType<OpenViewRequest> = { method: `${_preFix}/openView` };
 export const reloadWindow: RequestType<void, void> = { method: `${_preFix}/reloadWindow` };
@@ -122,3 +127,7 @@ export const updateAiDependencies: RequestType<UpdateAiDependenciesRequest, bool
 export const executeRemoteDeployWithParams: RequestType<ExecuteRemoteDeployParams, void> = { method: `${_preFix}/executeRemoteDeployWithParams` };
 export const getRemoteDeployConfigs: RequestType<void, DeployConfigParam[]> = { method: `${_preFix}/getRemoteDeployConfigs` };
 export const getMcpToolSuggestion: RequestType<McpToolSuggestionRequest, McpToolSuggestionResponse> = { method: `${_preFix}/getMcpToolSuggestion` };
+export const getConsolidatedProjectDetails: RequestType<void, ConsolidatedProjectDetails | null> = { method: `${_preFix}/getConsolidatedProjectDetails` };
+export const updateConsolidatedProjectDetails: RequestType<UpdateConsolidatedProjectDetailsRequest, boolean> = { method: `${_preFix}/updateConsolidatedProjectDetails` };
+export const getConsolidatedRemoteDeployConfig: RequestType<void, ConsolidatedRemoteDeployConfig | null> = { method: `${_preFix}/getConsolidatedRemoteDeployConfig` };
+export const saveConsolidatedRemoteDeployConfig: RequestType<ConsolidatedRemoteDeployConfig, boolean> = { method: `${_preFix}/saveConsolidatedRemoteDeployConfig` };
