@@ -2346,8 +2346,15 @@ export interface GetPomFileContentResponse{
     content: string;
 }
 
+export interface ExternalConnectorDetail {
+    name: string;
+    path: string;
+    type: 'connector' | 'inbound';
+}
+
 export interface GetExternalConnectorDetailsResponse{
     connectors: string[];
+    connectorDetails?: ExternalConnectorDetail[];
 }
 
 export interface WriteMockServicesRequest {
@@ -2594,4 +2601,15 @@ export interface GetAPIOperationInputSchemasRequest {
 export interface GetAPIOperationInputSchemasResponse {
     schemas: { [operationId: string]: string };
     descriptions: { [operationId: string]: string };
+}
+
+export interface ParsePomGavRequest {
+    pomPath: string;
+}
+
+export interface ParsePomGavResponse {
+    groupId: string;
+    artifactId: string;
+    version: string;
+    packaging?: string;
 }

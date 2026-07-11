@@ -401,6 +401,9 @@ import {
     CopyConnectorZipRequest,
     CopyConnectorZipResponse,
     copyConnectorZip,
+    ParsePomGavRequest,
+    ParsePomGavResponse,
+    parsePomGav,
     askOpenAPIDirPath,
     RemoveConnectorRequest,
     removeConnector,
@@ -901,6 +904,10 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
 
     copyConnectorZip(params: CopyConnectorZipRequest): Promise<CopyConnectorZipResponse> {
         return this._messenger.sendRequest(copyConnectorZip, HOST_EXTENSION, params);
+    }
+
+    parsePomGav(params: ParsePomGavRequest): Promise<ParsePomGavResponse> {
+        return this._messenger.sendRequest(parsePomGav, HOST_EXTENSION, params);
     }
 
     copyArtifact(params: CopyArtifactRequest): Promise<CopyArtifactResponse> {

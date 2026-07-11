@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -360,7 +361,12 @@ public class ConnectorConfigService {
             data.omit = Boolean.TRUE.equals(connectorCfg != null ? connectorCfg.omit : null);
             data.omitAllDrivers = Boolean.TRUE.equals(config.omitAllDrivers)
                     || Boolean.TRUE.equals(connectorCfg != null ? connectorCfg.omitAllDrivers : null);
-            data.dependencies = descriptorDeps.isEmpty()
+            // Call mergeDependencies whenever there are descriptor deps OR config overrides, so
+            // user-added dependencies (orphan overrides) still surface for connectors whose
+            // descriptor.yml declares no dependencies of its own.
+            boolean hasOverrides = connectorCfg != null && connectorCfg.dependencies != null
+                    && !connectorCfg.dependencies.isEmpty();
+            data.dependencies = (descriptorDeps.isEmpty() && !hasOverrides)
                     ? new ArrayList<>()
                     : mergeDependencies(descriptorDeps, config, artifactId, activeConnectionTypes);
             result.put(artifactId, data);
@@ -490,6 +496,11 @@ public class ConnectorConfigService {
                         ? connectorCfg.dependencies
                         : Collections.emptyList();
 
+        // Track which overrides are consumed by a descriptor.yml entry so the remaining (orphan)
+        // overrides can be emitted in a second pass below. Identity matching is used because
+        // findMatchingOverride returns the exact instance held in the overrides list.
+        Set<DependencyOverride> consumedOverrides = Collections.newSetFromMap(new IdentityHashMap<>());
+
         List<EffectiveDependency> result = new ArrayList<>();
         for (Map<String, Object> dep : descriptorDeps) {
             String groupId = (String) dep.get("groupId");
@@ -498,6 +509,9 @@ public class ConnectorConfigService {
             String connectionType = (String) dep.get("connectionType");
 
             DependencyOverride override = findMatchingOverride(overrides, connectionType, groupId, artifactId);
+            if (override != null) {
+                consumedOverrides.add(override);
+            }
 
             EffectiveDependency eff = new EffectiveDependency();
             eff.connectionType = connectionType;
@@ -527,6 +541,32 @@ public class ConnectorConfigService {
                     eff.localPath = override.localPath;
                 }
             }
+            result.add(eff);
+        }
+
+        // Second pass: emit overrides that matched no descriptor.yml entry. These are user-added
+        // dependencies; they have no descriptor default, so defaultVersion stays null (which the
+        // UI renders as an "added" dependency rather than an override of an existing driver).
+        for (DependencyOverride override : overrides) {
+            if (consumedOverrides.contains(override)) {
+                continue;
+            }
+            // An override with neither coordinates nor a connectionType carries no usable
+            // identity; skip it defensively.
+            if (StringUtils.isBlank(override.artifactId) && StringUtils.isBlank(override.connectionType)) {
+                continue;
+            }
+            EffectiveDependency eff = new EffectiveDependency();
+            eff.connectionType = blankToNull(override.connectionType);
+            eff.groupId = blankToNull(override.groupId);
+            eff.artifactId = blankToNull(override.artifactId);
+            eff.defaultVersion = null; // not part of descriptor.yml
+            eff.overriddenVersion = blankToNull(override.version);
+            eff.localPath = blankToNull(override.localPath);
+            eff.isOverridden = true;
+            eff.omit = globalOmitAllDrivers || Boolean.TRUE.equals(override.omit);
+            eff.isConnectionTypeActive = (eff.connectionType == null)
+                    || activeConnectionTypes.contains(eff.connectionType.toUpperCase());
             result.add(eff);
         }
         return result;

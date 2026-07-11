@@ -54,6 +54,8 @@ import {
     VisualizerLocation,
     WorkspaceFolder,
     WorkspacesResponse,
+    WorkspaceMiProject,
+    WorkspaceMiProjectsResponse,
     ProjectDetailsResponse,
     UpdatePropertiesRequest,
     UpdateDependenciesRequest,
@@ -138,6 +140,47 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
             }));
             resolve({ workspaces: response });
         });
+    }
+
+    /**
+     * Returns the MI integration projects available in the current workspace (excluding the
+     * active project), each with its Maven coordinates read from its pom.xml. Used to add another
+     * workspace project as a CAR dependency.
+     */
+    async getWorkspaceMiProjects(): Promise<WorkspaceMiProjectsResponse> {
+        const fs = require("fs");
+        const { XMLParser } = require("fast-xml-parser");
+        const parser = new XMLParser({ ignoreAttributes: false });
+        const folders = workspace.workspaceFolders ?? [];
+        const projects: WorkspaceMiProject[] = [];
+
+        for (const folder of folders) {
+            const folderPath = folder.uri.fsPath;
+            // Skip the currently active project.
+            if (path.normalize(folderPath) === path.normalize(this.projectUri)) {
+                continue;
+            }
+            const pomPath = path.join(folderPath, "pom.xml");
+            const wso2miDir = path.join(folderPath, "src", "main", "wso2mi");
+            if (!fs.existsSync(pomPath) || !fs.existsSync(wso2miDir)) {
+                continue;
+            }
+            try {
+                const parsed = parser.parse(fs.readFileSync(pomPath, "utf8"));
+                const project = parsed?.project ?? {};
+                const parent = project?.parent ?? {};
+                projects.push({
+                    name: folder.name,
+                    fsPath: folderPath,
+                    groupId: String(project.groupId ?? parent.groupId ?? ""),
+                    artifactId: String(project.artifactId ?? ""),
+                    version: String(project.version ?? parent.version ?? ""),
+                });
+            } catch (e) {
+                console.error(`Failed to parse pom.xml for workspace project at ${folderPath}`, e);
+            }
+        }
+        return { projects };
     }
 
     /**
@@ -348,7 +391,11 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
                         } else if (connectorsFromIntegrationProjectDeps.includes(dependencyString)) {
                             warningMessage = "This connector is provided by an integration project dependency and cannot be downloaded separately.";
                         } else if (unavailableDependencies.includes(dependencyString)) {
-                            warningMessage = "Dependency downloading failed.";
+                            warningMessage = params?.fromLocalProjectSource
+                                ? "Could not resolve the integration project dependency. "
+                                    + "Make sure the dependency project is built and installed locally "
+                                    + "before adding it as a dependency."
+                                : "Dependency downloading failed.";
                         } else if (missingDescriptorDependencies.includes(dependencyString)) {
                             warningMessage = "The dependency does not contain the descriptor file.";
                         } else if (versioningMismatchDependencies.includes(dependencyString)) {
@@ -471,7 +518,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
             const envContent = nonEmptyConfigValues.map(configValue => `${configValue.key}=${configValue.value}`).join('\n');
             fs.writeFileSync(envFilePath, envContent);
 
-            navigate(this.projectUri);
+            refreshUI(this.projectUri);
 
             resolve(true);
         });

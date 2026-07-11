@@ -30,6 +30,18 @@ export interface WorkspaceFolder {
     fsPath: string;
 }
 
+export interface WorkspaceMiProject {
+    name: string;
+    fsPath: string;
+    groupId: string;
+    artifactId: string;
+    version: string;
+}
+
+export interface WorkspaceMiProjectsResponse {
+    projects: WorkspaceMiProject[];
+}
+
 export interface Range {
     start: {
         line: number;
@@ -500,6 +512,10 @@ export interface UpdateAiDependenciesResponse {
 export interface ReloadDependenciesRequest {
     newDependencies?: DependencyDetails[];
     isProjectDependenciesUpdated?: boolean;
+    // True when the dependency was added from a local integration project source (the "select a
+    // pom file" or "workspace project" options). On resolution failure this surfaces guidance to
+    // build the project locally, rather than the generic download-failed message.
+    fromLocalProjectSource?: boolean;
 }
 
 export interface DeployConfigParam {

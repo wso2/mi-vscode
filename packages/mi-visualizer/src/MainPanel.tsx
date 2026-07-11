@@ -38,6 +38,7 @@ import { DataMapper } from './views/DataMapper';
 import { ErrorBoundary } from '@wso2/ui-toolkit';
 import PopupPanel from './PopupPanel';
 import { AddArtifactView } from './views/AddArtifact';
+import { ManageDependencies } from './views/ManageDependencies';
 import { SequenceTemplateView } from './views/Diagram/SequenceTemplate';
 import { ConnectionWizard } from './views/Forms/ConnectionForm';
 import { TestSuiteForm } from './views/Forms/Tests/TestSuiteForm';
@@ -166,6 +167,9 @@ const MainPanel = (props: MainPanelProps) => {
                 break;
             case MACHINE_VIEW.ADD_ARTIFACT:
                 setViewComponent(<AddArtifactView />);
+                break;
+            case MACHINE_VIEW.ManageDependencies:
+                setViewComponent(<ManageDependencies />);
                 break;
             case MACHINE_VIEW.UnsupportedProject:
                 setViewComponent(

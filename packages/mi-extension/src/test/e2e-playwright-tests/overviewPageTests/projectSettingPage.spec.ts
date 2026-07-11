@@ -61,7 +61,7 @@ export default function createTests() {
                 const overviewPage = new Overview(page.page);
                 await waitUntilPomNotContains(page.page, pomFilePath, '<artifactId>mysql-connector-java</artifactId>');
                 await overviewPage.init();
-                await overviewPage.openOtherDependenciesManager();
+                await overviewPage.openManageDependencies();
                 await overviewPage.addOtherDependencies();
                 // Wait for 10s to let the pom.xml update
                 await page.page.waitForTimeout(10000);
@@ -102,7 +102,7 @@ export default function createTests() {
                     '<artifactId>mi-connector-amazonsqs</artifactId>');
                 const overviewPage = new Overview(page.page);
                 await overviewPage.init();
-                await overviewPage.openConnectorDependenciesManager();
+                await overviewPage.openManageDependencies();
                 await overviewPage.addConnectorDependencies();
                 // Wait for 8s to let the pom.xml update
                 await page.page.waitForTimeout(8000);

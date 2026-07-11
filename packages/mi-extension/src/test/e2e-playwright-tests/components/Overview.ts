@@ -38,13 +38,13 @@ export class Overview {
             console.error("Error retrieving iframe title:", error);
             iframeTitle = null;
         }
-        if (iframeTitle != MACHINE_VIEW.Overview) {
+        const overviewTitle = isMultiWorkspace ? `Project Overview - ${projectName}` : "Project Overview";
+        const onManageDependencies = iframeTitle === MACHINE_VIEW.ManageDependencies;
+        if (iframeTitle != MACHINE_VIEW.Overview && !onManageDependencies) {
             const projectExplorer = new ProjectExplorer(this._page);
             await projectExplorer.goToOverview(projectName);
         }
-        const webview = isMultiWorkspace ? 
-            await switchToIFrame(`Project Overview - ${projectName}`, this._page) : 
-            await switchToIFrame("Project Overview", this._page);
+        const webview = await switchToIFrame(onManageDependencies ? MACHINE_VIEW.ManageDependencies : overviewTitle, this._page);
         if (!webview) {
             throw new Error("Failed to switch to Overview iframe");
         }
@@ -97,60 +97,53 @@ export class Overview {
         await popupPanel.waitFor({ state: 'detached', timeout: 100000 });
     }
 
-    public async openOtherDependenciesManager() {
-        await this.webView.locator('[id="link-external-manage-dependencies-Other\\ Dependencies"] i').click();
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
+    // The old per-type "Manage X Dependencies" popups were replaced by a single, non-popup
+    // "Manage Dependencies" view (ManageDependencies/index.tsx) with a tab bar. There's no
+    // #popUpPanel anymore — it fully occupies the same webview panel that Overview uses, so
+    // this.webView stays valid across the navigation (see MainPanel.tsx's view switch).
+    public async openManageDependencies() {
+        const manageDependenciesLink = this.webView.locator('vscode-link').filter({ hasText: 'Manage Dependencies' }).locator('i');
+        await manageDependenciesLink.waitFor();
+        await manageDependenciesLink.click();
+        // "Connector Dependencies" is the default active tab and confirms the view has loaded.
+        await this.webView.getByRole('button', { name: 'Connector Dependencies' }).waitFor();
     }
 
-    public async openConnectorDependenciesManager() {
-        await this.webView.locator('[id="link-external-manage-dependencies-Connector\\ Dependencies"] i').click();
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-    }
-
-    public async openIntegrationDependenciesManager() {
-        await this.webView.locator('[id="link-external-manage-dependencies-Integration\\ Project\\ Dependencies"] i').click();
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
+    public async selectDependencyTab(label: string) {
+        await this.webView.getByRole('button', { name: label, exact: true }).click();
     }
 
     public async addOtherDependencies() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-        await popupPanel.getByText('Add Dependency').click();
-        await popupPanel.getByRole('textbox', { name: 'Group ID' }).fill("mysql");
-        await popupPanel.getByRole('textbox', { name: 'Artifact ID' }).fill("mysql-connector-java");
-        await popupPanel.getByRole('textbox', { name: 'Version' }).fill("8.0.33");
-        await popupPanel.getByRole('button', { name: 'Add Dependency' }).click();
+        await this.selectDependencyTab('JAR Dependencies');
+        await this.webView.getByText('Add Dependency').click();
+        await this.webView.getByRole('textbox', { name: 'Group ID' }).fill("mysql");
+        await this.webView.getByRole('textbox', { name: 'Artifact ID' }).fill("mysql-connector-java");
+        await this.webView.getByRole('textbox', { name: 'Version' }).fill("8.0.33");
+        await this.webView.getByRole('button', { name: 'Add Dependency' }).click();
         const loader = this.webView.locator('[data-testid="dependency-manager-loader"]');
         await loader.waitFor({ state: 'detached', timeout: 10000 });
         await this._page.waitForTimeout(5000);
-        const dependencyItemComponent = popupPanel.locator('[data-testid="mysql-mysql-connector-java-8.0.33"]');
+        const dependencyItemComponent = this.webView.locator('[data-testid="mysql-mysql-connector-java-8.0.33"]');
         await dependencyItemComponent.waitFor({ state: 'visible', timeout: 50000 });
     }
 
     public async editOtherDependencies() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-        await popupPanel.locator('h2:has-text("Other Dependencies")').waitFor({ state: 'visible', timeout: 5000 });
-        const dependencyItemComponent = popupPanel.locator('[data-testid="mysql-mysql-connector-java-8.0.33"]');
+        await this.selectDependencyTab('JAR Dependencies');
+        const dependencyItemComponent = this.webView.locator('[data-testid="mysql-mysql-connector-java-8.0.33"]');
         await dependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
         await dependencyItemComponent.hover();
         await dependencyItemComponent.locator('.codicon-edit').click();
-        await popupPanel.getByRole('textbox', { name: 'Version' }).fill("8.0.32");
-        await popupPanel.getByText('Save Changes').click();
+        await this.webView.getByRole('textbox', { name: 'Version' }).fill("8.0.32");
+        await this.webView.getByText('Save Changes').click();
         const loader = this.webView.locator('[data-testid="dependency-manager-loader"]');
         await loader.waitFor({ state: 'detached', timeout: 10000 });
-        const newDependencyItemComponent = popupPanel.locator('[data-testid="mysql-mysql-connector-java-8.0.32"]');
+        const newDependencyItemComponent = this.webView.locator('[data-testid="mysql-mysql-connector-java-8.0.32"]');
         await newDependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
     }
 
     public async deleteOtherDependencies() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-        await popupPanel.locator('h2:has-text("Other Dependencies")').waitFor();
-        const dependencyItemComponent = popupPanel.locator('[data-testid="mysql-mysql-connector-java-8.0.32"]');
+        await this.selectDependencyTab('JAR Dependencies');
+        const dependencyItemComponent = this.webView.locator('[data-testid="mysql-mysql-connector-java-8.0.32"]');
         await dependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
         await dependencyItemComponent.hover();
         await dependencyItemComponent.locator('.codicon-trash').click();
@@ -160,50 +153,47 @@ export class Overview {
     }
 
     public async closeDependencyManager() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.locator('vscode-button[title="Close"]').click();
-        await popupPanel.waitFor({ state: 'detached' });
+        await this.webView.getByRole('button', { name: 'Back to Overview' }).click();
+        await this.webView.locator('vscode-link').filter({ hasText: 'Manage Dependencies' }).waitFor({ timeout: 20000 });
     }
 
     public async addConnectorDependencies() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-        await popupPanel.locator('h2:has-text("Connector Dependencies")').waitFor();
+        await this.selectDependencyTab('Connector Dependencies');
         await this.webView.getByText('Add Dependency').click();
+        // Connector Dependencies now opens the connector-store browsing panel first;
+        // "Configure Dependency" is the way to reach the manual Group ID/Artifact ID/Version form.
+        await this.webView.getByRole('button', { name: 'Configure Dependency' }).click();
         await this.webView.getByRole('textbox', { name: 'Group ID' }).fill("org.wso2.integration.connector");
         await this.webView.getByRole('textbox', { name: 'Artifact ID' }).fill("mi-connector-amazonsqs");
         await this.webView.getByRole('textbox', { name: 'Version' }).fill("2.0.3");
-        await popupPanel.getByRole('button', { name: 'Add Dependency' }).click();
+        await this.webView.getByRole('button', { name: 'Add Dependency' }).click();
         const loader = this.webView.locator('[data-testid="dependency-manager-loader"]');
         await loader.waitFor({ state: 'detached', timeout: 10000 });
-        const dependencyItemComponent = popupPanel.locator(
+        const dependencyItemComponent = this.webView.locator(
             '[data-testid="org.wso2.integration.connector-mi-connector-amazonsqs-2.0.3"]'
         );
         await dependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
     }
 
     public async editConnectorDependencies() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-        const dependencyItemComponent = popupPanel.locator('[data-testid="org.wso2.integration.connector-mi-connector-amazonsqs-2.0.3"]');
+        await this.selectDependencyTab('Connector Dependencies');
+        const dependencyItemComponent = this.webView.locator('[data-testid="org.wso2.integration.connector-mi-connector-amazonsqs-2.0.3"]');
         await dependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
         await dependencyItemComponent.hover();
         await dependencyItemComponent.locator('.codicon-edit').click();
         await this.webView.getByRole('textbox', { name: 'Version' }).fill("3.0.1");
-        await popupPanel.getByText('Save Changes').click();
+        await this.webView.getByText('Save Changes').click();
         const loader = this.webView.locator('[data-testid="dependency-manager-loader"]');
         await loader.waitFor({ state: 'detached', timeout: 10000 });
-        const newDependencyItemComponent = popupPanel.locator(
+        const newDependencyItemComponent = this.webView.locator(
             '[data-testid="org.wso2.integration.connector-mi-connector-amazonsqs-3.0.1"]'
         );
         await newDependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
     }
 
     public async deleteConnectorDependencies() {
-        const popupPanel = this.webView.locator('#popUpPanel');
-        await popupPanel.waitFor();
-        await popupPanel.locator('h2:has-text("Connector Dependencies")').waitFor();
-        const dependencyItemComponent = popupPanel.locator('[data-testid="org.wso2.integration.connector-mi-connector-amazonsqs-3.0.1"]');
+        await this.selectDependencyTab('Connector Dependencies');
+        const dependencyItemComponent = this.webView.locator('[data-testid="org.wso2.integration.connector-mi-connector-amazonsqs-3.0.1"]');
         await dependencyItemComponent.waitFor({ state: 'visible', timeout: 10000 });
         await dependencyItemComponent.hover();
         await dependencyItemComponent.locator('.codicon-trash').click();
