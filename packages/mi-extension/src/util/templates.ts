@@ -505,12 +505,21 @@ export const consolidatedProjectPomContent = (projectName: string, groupID: stri
     modulesXml,
     `    </modules>`,
     `    <properties>`,
+    `        <projectType>integration-project</projectType>`,
     `        <project.runtime.version>${miVersion}</project.runtime.version>`,
     `        <car.plugin.version>${LATEST_CAR_PLUGIN_VERSION}</car.plugin.version>`,
     `        <maven.compiler.source>1.8</maven.compiler.source>`,
     `        <maven.compiler.target>1.8</maven.compiler.target>`,
+    `        <dockerfile.base.image>wso2/wso2mi:${miVersion}</dockerfile.base.image>`,
     `        <is.consolidated.project>true</is.consolidated.project>`,
+    `        <is.remote.deployment.enabled>false</is.remote.deployment.enabled>`,
     `    </properties>`,
+    `    <pluginRepositories>`,
+    `        <pluginRepository>`,
+    `            <id>wso2-public</id>`,
+    `            <url>https://maven.wso2.org/nexus/content/groups/wso2-public/</url>`,
+    `        </pluginRepository>`,
+    `    </pluginRepositories>`,
     `</project>`
   ].join('\n');
 };

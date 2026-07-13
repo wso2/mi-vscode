@@ -40,6 +40,7 @@ import {
     addConfigurable,
     getHistory,
     getProjectOverview,
+    getWorkspaceProjectSummary,
     getProjectStructure,
     getReadmeContent,
     getProjectUri,
@@ -97,7 +98,13 @@ import {
     ExecuteRemoteDeployParams,
     getRemoteDeployConfigs,
     ReloadDependenciesRequest,
-    getDependencyStatusList
+    getDependencyStatusList,
+    getConsolidatedProjectDetails,
+    updateConsolidatedProjectDetails,
+    UpdateConsolidatedProjectDetailsRequest,
+    getConsolidatedRemoteDeployConfig,
+    saveConsolidatedRemoteDeployConfig,
+    ConsolidatedRemoteDeployConfig
 } from "@wso2/mi-core";
 import { Messenger } from "vscode-messenger";
 import { MiVisualizerRpcManager } from "./rpc-manager";
@@ -109,6 +116,7 @@ export function registerMiVisualizerRpcHandlers(messenger: Messenger, projectUri
     messenger.onRequest(findOldProjects, () => rpcManger.findOldProjects());
     messenger.onRequest(getProjectStructure, (args: ProjectStructureRequest) => rpcManger.getProjectStructure(args));
     messenger.onRequest(getProjectOverview, (args: ProjectStructureRequest) => rpcManger.getProjectOverview(args));
+    messenger.onRequest(getWorkspaceProjectSummary, (args: ProjectStructureRequest) => rpcManger.getWorkspaceProjectSummary(args));
     messenger.onRequest(getCurrentThemeKind, () => rpcManger.getCurrentThemeKind());
     messenger.onNotification(openView, (args: OpenViewRequest) => rpcManger.openView(args));
     messenger.onNotification(reloadWindow, () => rpcManger.reloadWindow());
@@ -158,4 +166,8 @@ export function registerMiVisualizerRpcHandlers(messenger: Messenger, projectUri
     messenger.onRequest(updateAiDependencies, (args: UpdateAiDependenciesRequest) => rpcManger.updateAiDependencies(args));
     messenger.onRequest(executeRemoteDeployWithParams, (args: ExecuteRemoteDeployParams) => rpcManger.executeRemoteDeployWithParams(args));
     messenger.onRequest(getRemoteDeployConfigs, () => rpcManger.getRemoteDeployConfigs());
+    messenger.onRequest(getConsolidatedProjectDetails, () => rpcManger.getConsolidatedProjectDetails());
+    messenger.onRequest(updateConsolidatedProjectDetails, (args: UpdateConsolidatedProjectDetailsRequest) => rpcManger.updateConsolidatedProjectDetails(args));
+    messenger.onRequest(getConsolidatedRemoteDeployConfig, () => rpcManger.getConsolidatedRemoteDeployConfig());
+    messenger.onRequest(saveConsolidatedRemoteDeployConfig, (args: ConsolidatedRemoteDeployConfig) => rpcManger.saveConsolidatedRemoteDeployConfig(args));
 }

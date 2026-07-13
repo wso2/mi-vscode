@@ -100,6 +100,7 @@ export enum MACHINE_VIEW {
     ImportInboundConnectorForm = "Import Inbound Endpoint",
     IdpConnectorSchemaGeneratorForm = "IDP Connector Schema Generator Form",
     DataMapperMigrationForm = "DataMapper Migration Form",
+    WorkspaceOverview = "Workspace Overview",
 }
 
 export enum AI_MACHINE_VIEW {

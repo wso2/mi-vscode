@@ -58,6 +58,9 @@ export const COMMANDS = {
     OPEN_PROJECT: "MI.openProject",
     EDIT_K8_CONFIGURATION_COMMAND: 'MI.edit-k8-configuration',
     IMPORT_FROM_CAPP: "MI.importProjectFromCapp",
+    BUILD_PROJECT: "MI.build-project",
+    CREATE_DOCKER_IMAGE: "MI.create-docker-image",
+    REMOTE_DEPLOY_PROJECT: "MI.remote-deploy-project",
 }
 
 // Actions for service designer
