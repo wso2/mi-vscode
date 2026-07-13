@@ -79,6 +79,7 @@ export const COMMANDS = {
     SHOW_MCP_SERVER: 'MI.project-explorer.show-mcp-server',
     DELETE_MCP_SERVER_COMMAND: 'MI.project-explorer.delete-mcp-server',
     CREATE_PROJECT_COMMAND: 'MI.project-explorer.create-project',
+    GET_MI_FORM_WS_BOOTSTRAP: 'MI.getMiFormWsBootstrap',
     REVEAL_ITEM_COMMAND: 'MI.project-explorer.revealItem',
     OPEN_SERVICE_DESIGNER: 'MI.project-explorer.open-service-designer',
     OPEN_PROJECT_OVERVIEW: 'MI.project-explorer.open-project-overview',
