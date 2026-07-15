@@ -103,7 +103,7 @@ export class XMLDocumentImpl implements XMLDocument {
   traverse(callback: (node: XMLNode) => void): void {
     this.traverseNode(this, callback);
   }
-
+//dfs algo - pre order traversal
   private traverseNode(node: XMLNode, callback: (node: XMLNode) => void): void {
     callback(node);
     for (const child of node.children) {

@@ -44,6 +44,8 @@ export class DiagnosticsHandler {
       );
       return true;
     };
+    //before: document.uri = "file:///Users/project/my%20synapse%20config.xml"
+    //after: fileName = "my%20synapse%20config.xml" , documentPath = "/Users/project/my synapse config.xml"
     const fileName = document.uri.split("/").pop() ?? "";
     const documentPath = document.uri.startsWith("file://")
       ? decodeURIComponent(document.uri.replace("file://", ""))

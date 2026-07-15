@@ -2,6 +2,8 @@
 
 LSP language server for WSO2 Micro Integrator XML config files. Schema-aware editing powered by Apache Xerces-C (WebAssembly).
 
+![Architecture Diagram](docs/images/diagram1.png)
+
 ## Features
 
 - Validation (XSD syntax + schema)

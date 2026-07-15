@@ -72,7 +72,7 @@ export class SchemaAssociator {
    */
   findSchema(fileName: string, xmlns?: string, documentPath?: string): ResolvedSchema | null {
 
-    // 0. Hardcoded priority for pom.xml to prevent custom **/*.xml associations
+    // 0. Hardcoded for pom.xml to prevent custom **/*.xml associations
     // from incorrectly mapping Maven files to Synapse schemas.
     if (fileName === "pom.xml" || fileName.endsWith("/pom.xml") || fileName.endsWith("\\pom.xml")) {
       const pomAssoc = this.builtInAssociations.find((a) => a.namespace === "http://maven.apache.org/POM/4.0.0");
@@ -100,7 +100,10 @@ export class SchemaAssociator {
       }
     }
 
-    // built-ins matched by specific pattern (fallback for files without namespace)
+    // 3. built-ins matched by specific pattern (fallback for files without namespace)
+    // NOTE: This block is currently not hit in practice because the only specific built-in pattern is
+    // '**/pom.xml' which is already intercepted in Step 0. This is kept active for future extensibility
+    // (e.g. if we add new built-in schemas with specific file patterns like '**/registry.xml').
     for (const assoc of this.builtInAssociations) {
       if (assoc.pattern && assoc.pattern !== "**/*.xml" && this.matchesPattern(fileName, assoc.pattern, documentPath)) {
         const xsdText = this.readXsdFile(assoc.xsdPath);

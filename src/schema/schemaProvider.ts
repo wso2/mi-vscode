@@ -73,6 +73,8 @@ export class SchemaProvider {
   async buildAndCacheCompletionProvider(info: SchemaInfo): Promise<void> {
     const xsdKey = info.xsdPath ?? info.uri;
     this.documentToSchema.set(info.uri, xsdKey);
+    //"auto://api1.xml" → "/schemas/440/synapse_config.xsd"
+    // "auto://api2.xml" → "/schemas/440/synapse_config.xsd"
 
     if (!this.completionProviders.has(xsdKey)) {
       const completionXsd = info.imports
