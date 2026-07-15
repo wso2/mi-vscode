@@ -99,6 +99,7 @@ import {
     SaveInboundEPUischemaRequest,
     ShowErrorMessageRequest,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     TestDbConnectionRequest,
     UndoRedoParams,
     UpdateAPIFromSwaggerRequest,
@@ -211,6 +212,7 @@ import {
     getMessageStore,
     getMetadataOfRegistryResource,
     getOpenAPISpec,
+    getDataServiceOpenAPISpec,
     getProjectRoot,
     getProjectUuid,
     getRecipientEndpoint,
@@ -502,6 +504,7 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onRequest(checkOldProject, () => rpcManger.checkOldProject());
     messenger.onNotification(refreshAccessToken, () => rpcManger.refreshAccessToken());
     messenger.onRequest(getOpenAPISpec, (args: SwaggerTypeRequest) => rpcManger.getOpenAPISpec(args));
+    messenger.onRequest(getDataServiceOpenAPISpec, (args: DataServiceSwaggerRequest) => rpcManger.getDataServiceOpenAPISpec(args));
     messenger.onNotification(editOpenAPISpec, (args: SwaggerTypeRequest) => rpcManger.editOpenAPISpec(args));
     messenger.onRequest(compareSwaggerAndAPI, (args: SwaggerTypeRequest) => rpcManger.compareSwaggerAndAPI(args));
     messenger.onNotification(updateSwaggerFromAPI, (args: SwaggerTypeRequest) => rpcManger.updateSwaggerFromAPI(args));

@@ -58,6 +58,7 @@ export type FilterType =
     | "dssDataSource"
     | "configurable"
     | "bindToInbound"
+    | "dsOperation";
 
 // Interfaces
 interface IKeylookupBase {
@@ -83,6 +84,7 @@ interface IKeylookupBase {
     path?: string;
     // Artifact type to be fetched
     filterType?: FilterType | ResourceType[];
+    dataServiceName?: string;
     // Callback to filter the fetched artifacts
     filter?: (value: string) => boolean;
     onCreateButtonClick?: (fetchItems: any, handleValueChange: any) => void;
@@ -187,7 +189,7 @@ export const Keylookup = (props: IKeylookup) => {
         filterType,
         value = "",
         onValueChange,
-        allowItemCreate = true,
+        allowItemCreate: allowItemCreateProp = true,
         path,
         errorMsg,
         exprToggleEnabled,
@@ -202,9 +204,12 @@ export const Keylookup = (props: IKeylookup) => {
     const { rpcClient } = useVisualizerContext();
     const fallbackId = useId();
 
+    // Remove "add new" option for DS operations
+    const allowItemCreate = filterType === "dsOperation" ? false : allowItemCreateProp;
+
     useEffect(() => {
         fetchItems();
-    }, [filterType]);
+    }, [filterType, props.dataServiceName]);
 
     const fetchItems = async () => {
         if (filterType === "mockService") {
@@ -283,7 +288,8 @@ export const Keylookup = (props: IKeylookup) => {
         }
         const result = await rpcClient.getMiDiagramRpcClient().getAvailableResources({
             documentIdentifier: path,
-            resourceType: resourceType
+            resourceType: resourceType,
+            ...(filterType === "dsOperation" && { dataServiceName: props.dataServiceName })
         });
 
         let workspaceItems: ItemComponent[] = [];

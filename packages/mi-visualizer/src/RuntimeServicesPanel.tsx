@@ -81,6 +81,21 @@ const ApiContent = styled.div`
     gap: 10px;
 `;
 
+const DataServiceContent = styled.div`
+    align-items: center;
+    margin-bottom: 10px;
+    padding: 10px;
+    cursor: pointer;
+    background-color: var(--vscode-editorHoverWidget-background);
+    &:hover {
+        background-color: var(--vscode-list-hoverBackground);
+    };
+    display: grid;
+    grid-template-columns: 2fr 3fr 3fr auto;
+    overflow: hidden;
+    gap: 10px;
+`;
+
 const Details = styled.div`
     overflow: hidden;
     white-space: nowrap;
@@ -203,6 +218,13 @@ export function RuntimeServicePanel() {
         }
     };
 
+    const onTryDataService = async (name: string) => {
+        try {
+            await rpcClient.getMiDiagramRpcClient().getDataServiceOpenAPISpec({ name });
+        } catch (error) {
+            console.error(`Failed to fetch the OpenAPI spec for ${name}:`, error);
+        }
+    };
 
     const apiServices = () => {
         if (services?.api?.count > 0) {
@@ -324,7 +346,7 @@ export function RuntimeServicePanel() {
                     }} />
                     {Object.entries(services.dataServices.list).map(([_, entry]) => (
                         <>
-                            <ProxyContent>
+                            <DataServiceContent>
                                 <Details style={{ fontWeight: 'bold' }}>
                                     {entry.name}
                                 </Details>
@@ -339,7 +361,15 @@ export function RuntimeServicePanel() {
                                         {entry.wsdl2_0}
                                     </Details>
                                 </Tooltip>
-                            </ProxyContent>
+                                <VSCodeButton
+                                    appearance="primary"
+                                    onClick={() => onTryDataService(entry.name)}
+                                    title={"Try service"}
+                                    style={{ width: 'max-content', justifySelf: 'flex-end' }}
+                                >
+                                    <ButtonWrapper>{"Try it"}</ButtonWrapper>
+                                </VSCodeButton>
+                            </DataServiceContent>
                         </>
                     ))}
                 </ServiceCard>

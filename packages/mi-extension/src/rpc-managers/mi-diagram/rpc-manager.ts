@@ -220,6 +220,7 @@ import {
     SwaggerData,
     SwaggerFromAPIResponse,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     TemplatesResponse,
     TestDbConnectionRequest,
     TestDbConnectionResponse,
@@ -410,6 +411,8 @@ const undoRedo = new UndoRedoManager();
 
 const connectorCache = new Map<string, any>();
 const legacyConnectorCache = new Map<string, any>();
+
+let swaggerCorsProxyPort: Promise<number> | undefined;
 
 export class MiDiagramRpcManager implements MiDiagramAPI {
     constructor(private projectUri: string) { }
@@ -4361,10 +4364,11 @@ ${endpointAttributes}
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const responses = await Promise.all(
                 DebuggerConfig.getProjectList().map(async projectPath =>
-                    langClient.getAvailableResources({ 
-                        documentIdentifier: projectPath, 
-                        resourceType: params.resourceType, 
-                        isDebugFlow: params.isDebugFlow 
+                    langClient.getAvailableResources({
+                        documentIdentifier: projectPath,
+                        resourceType: params.resourceType,
+                        isDebugFlow: params.isDebugFlow,
+                        dataServiceName: params.dataServiceName
                     })
                 )
             );
@@ -5552,12 +5556,7 @@ ${keyValuesXML}`;
             } else {
                 swaggerContent = swagger;
             }
-            const port = await getPortPromise({ port: 1000, stopPort: 3000 });
-            const cors_proxy = require('cors-anywhere');
-            cors_proxy.createServer({
-                originWhitelist: [], // Allow all origins
-                requireHeader: ['origin', 'x-requested-with']
-            }).listen(port, 'localhost');
+            const port = await startSwaggerCorsProxy();
 
             const swaggerData: SwaggerData = {
                 generatedSwagger: swaggerContent,
@@ -5910,16 +5909,30 @@ ${keyValuesXML}`;
             response = await langClient.swaggerFromAPI({ apiPath: params.apiPath, ...(fs.existsSync(swaggerPath) && { swaggerPath: swaggerPath }) });
         }
         const generatedSwagger = response.swagger;
-        const port = await getPortPromise({ port: 1000, stopPort: 3000 });
-        const cors_proxy = require('cors-anywhere');
-        cors_proxy.createServer({
-            originWhitelist: [], // Allow all origins
-            requireHeader: ['origin', 'x-requested-with']
-        }).listen(port, 'localhost');
+        const port = await startSwaggerCorsProxy();
 
         RPCLayer._messengers.get(this.projectUri)?.sendNotification(onSwaggerSpecReceived, { type: 'webview', webviewType: 'micro-integrator.runtime-services-panel' }, { generatedSwagger: generatedSwagger, port: port });
 
         return { generatedSwagger: generatedSwagger }; // TODO: refactor rpc function with void
+    }
+
+    async getDataServiceOpenAPISpec(params: DataServiceSwaggerRequest): Promise<SwaggerFromAPIResponse> {
+        const swaggerUrl = `http://${DebuggerConfig.getHost()}:${DebuggerConfig.getServerPort()}/services/${params.name}?swagger.json`;
+        let generatedSwagger: string;
+        try {
+            const swaggerResponse = await axios.get(swaggerUrl, { responseType: 'text', transformResponse: [(d) => d], timeout: 10000 });
+            generatedSwagger = swaggerResponse.data;
+        } catch (error) {
+            console.error('Error fetching data service swagger:', error);
+            window.showErrorMessage(`Failed to fetch the OpenAPI spec for ${params.name}. Make sure the Micro Integrator runtime is running and accessible at ${DebuggerConfig.getHost()}:${DebuggerConfig.getServerPort()}.`);
+            throw new Error(`Failed to fetch the OpenAPI spec for ${params.name}`);
+        }
+
+        const port = await startSwaggerCorsProxy();
+
+        RPCLayer._messengers.get(this.projectUri)?.sendNotification(onSwaggerSpecReceived, { type: 'webview', webviewType: 'micro-integrator.runtime-services-panel' }, { generatedSwagger: generatedSwagger, port: port });
+
+        return { generatedSwagger: generatedSwagger };
     }
 
     async openDependencyPom(params: OpenDependencyPomRequest): Promise<void> {
@@ -6945,6 +6958,21 @@ async function exposeVersionedServices(projectUri: string): Promise<boolean> {
         }
     }
     return false;
+}
+
+async function startSwaggerCorsProxy(): Promise<number> {
+    if (!swaggerCorsProxyPort) {
+        swaggerCorsProxyPort = (async () => {
+            const port = await getPortPromise({ port: 1000, stopPort: 3000 });
+            const cors_proxy = require('cors-anywhere');
+            cors_proxy.createServer({
+                originWhitelist: [], // Allow all origins
+                requireHeader: ['origin', 'x-requested-with']
+            }).listen(port, 'localhost');
+            return port;
+        })();
+    }
+    return swaggerCorsProxyPort;
 }
 
 export function getRepoRoot(projectRoot: string): string | undefined {

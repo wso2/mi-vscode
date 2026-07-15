@@ -1440,7 +1440,8 @@ export type ResourceType =
     | "crt"
     | "registry"
     | "bindToInbound"
-    | "inbound-endpoint";
+    | "inbound-endpoint"
+    | "dsOperation";
 
 export interface MultipleResourceType {
     type: ResourceType;
@@ -1452,6 +1453,7 @@ export interface GetAvailableResourcesRequest {
     documentIdentifier: string | undefined;
     resourceType: ResourceType | MultipleResourceType[];
     isDebugFlow?: boolean;
+    dataServiceName?: string;
 }
 
 export interface GetAvailableResourcesResponse {
@@ -1847,6 +1849,10 @@ export interface GenerateAPIResponse {
     apiXml: string;
     endpointXml?: string;
     error?: string;
+}
+
+export interface DataServiceSwaggerRequest {
+    name: string;
 }
 
 export interface SwaggerTypeRequest {

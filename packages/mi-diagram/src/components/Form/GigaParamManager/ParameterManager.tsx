@@ -88,9 +88,10 @@ export interface ParameterManagerProps {
     nodeRange?: Range;
     setParameters?: (params: Param[]) => void;
     documentUri?: string;
+    dataServiceName?: string;
 }
 const ParameterManager = (props: ParameterManagerProps) => {
-    const { documentUri, formData, nodeRange, parameters, setParameters } = props;
+    const { documentUri, formData, nodeRange, parameters, setParameters, dataServiceName } = props;
     const { addParamText, noDataText, readonly, tableKey, tableValue } = formData;
     const { control, setValue, getValues, reset, watch, handleSubmit, formState: { errors } } = useForm();
 
@@ -158,7 +159,8 @@ const ParameterManager = (props: ParameterManagerProps) => {
                 setValue={setValue}
                 getValues={getValues}
                 reset={reset}
-                watch={watch} />
+                watch={watch} 
+                dataServiceName={dataServiceName} />
 
             <FormActions sx={{
                 backgroundColor: Colors.SECONDARY_CONTAINER,
