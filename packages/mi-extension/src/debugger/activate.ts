@@ -17,18 +17,19 @@
  */
 
 import * as vscode from 'vscode';
-import { CancellationToken, DebugConfiguration, ProviderResult, Uri, window, workspace, WorkspaceFolder } from 'vscode';
+import { CancellationToken, DebugConfiguration, ProviderResult, Uri, ViewColumn, window, workspace, WorkspaceFolder } from 'vscode';
 import { MiDebugAdapter } from './debugAdapter';
 import { COMMANDS } from '../constants';
 import { extension } from '../MIExtensionContext';
 import {executeBuildTask, executeRemoteDeployTask, getServerPath, stopServer} from './debugHelper';
 import { getDockerTask } from './tasks';
-import { getStateMachine, refreshUI } from '../stateMachine';
+import { getStateMachine, openView, refreshUI } from '../stateMachine';
+import { openPopupView } from '../stateMachinePopup';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SELECTED_SERVER_PATH, SELECTED_JAVA_HOME } from './constants';
 import { buildBallerinaModule, isConsolidatedProject, setPathsInWorkSpace, verifyJavaHomePath, verifyMIPath } from '../util/onboardingUtils';
-import { MACHINE_VIEW } from '@wso2/mi-core';
+import { EVENT_TYPE, MACHINE_VIEW, POPUP_EVENT_TYPE, PomNodeDetails, PopupVisualizerLocation } from '@wso2/mi-core';
 import { askForProject } from '../util/workspace';
 import { webviews } from '../visualizer/webview';
 import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
@@ -68,6 +69,12 @@ class MiConfigurationProvider implements vscode.DebugConfigurationProvider {
                     return undefined;
                 }
                 config.projectList = selectedItems.map(item => item.label);
+            }
+        }
+
+        for (const projectPath of config.projectList as string[]) {
+            if (!(await confirmConfigurableValues(projectPath, config.projectList.length > 1))) {
+                return undefined;
             }
         }
 
@@ -415,6 +422,102 @@ export function activateDebugger(context: vscode.ExtensionContext) {
 
     const factory = new InlineDebugAdapterFactory();
     context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mi', factory));
+}
+
+function getConfigurablesWithValues(projectUri: string): PomNodeDetails[] {
+    const configFilePath = path.join(projectUri, 'src', 'main', 'wso2mi', 'resources', 'conf', 'config.properties');
+    if (!fs.existsSync(configFilePath)) {
+        return [];
+    }
+
+    const envValues: Map<string, string> = new Map();
+    const envPath = path.join(projectUri, '.env');
+    if (fs.existsSync(envPath)) {
+        for (const line of fs.readFileSync(envPath, 'utf-8').split('\n')) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || trimmedLine.startsWith('#')) {
+                continue;
+            }
+            const separatorIndex = trimmedLine.indexOf('=');
+            if (separatorIndex === -1) {
+                continue;
+            }
+            const key = trimmedLine.substring(0, separatorIndex).trim();
+            const value = trimmedLine.substring(separatorIndex + 1).trim();
+            if (key && value) {
+                envValues.set(key, value);
+            }
+        }
+    }
+
+    const configurables: PomNodeDetails[] = [];
+    for (const line of fs.readFileSync(configFilePath, 'utf-8').split('\n')) {
+        const trimmedLine = line.trim();
+        if (!trimmedLine || trimmedLine.startsWith('#')) {
+            continue;
+        }
+        const separatorIndex = trimmedLine.indexOf(':');
+        const key = (separatorIndex === -1 ? trimmedLine : trimmedLine.substring(0, separatorIndex)).trim();
+        const type = separatorIndex === -1 ? 'string' : (trimmedLine.substring(separatorIndex + 1).trim() || 'string');
+        if (key) {
+            configurables.push({ key, type, value: envValues.get(key) ?? '' });
+        }
+    }
+    return configurables;
+}
+
+async function confirmConfigurableValues(projectUri: string, showProjectName: boolean): Promise<boolean> {
+    const configurables = getConfigurablesWithValues(projectUri);
+    const missing = configurables.filter(config => !config.value);
+    if (missing.length === 0) {
+        return true;
+    }
+
+    const proceed = 'Proceed';
+    const addValues = 'Add Values';
+    const projectInfo = showProjectName ? ` in project '${path.basename(projectUri)}'` : '';
+    const response = await vscode.window.showWarningMessage(
+        `The following configurable${missing.length > 1 ? 's have' : ' has'} no value in the .env file${projectInfo}: ${missing.map(config => config.key).join(', ')}. How do you want to proceed?`,
+        { modal: true },
+        proceed,
+        addValues
+    );
+
+    if (response === proceed) {
+        return true;
+    }
+    if (response === addValues) {
+        await openManageConfigurables(projectUri, configurables);
+    }
+    return false;
+}
+
+async function openManageConfigurables(projectUri: string, configs: PomNodeDetails[]) {
+    if (webviews.has(projectUri)) {
+        webviews.get(projectUri)?.getWebview()?.reveal(ViewColumn.Active);
+    } else {
+        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.Overview, projectUri });
+        await new Promise<void>((resolve) => {
+            const stateMachine = getStateMachine(projectUri);
+            const currentState = stateMachine.state() as any;
+            if (typeof currentState === 'object' && currentState?.ready === 'viewReady') {
+                return resolve();
+            }
+            const listener = (state: { value: { ready?: string; }; }) => {
+                if (state?.value?.ready === 'viewReady') {
+                    stateMachine.service().off(listener);
+                    resolve();
+                }
+            };
+            stateMachine.service().onTransition(listener);
+        });
+        // Allow the webview app to mount and subscribe to popup state changes
+        await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    openPopupView(projectUri, POPUP_EVENT_TYPE.OPEN_VIEW, {
+        view: MACHINE_VIEW.ManageConfigurables,
+        customProps: { configs }
+    } as PopupVisualizerLocation);
 }
 
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {
