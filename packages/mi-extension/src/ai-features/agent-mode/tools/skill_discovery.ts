@@ -88,6 +88,13 @@ export interface DiscoverSkillsOptions {
 
 /** Defensive bounds so a pathological tree can't blow up discovery. */
 const MAX_SKILLS = 200;
+/**
+ * Cap the bytes read from a SKILL.md during discovery. Discovery only needs the
+ * frontmatter (at the top of the file), so reading a bounded prefix keeps an
+ * oversized SKILL.md from blocking the extension host or exhausting memory while
+ * still discovering it. Activation applies its own body cap separately.
+ */
+const SKILL_MD_SCAN_BYTES = 64 * 1024;
 const SKILLS_SUBDIR = path.join('skills');
 
 /**
@@ -207,7 +214,20 @@ function readSkill(skillMdPath: string, dirName: string, scope: SkillScope): Ski
 
     let raw: string;
     try {
-        raw = fs.readFileSync(skillMdPath, 'utf8');
+        if (stat.size > SKILL_MD_SCAN_BYTES) {
+            // Oversized file: read only the leading frontmatter region via a
+            // bounded fd read so we never pull a multi-MB/GB file into memory.
+            const fd = fs.openSync(skillMdPath, 'r');
+            try {
+                const buf = Buffer.allocUnsafe(SKILL_MD_SCAN_BYTES);
+                const bytesRead = fs.readSync(fd, buf, 0, SKILL_MD_SCAN_BYTES, 0);
+                raw = buf.subarray(0, bytesRead).toString('utf8');
+            } finally {
+                fs.closeSync(fd);
+            }
+        } else {
+            raw = fs.readFileSync(skillMdPath, 'utf8');
+        }
     } catch (error) {
         logDebug(`[Skills] Failed to read ${skillMdPath}: ${error instanceof Error ? error.message : String(error)}`);
         return undefined;
@@ -361,11 +381,19 @@ async function mutateSkillStates(
             }
             mutate(states);
             await fsp.mkdir(path.dirname(file), { recursive: true });
-            await fsp.writeFile(
-                file,
-                JSON.stringify({ states, updatedAt: new Date().toISOString() }, null, 2),
-                'utf8',
-            );
+            // Write to a temp sibling then atomically rename into place. A
+            // concurrent reader (discovery's readSkillStates is NOT part of this
+            // write chain) must never observe a half-written file and revert
+            // every skill to its scope default.
+            const tmp = `${file}.tmp`;
+            const payload = JSON.stringify({ states, updatedAt: new Date().toISOString() }, null, 2);
+            try {
+                await fsp.writeFile(tmp, payload, 'utf8');
+                await fsp.rename(tmp, file);
+            } catch (error) {
+                await fsp.rm(tmp, { force: true }).catch(() => { /* best-effort cleanup */ });
+                throw error;
+            }
         });
     skillStateWriteChains.set(file, run);
     try {
@@ -458,9 +486,6 @@ function scanAllSkills(projectPath: string, opts: DiscoverSkillsOptions): SkillC
 export function discoverSkills(projectPath: string, opts: DiscoverSkillsOptions): SkillCatalogEntry[] {
     const byName = new Map<string, SkillCatalogEntry>();
     for (const skill of scanAllSkills(projectPath, opts)) {
-        if (!skill.enabled) {
-            continue;
-        }
         const key = skill.name.toLowerCase();
         const existing = byName.get(key);
         if (existing) {
@@ -469,7 +494,12 @@ export function discoverSkills(projectPath: string, opts: DiscoverSkillsOptions)
         }
         byName.set(key, skill);
     }
-    return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
+    // Resolve name precedence first (loop above), THEN drop disabled winners.
+    // Filtering disabled entries before dedup would let an enabled lower-precedence
+    // duplicate win instead of being shadowed by a disabled higher-precedence one.
+    return Array.from(byName.values())
+        .filter((skill) => skill.enabled)
+        .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**
