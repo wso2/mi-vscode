@@ -764,21 +764,25 @@ export function createAgentTools(params: CreateToolsParams) {
         [TOOL_LOAD_TOOL_NAME]: createToolSearchTool(),
     };
 
-    // Skills (Agent Skills). Register the `skill` tool only when at least one
-    // model-invocable skill exists (don't expose a tool with no valid options),
-    // and constrain its `skill` parameter to those names. `disable-model-invocation`
-    // skills are excluded here — they stay user-invocable via `/skill-name`.
-    const modelInvocableSkills = (skills ?? []).filter((s) => !s.disableModelInvocation);
-    if (modelInvocableSkills.length > 0) {
-        (allTools as Record<string, unknown>)[SKILL_TOOL_NAME] = createSkillTool(
-            getWrappedExecute(
-                SKILL_TOOL_NAME,
-                createSkillExecute(modelInvocableSkills, activatedSkills ?? new Set<string>()),
-                false,
-            ),
-            modelInvocableSkills.map((s) => s.name),
-        );
-    }
+    // Skills (Agent Skills). Always register the `skill` tool with a constant
+    // (plain-string) schema — mirrors Claude Code's `Skill` tool. Because the
+    // schema never embeds skill names, toggling skills never invalidates the
+    // cached tools prefix; the valid names live only in the drift-aware
+    // `# Available Skills` reminder and are validated at execute time. The tool
+    // is deferred (see DEFERRED_TOOLS) so its schema is loaded on demand via
+    // load_tools. The executor receives the FULL discovered set (not just the
+    // model-invocable subset) so it can distinguish a `disable-model-invocation`
+    // (user-only) skill — which it refuses with a directed "ask the user to run
+    // /skill-name" error — from a genuinely unknown name. Only model-invocable
+    // skills are actually activatable via the tool; user-only ones stay
+    // reachable through the `/skill-name` path.
+    (allTools as Record<string, unknown>)[SKILL_TOOL_NAME] = createSkillTool(
+        getWrappedExecute(
+            SKILL_TOOL_NAME,
+            createSkillExecute(skills ?? [], activatedSkills ?? new Set<string>()),
+            false,
+        ),
+    );
 
     // Mark deferred tools — schemas hidden from initial prompt, loaded on-demand
     // via tool_search returning tool-reference content blocks.

@@ -683,11 +683,13 @@ export async function executeAgent(
         // parity) without having to call the `skill` tool itself.
         let userActivatedSkillContent: string | undefined;
         let userActivatedSkillFailed = false;
+        let userActivatedSkillModelHidden = false;
         const slashSkill = detectSlashSkillInvocation(request.query, sessionContextResult.snapshot.skills);
         if (slashSkill) {
             try {
                 userActivatedSkillContent = readAndFormatSkill(slashSkill.entry, slashSkill.args || undefined).content;
                 activatedSkills.add(slashSkill.entry.name.toLowerCase());
+                userActivatedSkillModelHidden = slashSkill.entry.disableModelInvocation;
                 logInfo(`[Agent] User activated skill '${slashSkill.entry.name}' via /skill-name`);
             } catch (error) {
                 logError(`[Agent] Failed to activate skill '${slashSkill.entry.name}' from /skill-name`, error);
@@ -722,6 +724,7 @@ export async function executeAgent(
             precomputedContext: sessionContextResult,
             userActivatedSkillContent,
             userActivatedSkillFailed,
+            userActivatedSkillModelHidden,
         };
         const userPromptBlocks = await getUserPrompt(userPromptParams);
 

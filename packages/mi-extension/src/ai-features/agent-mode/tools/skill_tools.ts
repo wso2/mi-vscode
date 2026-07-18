@@ -160,9 +160,12 @@ export function createSkillExecute(skills: SkillCatalogEntry[], activatedSkills:
             };
         }
 
+        // `skills` is the FULL discovered set, so a user-only skill resolves here
+        // (rather than looking like an unknown name) and can be reported precisely.
         const entry = findSkillByName(skills, name);
         if (!entry) {
-            const available = skills.map((s) => s.name).join(', ');
+            // Only advertise model-invocable names — user-only skills stay hidden.
+            const available = skills.filter((s) => !s.disableModelInvocation).map((s) => s.name).join(', ');
             return {
                 success: false,
                 message: `Unknown skill '${name}'. Available skills: ${available || '(none)'}.`,
@@ -175,6 +178,17 @@ export function createSkillExecute(skills: SkillCatalogEntry[], activatedSkills:
             return {
                 success: true,
                 message: `Skill '${entry.name}' is already active in this session — its instructions are already in your context above. Follow them; do not re-activate. Bundled files can be read with file_read against ${entry.baseDir}.`,
+            };
+        }
+
+        // User-only skill (`disable-model-invocation`): it exists but you may not
+        // activate it — only the user can, explicitly. Don't load it; tell the
+        // model to ask the user to invoke it via `/skill-name`.
+        if (entry.disableModelInvocation) {
+            return {
+                success: false,
+                message: `Skill '${entry.name}' is user-invocable only and cannot be activated with the skill tool. If its instructions would help, ask the user to invoke it themselves by typing "/${entry.name}" at the START of their next message (optionally followed by arguments). Do not call the skill tool for it again.`,
+                error: 'SKILL_USER_ONLY',
             };
         }
 
@@ -194,22 +208,32 @@ export function createSkillExecute(skills: SkillCatalogEntry[], activatedSkills:
 }
 
 /**
- * Build the `skill` tool. `modelInvocableNames` constrains the `skill` parameter
- * to an enum of discovered names (prevents hallucinated names) when any exist.
+ * Build the `skill` tool. Mirrors Claude Code's `Skill` tool: the `skill`
+ * parameter is a plain string — NOT an enum of discovered names — so the tool
+ * schema is constant regardless of which skills are enabled. Toggling skills
+ * therefore only changes the drift-aware `# Available Skills` reminder, never
+ * the cached tools prefix. The name is validated at execute time (see
+ * createSkillExecute); valid names are conveyed via that reminder.
  */
-export function createSkillTool(execute: SkillExecuteFn, modelInvocableNames: string[]) {
-    const skillParam = modelInvocableNames.length > 0
-        ? z.enum(modelInvocableNames as [string, ...string[]])
-        : z.string();
+export function createSkillTool(execute: SkillExecuteFn) {
     const skillInputSchema = z.object({
-        skill: skillParam.describe('The exact name of the skill to use (from the "# Available Skills" reminder).'),
+        skill: z.string().describe('The exact name of a skill from the "# Available Skills" reminder (no leading slash). Do not guess names.'),
         args: z.string().optional().describe('Optional arguments forwarded to the skill (substituted for $ARGUMENTS in the skill body).'),
     });
 
     return (tool as any)({
-        description: `Use a skill to load specialized, task-specific instructions into your context.
-The "# Available Skills" reminder lists which skills exist (name: description). When the user's task matches a skill, call this tool with the exact skill name to load its full instructions, then follow them.
-Pass \`args\` to forward arguments (substituted for $ARGUMENTS in the skill). Bundled files referenced by a skill (scripts/references/assets) are read on demand with file_read against the skill directory. Do not re-activate a skill already loaded this session unless the catalog shows it changed.`,
+        description: `Execute a skill to load specialized, task-specific instructions into your context.
+
+When the user's task matches an available skill, use this tool to invoke it. When the user references a "slash command" or "/<something>", they are referring to a skill — use this tool to invoke it.
+
+How to invoke:
+- Set \`skill\` to the exact name of an available skill (no leading slash).
+- Set \`args\` to pass optional arguments (substituted for $ARGUMENTS in the skill body).
+
+Important:
+- Available skills are listed in the \`# Available Skills\` <system-reminder>. Only invoke a skill that appears there, or one the user explicitly typed as \`/<name>\`. Never guess or invent a skill name.
+- When a skill matches the user's request, invoke it before producing other output about the task, then follow the loaded instructions.
+- Do not re-activate a skill already active this session — its instructions are already in your context. Bundled files a skill references (scripts/references/assets) are read on demand with file_read against the skill directory.`,
         inputSchema: skillInputSchema,
         execute,
     });

@@ -176,6 +176,7 @@ export const DEFERRED_TOOLS = new Set<string>([
     KILL_TASK_TOOL_NAME,
     TASK_OUTPUT_TOOL_NAME,
     READ_SERVER_LOGS_TOOL_NAME,
+    SKILL_TOOL_NAME,
 ]);
 
 // DeepWiki Tool (local MCP client bridge)

@@ -274,6 +274,14 @@ export interface UserPromptParams {
      * under the "# Activated Skill / follow the instructions below" framing.
      */
     userActivatedSkillFailed?: boolean;
+    /**
+     * True when the user-invoked skill is `disable-model-invocation` (user-only).
+     * Adds a notice to the `# Activated Skill` reminder that the model cannot
+     * activate this skill via the `skill` tool (it isn't in `# Available Skills`),
+     * so the model follows the already-loaded instructions instead of attempting
+     * a failing re-invocation later in the session.
+     */
+    userActivatedSkillModelHidden?: boolean;
 }
 
 // ============================================================================
@@ -1033,7 +1041,7 @@ ${list}`;
  * substituted, resources listed) — we just frame it so the model treats it as
  * an activated skill and proceeds.
  */
-function buildUserActivatedSkillBlockText(skillContent: string | undefined, failed?: boolean): string | undefined {
+function buildUserActivatedSkillBlockText(skillContent: string | undefined, failed?: boolean, modelHidden?: boolean): string | undefined {
     if (!skillContent) {
         return undefined;
     }
@@ -1043,9 +1051,15 @@ function buildUserActivatedSkillBlockText(skillContent: string | undefined, fail
     if (failed) {
         return skillContent;
     }
+    // For `disable-model-invocation` skills, tell the model it cannot re-activate
+    // this one via the skill tool (it isn't listed in `# Available Skills`), so it
+    // follows the already-loaded instructions instead of a later failing tool call.
+    const modelHiddenNotice = modelHidden
+        ? '\nThis skill is user-invocable only (`disable-model-invocation`): it is not listed in `# Available Skills` and cannot be activated with the skill tool. Its instructions are already loaded below — follow them directly; do not attempt to call the skill tool for it.\n'
+        : '';
     return `# Activated Skill
 The user invoked a skill. Its full instructions are below — follow them for this task.
-
+${modelHiddenNotice}
 ${skillContent}`;
 }
 
@@ -1111,7 +1125,7 @@ export async function getUserPrompt(params: UserPromptParams): Promise<UserPromp
     const payloadsBlock = buildPayloadsBlockText(snapshot.tryoutPayloads, blockStatuses.payloads);
     const agentsMdBlock = buildAgentsMdBlockText(snapshot, blockStatuses.agentsMd);
     const skillsBlock = buildSkillsBlockText(snapshot.skills, blockStatuses.skills);
-    const userActivatedSkillBlock = buildUserActivatedSkillBlockText(params.userActivatedSkillContent, params.userActivatedSkillFailed);
+    const userActivatedSkillBlock = buildUserActivatedSkillBlockText(params.userActivatedSkillContent, params.userActivatedSkillFailed, params.userActivatedSkillModelHidden);
     const fullModePolicyBlock = buildFullModePolicyBlockText(
         mode,
         fullModePolicy,

@@ -39,6 +39,7 @@ export const DEFERRED_TOOL_DESCRIPTIONS: Record<string, string> = {
     kill_task: 'Terminate a background shell or subagent task',
     task_output: 'Get output from a background task',
     read_server_logs: 'Read and analyze MI server log files (errors, deployments, HTTP requests)',
+    skill: 'Activate an Agent Skill by exact name to load its full instructions (names come from the "# Available Skills" reminder)',
 };
 
 
