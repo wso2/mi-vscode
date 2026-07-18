@@ -31,6 +31,7 @@ import { logInfo, logDebug, logError } from "./copilot/logger";
 
 export const ANTHROPIC_HAIKU_4_5 = "claude-haiku-4-5";
 export const ANTHROPIC_SONNET_4_6 = "claude-sonnet-4-6";
+export const ANTHROPIC_SONNET_5 = "claude-sonnet-5";
 export const ANTHROPIC_OPUS_4_8 = "claude-opus-4-8";
 // Backward-compatible alias for existing imports.
 export const ANTHROPIC_SONNET_4_5 = ANTHROPIC_SONNET_4_6;
@@ -38,6 +39,7 @@ export const ANTHROPIC_SONNET_4_5 = ANTHROPIC_SONNET_4_6;
 export type AnthropicModel =
     | typeof ANTHROPIC_HAIKU_4_5
     | typeof ANTHROPIC_SONNET_4_6
+    | typeof ANTHROPIC_SONNET_5
     | typeof ANTHROPIC_OPUS_4_8;
 
 // Bedrock inference-profile IDs (without the regional prefix).
@@ -45,6 +47,7 @@ export type AnthropicModel =
 const BEDROCK_MODEL_MAP: Record<string, string> = {
     [ANTHROPIC_HAIKU_4_5]: "anthropic.claude-haiku-4-5-20251001-v1:0",
     [ANTHROPIC_SONNET_4_6]: "anthropic.claude-sonnet-4-6",
+    [ANTHROPIC_SONNET_5]: "anthropic.claude-sonnet-5",
     [ANTHROPIC_OPUS_4_8]: "anthropic.claude-opus-4-8",
 };
 
@@ -52,7 +55,7 @@ const BEDROCK_MODEL_MAP: Record<string, string> = {
  * Bedrock 4.x models can only be invoked through an inference profile, not as
  * on-demand foundation models. Region-pinned profiles (us./eu./ap./...) are
  * not published in every AWS region for every model, so we always use the
- * `global.` profile — it is published for all three models we support and is
+ * `global.` profile — it is published for all four models we support and is
  * accessible from any Bedrock-enabled region.
  *
  * Trade-off: `global.` may cost slightly more per token than a region-pinned
@@ -372,7 +375,7 @@ export function resolveMainModelId(settings: { mainModelPreset: string; mainMode
     if (settings.mainModelCustomId) {
         return settings.mainModelCustomId;
     }
-    return settings.mainModelPreset === 'opus' ? ANTHROPIC_OPUS_4_8 : ANTHROPIC_SONNET_4_6;
+    return settings.mainModelPreset === 'opus' ? ANTHROPIC_OPUS_4_8 : ANTHROPIC_SONNET_5;
 }
 
 /**
@@ -382,7 +385,7 @@ export function resolveSubModelId(settings: { subModelPreset: string; subModelCu
     if (settings.subModelCustomId) {
         return settings.subModelCustomId;
     }
-    return settings.subModelPreset === 'sonnet' ? ANTHROPIC_SONNET_4_6 : ANTHROPIC_HAIKU_4_5;
+    return settings.subModelPreset === 'sonnet' ? ANTHROPIC_SONNET_5 : ANTHROPIC_HAIKU_4_5;
 }
 
 /**

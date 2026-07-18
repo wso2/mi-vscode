@@ -30,7 +30,7 @@ const NATIVE_COMPACTION_TRIGGER_TOKENS = 200000;
 
 import { ModelMessage, streamText, stepCountIs, UserModelMessage, SystemModelMessage, wrapLanguageModel } from 'ai';
 import { AnthropicProviderOptions } from '@ai-sdk/anthropic';
-import { getAnthropicClient, getAnthropicClientForCustomModel, getAnthropicProvider, AnthropicModel, resolveMainModelId, ANTHROPIC_OPUS_4_8, ANTHROPIC_SONNET_4_6 } from '../../../connection';
+import { getAnthropicClient, getAnthropicClientForCustomModel, getAnthropicProvider, AnthropicModel, resolveMainModelId, ANTHROPIC_OPUS_4_8, ANTHROPIC_SONNET_5 } from '../../../connection';
 import { getLoginMethod, getTavilyApiKey } from '../../../auth';
 import { getSystemPrompt } from '../main/system';
 import {
@@ -861,7 +861,7 @@ export async function executeAgent(
             mainModelId === ANTHROPIC_OPUS_4_8
         ) {
             logInfo('[Agent] MI_INTEL login: Opus is not available on the WSO2 plan — using Sonnet for the main agent.');
-            mainModelId = ANTHROPIC_SONNET_4_6;
+            mainModelId = ANTHROPIC_SONNET_5;
         }
         let model = request.modelSettings?.mainModelCustomId
             ? await getAnthropicClientForCustomModel(mainModelId)
@@ -932,7 +932,10 @@ export async function executeAgent(
         //   harmless on Sonnet which already defaults to summarized.
         const anthropicOptions: AnthropicProviderOptions = request.thinking
             ? { thinking: { type: 'adaptive', display: 'summarized' } as any, effort: 'low' }
-            : {};
+            // Explicitly disable thinking when off. Sonnet 5 runs adaptive thinking by
+            // default when the `thinking` field is omitted, so the toggle wouldn't
+            // actually turn thinking off without this.
+            : { thinking: { type: 'disabled' } as any };
 
         // Native server-side compaction: Anthropic auto-summarizes the conversation
         // when input tokens exceed the trigger threshold. The compaction block is
@@ -974,7 +977,10 @@ export async function executeAgent(
         const streamConfig: any = {
             model,
             maxOutputTokens: AGENT_EXECUTION_CONFIG.maxOutputTokens,
-            temperature: request.thinking ? undefined : 0,
+            // Current-generation main models (Sonnet 5, Opus 4.8) reject a non-default
+            // `temperature` with a 400, so never send one. Response depth is steered via
+            // adaptive thinking / effort instead (see anthropicOptions above).
+            temperature: undefined,
             messages: allMessages,
             stopWhen: stepCountIs(AGENT_EXECUTION_CONFIG.maxSteps),
             tools: finalTools,

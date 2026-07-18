@@ -49,13 +49,13 @@ const TAVILY_SIGNUP_URL = 'https://app.tavily.com';
 const TAVILY_AWS_MARKETPLACE_URL = 'https://aws.amazon.com/marketplace/pp/prodview-myijjwd7qoky4';
 
 const MAIN_AGENT_OPTIONS: { value: MainModelPreset; label: string; model: string; description: string }[] = [
-    { value: "sonnet", label: "Normal", model: "Claude Sonnet 4.6", description: "Balanced quality, speed, and quota usage for everyday requests." },
+    { value: "sonnet", label: "Normal", model: "Claude Sonnet 5", description: "Balanced quality, speed, and quota usage for everyday requests." },
     { value: "opus", label: "High", model: "Claude Opus 4.8", description: "Maximum reasoning capability for complex tasks. Higher quota usage." },
 ];
 
 const SUB_AGENT_OPTIONS: { value: SubModelPreset; label: string; model: string; description: string }[] = [
     { value: "haiku", label: "Normal", model: "Claude Haiku 4.5", description: "Fast and lightweight for routine sub-agent work." },
-    { value: "sonnet", label: "High", model: "Claude Sonnet 4.6", description: "Higher quality sub-agent responses. Moderate quota usage." },
+    { value: "sonnet", label: "High", model: "Claude Sonnet 5", description: "Higher quality sub-agent responses. Moderate quota usage." },
 ];
 
 const DEFAULT_MAIN: MainModelPreset = "sonnet";
