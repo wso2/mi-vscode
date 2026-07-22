@@ -596,6 +596,8 @@ public class Constant {
     public static final String BALLERINA_MODULE_PATH = "ballerinaModulePath";
     public static final String BALLERINA = "ballerina";
     public static final String UI_SCHEMA_JSON = "uischema.json";
+    public static final String INPUT_SCHEMA_JSON = "inputschema.json";
+    public static final String INBOUND_VARIABLE_NAME = "inboundVariableName";
     public static final String JSON_FILE_EXT = ".json";
     public static final String INBOUND_CONNECTOR_PREFIX = "mi-inbound-";
     public static final String INBOUND_CONNECTORS = "inbound.connectors";
