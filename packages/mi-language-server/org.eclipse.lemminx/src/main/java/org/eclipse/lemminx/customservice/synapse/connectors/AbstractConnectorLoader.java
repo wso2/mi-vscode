@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors;
 
+import com.google.gson.JsonObject;
 import org.eclipse.lemminx.customservice.SynapseLanguageClientAPI;
 import org.eclipse.lemminx.customservice.synapse.ConnectorStatusNotification;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector;
@@ -160,8 +161,15 @@ public abstract class AbstractConnectorLoader {
                     if (zipName.contains(INBOUND_CONNECTOR_PREFIX)) {
                         String schema = Utils.readFile(extractToFolder.toPath().resolve(Constant.RESOURCES)
                                 .resolve(Constant.UI_SCHEMA_JSON).toFile());
-                        inboundConnectorHolder.saveInboundConnector(Utils.getJsonObject(schema)
-                                .get(Constant.NAME).getAsString(), schema);
+                        JsonObject uiSchemaJson = Utils.getJsonObject(schema);
+                        String connectorName = uiSchemaJson.get(Constant.NAME).getAsString();
+                        inboundConnectorHolder.saveInboundConnector(connectorName, schema);
+                        File inputSchemaFile = extractToFolder.toPath().resolve(Constant.RESOURCES)
+                                .resolve(Constant.INPUT_SCHEMA_JSON).toFile();
+                        if (inputSchemaFile.exists() && uiSchemaJson.has(Constant.ID)) {
+                            inboundConnectorHolder.saveInboundConnectorInputSchema(connectorName,
+                                    uiSchemaJson.get(Constant.ID).getAsString(), Utils.readFile(inputSchemaFile));
+                        }
                     }
                 } catch (IOException e) {
                     log.log(Level.WARNING, "Failed to extract connector zip:" + zipName, e);
