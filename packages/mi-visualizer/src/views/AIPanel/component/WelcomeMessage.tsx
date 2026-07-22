@@ -36,10 +36,24 @@ export const WelcomeMessage: React.FC = () => {
                     Describe your requirements in plain language and get working implementations instantly.
                 </p>
             </div>
-            <div className="flex flex-col items-center gap-2 mt-5 text-[13px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
+            <div className="flex flex-col items-center gap-0.5 mt-5 text-[13px]" style={{ color: "var(--vscode-descriptionForeground)" }}>
                 <p className="flex items-center gap-1.5">
                     <Codicon name="attach" />
                     <span>to attach context</span>
+                </p>
+                <p className="flex items-center gap-1.5">
+                    <span style={{
+                        fontFamily: "var(--vscode-editor-font-family, 'Menlo', 'Monaco', 'Courier New', monospace)",
+                        fontWeight: 600,
+                    }}>@</span>
+                    <span>to mention files</span>
+                </p>
+                <p className="flex items-center gap-1.5">
+                    <span style={{
+                        fontFamily: "var(--vscode-editor-font-family, 'Menlo', 'Monaco', 'Courier New', monospace)",
+                        fontWeight: 600,
+                    }}>/</span>
+                    <span>to invoke a skill</span>
                 </p>
             </div>
         </div>

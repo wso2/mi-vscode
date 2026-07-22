@@ -19,7 +19,7 @@
 import { generateText, stepCountIs } from 'ai';
 import { SYNAPSE_CONTEXT_SUBAGENT_SYSTEM } from './system';
 import { logInfo, logDebug, logError } from '../../../../copilot/logger';
-import { ANTHROPIC_HAIKU_4_5, ANTHROPIC_SONNET_4_6, AnthropicModel } from '../../../../connection';
+import { ANTHROPIC_HAIKU_4_5, ANTHROPIC_SONNET_5, AnthropicModel } from '../../../../connection';
 import { SubagentResult } from '../../../tools/types';
 import { extractStepMessages } from '../utils';
 
@@ -71,7 +71,7 @@ export async function executeSynapseContextSubagent(
 
     try {
         // Select model - prefer haiku for speed
-        const modelId = model === 'sonnet' ? ANTHROPIC_SONNET_4_6 : ANTHROPIC_HAIKU_4_5;
+        const modelId = model === 'sonnet' ? ANTHROPIC_SONNET_5 : ANTHROPIC_HAIKU_4_5;
         const anthropicModel = await getAnthropicClient(modelId);
 
         // Create tools: read-only file tools + context reference tool
@@ -116,7 +116,11 @@ export async function executeSynapseContextSubagent(
             messages,
             tools,
             stopWhen: stepCountIs(6),
-            temperature: 0.2,
+            // Sonnet 5 rejects a non-default temperature (400) and runs adaptive thinking by
+            // default; keep the subagent fast/focused by omitting temperature and disabling
+            // thinking on it (would otherwise eat the small output budget). Haiku keeps temp 0.2.
+            temperature: model === 'sonnet' ? undefined : 0.2,
+            providerOptions: model === 'sonnet' ? { anthropic: { thinking: { type: 'disabled' } } as any } : undefined,
             maxOutputTokens: 4000,
             abortSignal,
         });
