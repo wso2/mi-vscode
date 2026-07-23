@@ -57,9 +57,216 @@
             }
           },
           {
+            "type": "attribute",
+            "value": {
+              "name": "operationName",
+              "displayName": "Operation Name",
+              "inputType": "key",
+              "keyType": "dsOperation",
+              "required": true,
+              "enableCondition": [
+                "AND",
+                {
+                  "sourceType": "INLINE"
+                },
+                [
+                  "OR",
+                  {
+                    "operationType": "SINGLE"
+                  },
+                  {
+                    "operationType": "BATCH"
+                  }
+                ]
+              ],
+              "helpTip": ""
+            }
+          },
+          {
             "type": "table",
             "value": {
-              "name": "operations",
+              "name": "singleOperations",
+              "displayName": "Operations",
+              "description": "Editing of the properties of an object AbstractDSSOperation",
+              "tableKey": "operationName",
+              "tableValue": "DSSProperties",
+              "maxEntries": 1,
+              "elements": [
+                {
+                  "type": "table",
+                  "value": {
+                    "name": "DSSProperties",
+                    "displayName": "DSS Properties",
+                    "description": "Editing of the properties of an object DSSoperationProperty",
+                    "tableKey": "propertyName",
+                    "tableValue": "propertyValue",
+                    "elements": [
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyName",
+                          "displayName": "Property Name",
+                          "inputType": "string",
+                          "required": true,
+                          "helpTip": ""
+                        }
+                      },
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyValueType",
+                          "displayName": "Property Value Type",
+                          "inputType": "combo",
+                          "defaultValue": "LITERAL",
+                          "comboValues": [
+                            "LITERAL",
+                            "EXPRESSION"
+                          ],
+                          "required": false,
+                          "helpTip": ""
+                        }
+                      },
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyValue",
+                          "displayName": "Property Value",
+                          "inputType": "string",
+                          "required": false,
+                          "helpTip": "",
+                          "enableCondition": [
+                            {
+                              "propertyValueType": "LITERAL"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyExpression",
+                          "displayName": "Property Expression",
+                          "inputType": "expression",
+                          "expressionType":"xpath/jsonPath",
+                          "required": false,
+                          "helpTip": "",
+                          "enableCondition": [
+                            {
+                              "propertyValueType": "EXPRESSION"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "enableCondition": [
+                "AND",
+                {
+                  "sourceType": "INLINE"
+                },
+                {
+                  "operationType": "SINGLE"
+                }
+              ],
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "table",
+            "value": {
+              "name": "batchOperations",
+              "displayName": "Operations",
+              "description": "Editing of the properties of an object AbstractDSSOperation",
+              "tableKey": "operationName",
+              "tableValue": "DSSProperties",
+              "elements": [
+                {
+                  "type": "table",
+                  "value": {
+                    "name": "DSSProperties",
+                    "displayName": "DSS Properties",
+                    "description": "Editing of the properties of an object DSSoperationProperty",
+                    "tableKey": "propertyName",
+                    "tableValue": "propertyValue",
+                    "elements": [
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyName",
+                          "displayName": "Property Name",
+                          "inputType": "string",
+                          "required": true,
+                          "helpTip": ""
+                        }
+                      },
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyValueType",
+                          "displayName": "Property Value Type",
+                          "inputType": "combo",
+                          "defaultValue": "LITERAL",
+                          "comboValues": [
+                            "LITERAL",
+                            "EXPRESSION"
+                          ],
+                          "required": false,
+                          "helpTip": ""
+                        }
+                      },
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyValue",
+                          "displayName": "Property Value",
+                          "inputType": "string",
+                          "required": false,
+                          "helpTip": "",
+                          "enableCondition": [
+                            {
+                              "propertyValueType": "LITERAL"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "type": "attribute",
+                        "value": {
+                          "name": "propertyExpression",
+                          "displayName": "Property Expression",
+                          "inputType": "expression",
+                          "expressionType":"xpath/jsonPath",
+                          "required": false,
+                          "helpTip": "",
+                          "enableCondition": [
+                            {
+                              "propertyValueType": "EXPRESSION"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "enableCondition": [
+                "AND",
+                {
+                  "sourceType": "INLINE"
+                },
+                {
+                  "operationType": "BATCH"
+                }
+              ],
+              "helpTip": ""
+            }
+          },
+          {
+            "type": "table",
+            "value": {
+              "name": "requestBoxoperations",
               "displayName": "Operations",
               "description": "Editing of the properties of an object AbstractDSSOperation",
               "tableKey": "operationName",
@@ -69,8 +276,9 @@
                   "type": "attribute",
                   "value": {
                     "name": "operationName",
-                    "displayName": "OperationName",
-                    "inputType": "string",
+                    "displayName": "Operation Name",
+                    "inputType": "key",
+                    "keyType": "dsOperation",
                     "required": true,
                     "helpTip": ""
                   }
@@ -145,8 +353,12 @@
                 }
               ],
               "enableCondition": [
+                "AND",
                 {
                   "sourceType": "INLINE"
+                },
+                {
+                  "operationType": "REQUEST-BOX"
                 }
               ],
               "helpTip": ""

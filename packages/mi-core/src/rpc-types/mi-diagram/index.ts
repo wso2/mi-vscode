@@ -182,6 +182,7 @@ import {
     ExportProjectRequest,
     EditAPIRequest,
     EditAPIResponse,
+    DataServiceSwaggerRequest,
     SwaggerTypeRequest,
     UpdateAPIFromSwaggerRequest,
     CompareSwaggerAndAPIResponse,
@@ -428,6 +429,7 @@ export interface MiDiagramAPI {
     checkOldProject: () => Promise<boolean>;
     refreshAccessToken: () => void;
     getOpenAPISpec: (params: SwaggerTypeRequest) => Promise<SwaggerFromAPIResponse>;
+    getDataServiceOpenAPISpec: (params: DataServiceSwaggerRequest) => Promise<SwaggerFromAPIResponse>;
     editOpenAPISpec: (params: SwaggerTypeRequest) => void;
     compareSwaggerAndAPI: (params: SwaggerTypeRequest) => Promise<CompareSwaggerAndAPIResponse>;
     updateSwaggerFromAPI: (params: SwaggerTypeRequest) => void;

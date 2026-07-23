@@ -180,6 +180,7 @@ import {
     EditAPIRequest,
     EditAPIResponse,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     UpdateAPIFromSwaggerRequest,
     CompareSwaggerAndAPIResponse,
     UpdateTestSuiteRequest,
@@ -435,6 +436,7 @@ export const exportProject: NotificationType<ExportProjectRequest> = { method: `
 export const checkOldProject: RequestType<void, boolean> = { method: `${_preFix}/checkOldProject` };
 export const refreshAccessToken: NotificationType<void> = { method: `${_preFix}/refreshAccessToken` };
 export const getOpenAPISpec: RequestType<SwaggerTypeRequest, SwaggerFromAPIResponse> = { method: `${_preFix}/getOpenAPISpec` };
+export const getDataServiceOpenAPISpec: RequestType<DataServiceSwaggerRequest, SwaggerFromAPIResponse> = { method: `${_preFix}/getDataServiceOpenAPISpec` };
 export const editOpenAPISpec: NotificationType<SwaggerTypeRequest> = { method: `${_preFix}/editOpenAPISpec` };
 export const compareSwaggerAndAPI: RequestType<SwaggerTypeRequest, CompareSwaggerAndAPIResponse> = { method: `${_preFix}/compareSwaggerAndAPI` };
 export const updateSwaggerFromAPI: NotificationType<SwaggerTypeRequest> = { method: `${_preFix}/updateSwaggerFromAPI` };

@@ -164,6 +164,7 @@ import {
     ShowErrorMessageRequest,
     SwaggerFromAPIResponse,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     TemplatesResponse,
     UndoRedoParams,
     UpdateAPIFromSwaggerRequest,
@@ -280,6 +281,7 @@ import {
     getMessageStore,
     getMetadataOfRegistryResource,
     getOpenAPISpec,
+    getDataServiceOpenAPISpec,
     getProjectRoot,
     getProjectUuid,
     getRecipientEndpoint,
@@ -1041,6 +1043,10 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
 
     getOpenAPISpec(params: SwaggerTypeRequest): Promise<SwaggerFromAPIResponse> {
         return this._messenger.sendRequest(getOpenAPISpec, HOST_EXTENSION, params);
+    }
+
+    getDataServiceOpenAPISpec(params: DataServiceSwaggerRequest): Promise<SwaggerFromAPIResponse> {
+        return this._messenger.sendRequest(getDataServiceOpenAPISpec, HOST_EXTENSION, params);
     }
 
     updateSwaggerFromAPI(params: SwaggerTypeRequest): void {
