@@ -30,7 +30,7 @@ const NATIVE_COMPACTION_TRIGGER_TOKENS = 200000;
 
 import { ModelMessage, streamText, stepCountIs, UserModelMessage, SystemModelMessage, wrapLanguageModel } from 'ai';
 import { AnthropicProviderOptions } from '@ai-sdk/anthropic';
-import { getAnthropicClient, getAnthropicClientForCustomModel, getAnthropicProvider, AnthropicModel, resolveMainModelId, ANTHROPIC_OPUS_4_8, ANTHROPIC_SONNET_5 } from '../../../connection';
+import { getAnthropicClient, getAnthropicClientForCustomModel, getAnthropicProvider, AnthropicModel, resolveMainModelId, ANTHROPIC_OPUS_4_8, ANTHROPIC_SONNET_4_6 } from '../../../connection';
 import { getLoginMethod, getTavilyApiKey } from '../../../auth';
 import { getSystemPrompt } from '../main/system';
 import {
@@ -71,10 +71,7 @@ import {
     WEB_SEARCH_TOOL_NAME,
     WEB_FETCH_TOOL_NAME,
     DEEPWIKI_ASK_QUESTION_TOOL_NAME,
-    SKILL_TOOL_NAME,
 } from './tools';
-import { findSkillByName, type SkillCatalogEntry } from '../../tools/skill_discovery';
-import { readAndFormatSkill } from '../../tools/skill_tools';
 import { logInfo, logError, logDebug } from '../../../copilot/logger';
 import { ChatHistoryManager, SessionContextBlocksState, TOOL_USE_INTERRUPTION_CONTEXT } from '../../chat-history-manager';
 import { getToolAction } from '../../tool-action-mapper';
@@ -265,7 +262,6 @@ function buildUpdatedBlocksState(
     apply('modePolicy', statuses.modePolicy, current.modePolicy);
     apply('payloads', statuses.payloads, current.payloads);
     apply('agentsMd', statuses.agentsMd, current.agentsMd);
-    apply('skills', statuses.skills, current.skills);
     return touched ? updated : undefined;
 }
 
@@ -293,40 +289,9 @@ function logBlockInjectionDrift(
     note('mode', statuses.modePolicy, previous.modePolicy, current.modePolicy);
     note('payloads', statuses.payloads, previous.payloads, current.payloads);
     note('agentsMd', statuses.agentsMd, previous.agentsMd, current.agentsMd);
-    note('skills', statuses.skills, previous.skills, current.skills);
     if (driftedBlocks.length > 0) {
         logInfo(`[Agent] Session-context drift — re-injecting: ${driftedBlocks.join(', ')}`);
     }
-}
-
-/**
- * Detect a user-explicit skill invocation (`/skill-name [args]`) at the start of
- * the message and resolve it against the discovered skills. Mirrors Claude Code:
- * the harness does the lookup so the model receives the skill content
- * deterministically. Matches both model-invocable and `disable-model-invocation`
- * skills (the user asked for it explicitly). Returns undefined when the message
- * is not a recognized slash invocation.
- */
-function detectSlashSkillInvocation(
-    query: string,
-    skills: SkillCatalogEntry[],
-): { entry: SkillCatalogEntry; args: string } | undefined {
-    if (!query) {
-        return undefined;
-    }
-    const trimmed = query.replace(/^\s+/, '');
-    if (!trimmed.startsWith('/')) {
-        return undefined;
-    }
-    const match = trimmed.match(/^\/([A-Za-z0-9][A-Za-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/);
-    if (!match) {
-        return undefined;
-    }
-    const entry = findSkillByName(skills, match[1]);
-    if (!entry) {
-        return undefined;
-    }
-    return { entry, args: (match[2] ?? '').trim() };
 }
 
 const TOOL_INTERRUPTION_ERROR_CODE = 'AGENT_TOOL_INTERRUPTION';
@@ -659,7 +624,6 @@ export async function executeAgent(
             modePolicy: decideBlockStatus(currentBlockHashes.modePolicy, previousBlocks.modePolicy, forceFirstInjection),
             payloads: decideBlockStatus(currentBlockHashes.payloads, previousBlocks.payloads, forceFirstInjection),
             agentsMd: decideBlockStatus(currentBlockHashes.agentsMd, previousBlocks.agentsMd, forceFirstInjection),
-            skills: decideBlockStatus(currentBlockHashes.skills, previousBlocks.skills, forceFirstInjection),
         };
         const previousMode = previousBlocks.modePolicy as AgentMode | undefined;
 
@@ -671,40 +635,6 @@ export async function executeAgent(
         if (updatedBlocks && request.chatHistoryManager) {
             await request.chatHistoryManager.updateMetadata({ sessionContextBlocks: updatedBlocks });
             logBlockInjectionDrift(blockStatuses, previousBlocks, currentBlockHashes);
-        }
-
-        // Per-run set of activated skill names — shared with the `skill` tool so
-        // a user `/skill-name` invocation and a later model `skill` call dedup
-        // each other within the turn.
-        const activatedSkills = new Set<string>();
-
-        // User-explicit skill invocation (`/skill-name [args]`). Resolve & format
-        // here so the model receives the skill deterministically (Claude Code
-        // parity) without having to call the `skill` tool itself.
-        let userActivatedSkillContent: string | undefined;
-        let userActivatedSkillFailed = false;
-        let userActivatedSkillModelHidden = false;
-        const slashSkill = detectSlashSkillInvocation(request.query, sessionContextResult.snapshot.skills);
-        if (slashSkill) {
-            try {
-                userActivatedSkillContent = readAndFormatSkill(slashSkill.entry, slashSkill.args || undefined).content;
-                activatedSkills.add(slashSkill.entry.name.toLowerCase());
-                userActivatedSkillModelHidden = slashSkill.entry.disableModelInvocation;
-                logInfo(`[Agent] User activated skill '${slashSkill.entry.name}' via /skill-name`);
-            } catch (error) {
-                logError(`[Agent] Failed to activate skill '${slashSkill.entry.name}' from /skill-name`, error);
-                // Surface the failure instead of silently proceeding as if no
-                // skill was requested. Rendered as a plain <system-reminder>
-                // instruction (not under the "# Activated Skill / follow the
-                // instructions below" success framing) so the model tells the
-                // user in-chat rather than acting on instructions that never loaded.
-                const detail = error instanceof Error ? error.message : String(error);
-                userActivatedSkillFailed = true;
-                userActivatedSkillContent =
-                    `The user invoked the skill "${slashSkill.entry.name}" via /skill-name, but it could not be loaded ` +
-                    `(${detail}). There are no skill instructions to apply — briefly tell the user the skill failed to ` +
-                    `activate, then continue with their request without it.`;
-            }
         }
 
         // Build user prompt — pass the pre-built sessionContextResult so
@@ -722,9 +652,6 @@ export async function executeAgent(
             blockStatuses,
             previousMode,
             precomputedContext: sessionContextResult,
-            userActivatedSkillContent,
-            userActivatedSkillFailed,
-            userActivatedSkillModelHidden,
         };
         const userPromptBlocks = await getUserPrompt(userPromptParams);
 
@@ -840,8 +767,6 @@ export async function executeAgent(
             undoCheckpointManager: request.undoCheckpointManager,
             abortSignal: streamWatchdog.abortSignal,
             modelSettings: request.modelSettings,
-            skills: sessionContextResult.snapshot.skills,
-            activatedSkills,
         });
 
         const finalTools: any = tools;
@@ -861,7 +786,7 @@ export async function executeAgent(
             mainModelId === ANTHROPIC_OPUS_4_8
         ) {
             logInfo('[Agent] MI_INTEL login: Opus is not available on the WSO2 plan — using Sonnet for the main agent.');
-            mainModelId = ANTHROPIC_SONNET_5;
+            mainModelId = ANTHROPIC_SONNET_4_6;
         }
         let model = request.modelSettings?.mainModelCustomId
             ? await getAnthropicClientForCustomModel(mainModelId)
@@ -932,10 +857,7 @@ export async function executeAgent(
         //   harmless on Sonnet which already defaults to summarized.
         const anthropicOptions: AnthropicProviderOptions = request.thinking
             ? { thinking: { type: 'adaptive', display: 'summarized' } as any, effort: 'low' }
-            // Explicitly disable thinking when off. Sonnet 5 runs adaptive thinking by
-            // default when the `thinking` field is omitted, so the toggle wouldn't
-            // actually turn thinking off without this.
-            : { thinking: { type: 'disabled' } as any };
+            : {};
 
         // Native server-side compaction: Anthropic auto-summarizes the conversation
         // when input tokens exceed the trigger threshold. The compaction block is
@@ -977,10 +899,7 @@ export async function executeAgent(
         const streamConfig: any = {
             model,
             maxOutputTokens: AGENT_EXECUTION_CONFIG.maxOutputTokens,
-            // Current-generation main models (Sonnet 5, Opus 4.8) reject a non-default
-            // `temperature` with a 400, so never send one. Response depth is steered via
-            // adaptive thinking / effort instead (see anthropicOptions above).
-            temperature: undefined,
+            temperature: request.thinking ? undefined : 0,
             messages: allMessages,
             stopWhen: stepCountIs(AGENT_EXECUTION_CONFIG.maxSteps),
             tools: finalTools,
@@ -1359,11 +1278,6 @@ export async function executeAgent(
                         displayInput = {
                             repoName: toolInput?.repoName,
                             question: toolInput?.question,
-                        };
-                    } else if (part.toolName === SKILL_TOOL_NAME) {
-                        displayInput = {
-                            skill: toolInput?.skill,
-                            args: toolInput?.args,
                         };
                     }
 

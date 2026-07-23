@@ -30,7 +30,6 @@
 const PROMPT = `
 Your task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
-Do NOT reproduce or summarize the contents of \`<system-reminder>\` context blocks (for example \`<env>\`, connector catalogs, \`# Available Skills\`, \`# Project AGENTS.md\`, mode policy, or \`.tryout\` payload listings). This environment re-injects that context automatically after compaction, so capturing it here only wastes space and risks stale duplicates that conflict with the freshly re-injected copies. The sole exception is a \`# Activated Skill\` block (a skill the user invoked with /skill-name): capture the substance of its instructions, since that content is NOT re-injected after compaction.
 Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. In your analysis process:
 1. Chronologically analyze each message and section of the conversation. For each section thoroughly identify:
    - The user's explicit requests and intents

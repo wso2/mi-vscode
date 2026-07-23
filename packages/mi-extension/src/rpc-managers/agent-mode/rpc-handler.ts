@@ -37,18 +37,12 @@ import {
     createNewSession,
     deleteSession,
     searchMentionablePaths,
-    listSkills,
-    listManagedSkills,
-    setSkillEnabled,
-    deleteSkill,
     getAgentRunStatus,
     ListSessionsRequest,
     SwitchSessionRequest,
     CreateNewSessionRequest,
     DeleteSessionRequest,
     SearchMentionablePathsRequest,
-    SetSkillEnabledRequest,
-    DeleteSkillRequest,
 } from "@wso2/mi-core";
 
 const rpcManagerMap: Map<string, MIAgentPanelRpcManager> = new Map();
@@ -103,13 +97,5 @@ export function registerMIAgentPanelRpcHandlers(messenger: MessengerAPI, project
     messenger.onRequest(searchMentionablePaths, (request: SearchMentionablePathsRequest) =>
         rpcManager.searchMentionablePaths(request)
     );
-
-    // ==================================
-    // Skills Functions
-    // ==================================
-    messenger.onRequest(listSkills, () => rpcManager.listSkills());
-    messenger.onRequest(listManagedSkills, () => rpcManager.listManagedSkills());
-    messenger.onRequest(setSkillEnabled, (request: SetSkillEnabledRequest) => rpcManager.setSkillEnabled(request));
-    messenger.onRequest(deleteSkill, (request: DeleteSkillRequest) => rpcManager.deleteSkill(request));
 
 }
