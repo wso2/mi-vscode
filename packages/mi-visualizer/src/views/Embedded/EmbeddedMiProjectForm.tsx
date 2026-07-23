@@ -38,7 +38,7 @@ export interface EmbeddedMiProjectFormProps {
  * extension host over the token-gated giga-bridge websocket.
  */
 export default function EmbeddedMiProjectForm({ onBack, bootstrap }: EmbeddedMiProjectFormProps) {
-    const resolved = bootstrap ?? resolveMiBridgeBootstrap();
+    const resolved = React.useMemo(() => bootstrap ?? resolveMiBridgeBootstrap(), [bootstrap]);
     return (
         <MiWsClientProvider bootstrap={resolved} onBack={onBack}>
             <MiProjectForm />
