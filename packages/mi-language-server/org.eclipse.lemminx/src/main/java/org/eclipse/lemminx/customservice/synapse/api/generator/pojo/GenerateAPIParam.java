@@ -21,4 +21,7 @@ public class GenerateAPIParam {
     public String wsdlEndpointName;
     public String publishSwaggerPath;
     public String mode;
+    public String context;
+    public String version;
+    public String versionType;
 }
