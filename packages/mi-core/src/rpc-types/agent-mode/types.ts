@@ -449,6 +449,8 @@ export interface SessionContextBlocksState {
     payloads?: string;
     /** sha256-16 of the (possibly truncated) AGENTS.md bytes + truncation banner inputs */
     agentsMd?: string;
+    /** sha256-16 of the model-invocable skill catalog (name/description/location/mtime/size) */
+    skills?: string;
 }
 
 /**
@@ -588,6 +590,61 @@ export interface SearchMentionablePathsResponse {
     error?: string;
 }
 
+/**
+ * One discovered Agent Skill, surfaced to the webview for the `/skill-name`
+ * autocomplete. Includes `disable-model-invocation` skills (the model won't
+ * auto-pick them, but the user can invoke them explicitly).
+ */
+export interface SkillListItem {
+    name: string;
+    description: string;
+    disableModelInvocation: boolean;
+}
+
+export interface ListSkillsResponse {
+    skills: SkillListItem[];
+}
+
+/** A discovered skill with management metadata for the settings UI. */
+export interface ManagedSkillItem {
+    name: string;
+    description: string;
+    scope: 'project' | 'user';
+    /** User enable/disable state (toggle). */
+    enabled: boolean;
+    /** SKILL.md `disable-model-invocation` frontmatter flag (read-only here). */
+    disableModelInvocation: boolean;
+    /** True when a higher-precedence skill of the same name shadows this one. */
+    shadowed: boolean;
+}
+
+export interface ListManagedSkillsResponse {
+    skills: ManagedSkillItem[];
+}
+
+export interface SetSkillEnabledRequest {
+    name: string;
+    scope: 'project' | 'user';
+    enabled: boolean;
+}
+
+export interface SetSkillEnabledResponse {
+    success: boolean;
+    error?: string;
+}
+
+export interface DeleteSkillRequest {
+    name: string;
+    scope: 'project' | 'user';
+}
+
+export interface DeleteSkillResponse {
+    success: boolean;
+    /** True when the skill directory was removed; false when the user cancelled. */
+    deleted: boolean;
+    error?: string;
+}
+
 export interface GetAgentRunStatusRequest {
     /** When set, only return events with seq > sinceSeq (for polling dedup) */
     sinceSeq?: number;
@@ -618,6 +675,12 @@ export interface MIAgentPanelAPI {
     deleteSession: (request: DeleteSessionRequest) => Promise<DeleteSessionResponse>;
     // Mention search
     searchMentionablePaths: (request: SearchMentionablePathsRequest) => Promise<SearchMentionablePathsResponse>;
+    // Skills (for /skill-name autocomplete)
+    listSkills: () => Promise<ListSkillsResponse>;
+    // Skills management (settings UI)
+    listManagedSkills: () => Promise<ListManagedSkillsResponse>;
+    setSkillEnabled: (request: SetSkillEnabledRequest) => Promise<SetSkillEnabledResponse>;
+    deleteSkill: (request: DeleteSkillRequest) => Promise<DeleteSkillResponse>;
     // Agent run status for panel reconnection
     getAgentRunStatus: (request?: GetAgentRunStatusRequest) => Promise<GetAgentRunStatusResponse>;
 }

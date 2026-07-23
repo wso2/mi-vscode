@@ -31,7 +31,7 @@ import {
     TASK_OUTPUT_TOOL_NAME,
 } from './types';
 import { logInfo, logError, logDebug } from '../../copilot/logger';
-import { AnthropicModel, getAnthropicClientForCustomModel, resolveSubModelId, ANTHROPIC_HAIKU_4_5, ANTHROPIC_SONNET_4_6 } from '../../connection';
+import { AnthropicModel, getAnthropicClientForCustomModel, resolveSubModelId, ANTHROPIC_HAIKU_4_5, ANTHROPIC_SONNET_5 } from '../../connection';
 import { ModelSettings } from '@wso2/mi-core';
 import { getCopilotSessionDir } from '../storage-paths';
 
@@ -332,7 +332,7 @@ export function createSubagentExecute(
         } else if (modelSettings?.subModelPreset) {
             // Preset override: map the resolved sub-model ID back to 'haiku' | 'sonnet'
             const resolvedId = resolveSubModelId(modelSettings);
-            effectiveModel = resolvedId === ANTHROPIC_SONNET_4_6 ? 'sonnet' : 'haiku';
+            effectiveModel = resolvedId === ANTHROPIC_SONNET_5 ? 'sonnet' : 'haiku';
         }
 
         const isResume = !!resume;
