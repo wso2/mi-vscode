@@ -15,7 +15,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button, Dropdown, FormGroup, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, ParamManager, Tooltip, Icon, ParamConfig } from "@wso2/ui-toolkit";
 import { yupResolver } from "@hookform/resolvers/yup"
 import * as yup from "yup";
@@ -62,6 +62,9 @@ export function MiProjectForm() {
     const [dirContent, setDirContent] = useState([]);
     const [supportedMIVersions, setSupportedMIVersions] = useState<OptionProps[]>([]);
     const [formSaved, setFormSaved] = useState(false);
+    // Tracks the artifactID we last auto-filled from the project name, so we stop
+    // syncing once the user manually edits the Artifact Id field.
+    const lastAutoSyncedArtifactId = useRef<string>(initialEndpoint.artifactID);
 
     const [isConsolidatedProject, setIsConsolidatedProject] = useState(false);
     const [isSubProjectsAdded, setIsSubProjectsAdded] = useState(false);
@@ -113,19 +116,29 @@ export function MiProjectForm() {
 
     useEffect(() => {
         (async () => {
-            const currentDir = await wsClient.getWorkspaceRoot();
-            setValue("directory", currentDir.path);
-            const supportedVersionsResponse = await wsClient.getSupportedMIVersionsHigherThan('');
-            const supportedMIVersions = supportedVersionsResponse.versions.map((version: string) => ({ value: version, content: version }));
-            setSupportedMIVersions(supportedMIVersions);
-            setValue("miVersion", supportedVersionsResponse.versions[0]); // Set the first supported version as the default, it is the latest version
-            const response = await wsClient.getSubFolderNames({ path: currentDir.path });
-            setDirContent(response.folders);
+            try {
+                const currentDir = await wsClient.getWorkspaceRoot();
+                setValue("directory", currentDir.path);
+                const supportedVersionsResponse = await wsClient.getSupportedMIVersionsHigherThan('');
+                const supportedMIVersions = supportedVersionsResponse.versions.map((version: string) => ({ value: version, content: version }));
+                setSupportedMIVersions(supportedMIVersions);
+                setValue("miVersion", supportedVersionsResponse.versions[0]); // Set the first supported version as the default, it is the latest version
+                const response = await wsClient.getSubFolderNames({ path: currentDir.path });
+                setDirContent(response.folders);
+            } catch (error) {
+                console.error("Failed to initialize the MI project form", error);
+                wsClient.showErrorMessage("Failed to load project details. Please reopen the form and try again.");
+            }
         })();
     }, []);
 
     useEffect(() => {
-        setValue("artifactID", getValues("name"));
+        const currentArtifactId = getValues("artifactID");
+        if (currentArtifactId === lastAutoSyncedArtifactId.current) {
+            const name = getValues("name");
+            setValue("artifactID", name);
+            lastAutoSyncedArtifactId.current = name;
+        }
     }, [watch("name")]);
 
     const handleSubProjectsOnChange = (params: any) => {
@@ -161,12 +174,13 @@ export function MiProjectForm() {
         setFormSaved(true);
         try {
             const response = await wsClient.createMiProject(createProjectParams);
-            if (response.filePath === "Error") {
+
+            if (!response.filePath) {
                 setFormSaved(false);
-            } else {
-                // Project created successfully
+                wsClient.showErrorMessage("Failed to create the MI project.");
             }
-        } catch {
+        } catch (error) {
+            console.error("Failed to create MI project", error);
             setFormSaved(false);
         }
     };
