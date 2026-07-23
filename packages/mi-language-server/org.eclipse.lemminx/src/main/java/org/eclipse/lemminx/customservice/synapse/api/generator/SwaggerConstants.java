@@ -190,4 +190,9 @@ public class SwaggerConstants {
      *  Path param normaized placeholder
      */
     public static final String NORMALIZED_PLACEHOLDER = "{}";
+
+    /**
+     * Version type value indicating that the API should be unversioned
+     */
+    static final String VERSION_TYPE_NONE = "none";
 }
