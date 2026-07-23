@@ -136,6 +136,11 @@
       "name": "Solace (Inbound)",
       "id": "org.wso2.carbon.inbound.solace.SolaceEventListener",
       "type": "inbound-endpoint"
+    },
+	{
+      "name": "Azure Service Bus (Inbound)",
+      "id": "org.wso2.carbon.inbound.asb.ASBEventConsumer",
+      "type": "inbound-endpoint"
     }
   ]
 }
