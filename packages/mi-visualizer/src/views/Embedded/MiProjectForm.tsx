@@ -57,6 +57,11 @@ const FieldGroup = styled.div`
     margin-bottom: 20px;
 `;
 
+const FormContainer = styled.div`
+    max-width: 800px;
+    margin: 0 auto;
+`;
+
 export function MiProjectForm() {
     const { wsClient } = useMiWsContext();
     const [dirContent, setDirContent] = useState([]);
@@ -195,7 +200,7 @@ export function MiProjectForm() {
     };
 
     return (
-        <div>
+        <FormContainer>
             <FieldGroup>
                 <TextField
                     id='name'
@@ -282,6 +287,6 @@ export function MiProjectForm() {
                     ) : "Create Project"}
                 </Button>
             </ButtonWrapper>
-        </div>
+        </FormContainer>
     );
 }
