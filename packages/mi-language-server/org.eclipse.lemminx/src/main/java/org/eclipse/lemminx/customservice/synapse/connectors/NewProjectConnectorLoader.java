@@ -119,11 +119,19 @@ public class NewProjectConnectorLoader extends AbstractConnectorLoader {
                     if (connectorFolder.getName().contains(Constant.INBOUND_CONNECTOR_PREFIX) ) {
                         String schema = Utils.readFile(connectorFolder.toPath().resolve(Constant.RESOURCES)
                                 .resolve(Constant.UI_SCHEMA_JSON).toFile());
-                        String fileName = Utils.getJsonObject(schema).get(Constant.NAME).getAsString() + Constant.JSON_FILE_EXT;
+                        String inboundName = Utils.getJsonObject(schema).get(Constant.NAME).getAsString();
                         String projectFolderName = connectorExtractFolder.getParentFile().getName();
-                        File schemaToRemove = Path.of(getUserHome(), Constant.WSO2_MI,
-                                Constant.INBOUND_CONNECTORS).resolve(projectFolderName).resolve(fileName).toFile();
-                        FileUtils.delete(schemaToRemove);
+                        Path inboundCacheDir = Path.of(getUserHome(), Constant.WSO2_MI,
+                                Constant.INBOUND_CONNECTORS).resolve(projectFolderName);
+                        File schemaToRemove = inboundCacheDir.resolve(inboundName + Constant.JSON_FILE_EXT).toFile();
+                        if (schemaToRemove.exists()) {
+                            FileUtils.delete(schemaToRemove);
+                        }
+                        File inputSchemaToRemove = inboundCacheDir
+                                .resolve(inboundName + InboundConnectorHolder.INPUT_SCHEMA_FILE_SUFFIX).toFile();
+                        if (inputSchemaToRemove.exists()) {
+                            FileUtils.delete(inputSchemaToRemove);
+                        }
                     }
                     FileUtils.deleteDirectory(connectorFolder);
                     notifyRemoveConnector(connectorName, true, "Connector deleted successfully");
