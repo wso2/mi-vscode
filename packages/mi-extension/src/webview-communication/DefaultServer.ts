@@ -20,16 +20,15 @@
 
 import { createExtensionTransportManager, createRequestRouter } from "@wso2/webview-giga-bridge";
 import { randomBytes } from "crypto";
-import * as path from "path";
-import { commands, Disposable, Uri, WebviewPanel, window, workspace } from "vscode";
+import { commands, Disposable, WebviewPanel, window, workspace } from "vscode";
 import { COMMANDS } from "../constants";
 import { MiDiagramRpcManager } from "../rpc-managers/mi-diagram/rpc-manager";
 import { getSupportedMIVersionsHigherThan } from "../util/onboardingUtils";
+import { createMiProject } from "../util/projectCreationUtils";
 // Shared wire contract — single source of truth for both this server and the
 // webview client (`mi-visualizer` `MiWsClient`).
 import {
     CreateMiProjectRequest,
-    CreateMiProjectResponse,
     WEBVIEW_WS_EVENTS,
     WebviewWsBootstrap,
     WebviewWsRequest,
@@ -146,7 +145,7 @@ export class DefaultServer {
         // project URI (same pattern as the MI.project-explorer.create-project command).
         const miDiagram = new MiDiagramRpcManager("");
 
-        this.register("createMiProject", (p: CreateMiProjectRequest) => this.createMiProject(p));
+        this.register("createMiProject", (p: CreateMiProjectRequest) => createMiProject(p));
         this.register("importProjectFromCapp", () => commands.executeCommand(COMMANDS.IMPORT_FROM_CAPP));
         this.register("getSupportedMIVersionsHigherThan", async (version: string) => ({
             versions: await getSupportedMIVersionsHigherThan(typeof version === "string" ? version : ""),
@@ -159,35 +158,5 @@ export class DefaultServer {
         this.register("showErrorMessage", (p) => {
             window.showErrorMessage(typeof p === "string" ? p : p?.message ?? "An error occurred.");
         });
-    }
-
-    /** Creates an MI project via the project-explorer command (the same flow the
-     *  WSO2 Integrator delegated to before the form moved here). */
-    private async createMiProject(params: CreateMiProjectRequest): Promise<CreateMiProjectResponse> {
-        try {
-            const miCommandParams = {
-                name: params.name,
-                path: path.join(params.directory, params.name),
-                scope: "user",
-                open: params.open,
-                miVersion: params.miVersion,
-                isConsolidatedProject: params.isConsolidatedProject ?? false,
-                subProjects: params.subProjects ?? [],
-                groupId: params.groupID ?? "com.microintegrator.projects",
-                artifactId: params.artifactID ?? params.name,
-                version: params.version ?? "1.0.0",
-            };
-            const result = await commands.executeCommand(COMMANDS.CREATE_PROJECT_COMMAND, miCommandParams);
-            if (result) {
-                const response = result as CreateMiProjectResponse;
-                await commands.executeCommand("vscode.openFolder", Uri.file(path.resolve(response.filePath)));
-                return response;
-            }
-            return { filePath: "" };
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            window.showErrorMessage(`Failed to create MI project: ${errorMessage}`);
-            throw error;
-        }
     }
 }
