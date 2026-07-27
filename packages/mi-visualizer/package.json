@@ -5,11 +5,13 @@
   "main": "index.js",
   "scripts": {
     "start": "webpack-dev-server --mode=development --progress",
-    "build": "webpack && pnpm run postbuild",
+    "build": "webpack && pnpm run postbuild && pnpm run build:federation",
+    "build:federation": "webpack --config webpack.federation.config.js && pnpm run postbuild:federation",
     "build:tsc": "tsc --pretty",
     "storybook": "storybook dev",
     "build-storybook": "storybook build",
-    "postbuild": "copyfiles -u 1 \"build/**/*\" ../mi-extension/resources/jslibs"
+    "postbuild": "copyfiles -u 1 \"build/**/*\" ../mi-extension/resources/jslibs",
+    "postbuild:federation": "node -e \"require('fs').rmSync('../mi-extension/resources/jslibs/federation',{recursive:true,force:true})\" && copyfiles -u 1 -V \"build-federation/*.js\" \"build-federation/images/*\" ../mi-extension/resources/jslibs/federation"
   },
   "author": "wso2",
   "license": "Apache-2.0",
@@ -23,6 +25,7 @@
     "@wso2/mi-rpc-client": "workspace:*",
     "@wso2/service-designer": "workspace:*",
     "@wso2/ui-toolkit": "workspace:*",
+    "@wso2/webview-giga-bridge": "workspace:*",
     "@wso2/mi-data-mapper": "workspace:*",
     "@wso2/wso2-platform-core": "workspace:*",
     "react": "18.2.0",

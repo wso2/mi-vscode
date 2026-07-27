@@ -1230,6 +1230,7 @@
     "@wso2/mi-diagram": "workspace:*",
     "@wso2/mi-rpc-client": "workspace:*",
     "@wso2/syntax-tree": "workspace:*",
+    "@wso2/webview-giga-bridge": "workspace:*",
     "@wso2/playwright-vscode-tester": "workspace:*",
     "adm-zip": "0.6.0",
     "axios": "1.18.0",
