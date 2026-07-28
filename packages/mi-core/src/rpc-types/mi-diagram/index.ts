@@ -428,6 +428,7 @@ export interface MiDiagramAPI {
     deployProject: (params: DeployProjectRequest) => Promise<DeployProjectResponse>;
     getDevantMetadata: () => Promise<DevantMetadata>;
     exportProject: (params: ExportProjectRequest) => void;
+    exportConsolidatedProject: () => void;
     checkOldProject: () => Promise<boolean>;
     refreshAccessToken: () => void;
     getOpenAPISpec: (params: SwaggerTypeRequest) => Promise<SwaggerFromAPIResponse>;

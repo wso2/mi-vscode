@@ -63,6 +63,7 @@ import { IdpConnectorSchemaGenerateForm }from './views/Forms/IDPConnectorForm/Id
 import { KubernetesConfigurationForm } from "./views/Forms/KubernetesConfigurationForm";
 import { RegistryPropertyForm } from "./views/Forms/RegistryPropertyForm";
 import { ConvertToConsolidatedWizard } from './views/Forms/ConvertToConsolidated';
+import { WorkspaceOverview } from './views/WorkspaceOverview';
 
 const MainContainer = styled.div`
     display: flex;
@@ -163,6 +164,9 @@ const MainPanel = (props: MainPanelProps) => {
         switch (visualizerState.view) {
             case MACHINE_VIEW.Overview:
                 setViewComponent(<Overview />);
+                break;
+            case MACHINE_VIEW.WorkspaceOverview:
+                setViewComponent(<WorkspaceOverview />);
                 break;
             case MACHINE_VIEW.ADD_ARTIFACT:
                 setViewComponent(<AddArtifactView />);

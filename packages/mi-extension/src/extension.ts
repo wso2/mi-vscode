@@ -30,15 +30,20 @@ import { activateUriHandlers } from './uri-handler';
 import { extensions, workspace } from 'vscode';
 import { StateMachineAI } from './ai-features/aiMachine';
 import { isOldProjectOrWorkspace, getStateMachine } from './stateMachine';
-import { webviews } from './visualizer/webview';
+import { MACHINE_VIEW, onWorkspaceFoldersChanged } from '@wso2/mi-core';
+import { webviews, VisualizerWebview } from './visualizer/webview';
+import { RPCLayer } from './RPCLayer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { COMMANDS, WI_EXTENSION_ID } from './constants';
 import { enableLS } from './util/workspace';
 import { disposeMIAgentPanelRpcManager } from './rpc-managers/agent-mode/rpc-handler';
 import { isConsolidatedProject } from './util/onboardingUtils';
+import { readConsolidatedProjectDetails } from './util/consolidatedPomUtils';
+import { getModules, parseConsolidatedProjectPom } from './debugger/pomResolver';
 const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
 
 export async function activate(context: vscode.ExtensionContext) {
 	extension.context = context;
@@ -50,8 +55,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	vscode.window.tabGroups.close(orphanedTabs);
 
 	if (workspace.workspaceFolders) {
-		for (const folder of workspace.workspaceFolders) {
-			await replaceWithSubProjects(folder);
+		// Reopening as a consolidated workspace reloads the window
+		const reopening = await openConsolidatedAsWorkspace(context);
+		if (reopening) {
+			return;
 		}
 	}
 
@@ -72,14 +79,27 @@ export async function activate(context: vscode.ExtensionContext) {
 						 oldProjects?.[0]?.uri?.fsPath || 
 						 path.join(os.tmpdir(), uuidv4());
 	
+	const updateMultiProjectContext = () => {
+		const count = workspace.workspaceFolders?.length ?? 0;
+		vscode.commands.executeCommand('setContext', 'MI.hasMultipleProjects', count > 1);
+	};
+
 	if (!oldProjects.length) {
-		getStateMachine(firstProject);
+		const wsFolders = workspace.workspaceFolders;
+		const hasMultipleProjects = (wsFolders?.length ?? 0) > 1;
+		// A consolidated project opens as a workspace of its sub-projects
+		const isWorkspace = !!workspace.workspaceFile
+			|| (!!wsFolders?.length && isConsolidatedProject(path.dirname(wsFolders[0].uri.fsPath)));
+		const showWorkspaceOverview = hasMultipleProjects || isWorkspace;
+		getStateMachine(firstProject, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);
 	}
+	updateMultiProjectContext();
+
 	workspace.onDidChangeWorkspaceFolders(async (event) => {
 		if (event.added.length > 0) {
-			for (const addedProject of event.added) {
-				getStateMachine(addedProject.uri.fsPath);
-			}
+			// If several folders are added at once, this avoids opening one panel per folder.
+			const showWorkspaceOverview = (workspace.workspaceFolders?.length ?? 0) > 1;
+			getStateMachine(event.added[0].uri.fsPath, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);
 		}
 		if (event.removed.length > 0) {
 			for (const removedProject of event.removed) {
@@ -90,8 +110,16 @@ export async function activate(context: vscode.ExtensionContext) {
 				}
 			}
 		}
+		updateMultiProjectContext();
 		// refresh project explorer
 		vscode.commands.executeCommand(COMMANDS.REFRESH_COMMAND);
+		// notify any open Workspace Overview webview to refresh its project list
+		for (const projectUri of webviews.keys()) {
+			RPCLayer._messengers.get(projectUri)?.sendNotification(
+				onWorkspaceFoldersChanged,
+				{ type: 'webview', webviewType: VisualizerWebview.viewType }
+			);
+		}
 	});
 	StateMachineAI.initialize();
 
@@ -144,38 +172,138 @@ export function checkForWso2IntegratorExt() {
 	return true;
 }
 
-async function replaceWithSubProjects(folder: vscode.WorkspaceFolder) {
+/**
+ * Discover the sub-project folders of a consolidated project root.
+ */
+async function getSubProjectUris(folderPath: string): Promise<vscode.Uri[]> {
+	let declaredModules: string[];
 	try {
-		const folderPath = folder.uri.fsPath;
-		if (!isConsolidatedProject(folderPath)) {
-			return;
-		}
-
-		const entries = await fs.promises.readdir(folderPath, { withFileTypes: true });
-		const subUris: vscode.Uri[] = [];
-
-		for (const entry of entries) {
-			const subPath = path.join(folderPath, entry.name);
-			if (!entry.isDirectory() || entry.name.startsWith('.') || fs.existsSync(path.join(subPath, '.docker-build'))) {
-				continue;
-			}
-			const pomPath = path.join(subPath, 'pom.xml');
-
-			if (fs.existsSync(pomPath)) {
-				subUris.push(vscode.Uri.file(subPath));
-			}
-		}
-
-		if (subUris.length === 0) {
-			return;
-		}
-		vscode.workspace.updateWorkspaceFolders(
-			folder.index,   // start index
-			1,              // remove the consolidated project folder
-			...subUris.map(uri => ({ uri }))
-		);
-
+		const pom = parseConsolidatedProjectPom(path.join(folderPath, 'pom.xml'));
+		declaredModules = getModules(pom.project);
 	} catch (err) {
-		console.error('Error replacing consolidated project', err);
+		console.error('Could not read modules from consolidated project pom.xml', err);
+		return [];
 	}
+
+	const entries = await fs.promises.readdir(folderPath, { withFileTypes: true });
+	const subUris: vscode.Uri[] = [];
+
+	for (const entry of entries) {
+		const subPath = path.join(folderPath, entry.name);
+		if (!entry.isDirectory() || entry.name.startsWith('.') || fs.existsSync(path.join(subPath, '.docker-build'))) {
+			continue;
+		}
+		if (declaredModules.includes(entry.name) && fs.existsSync(path.join(subPath, 'pom.xml'))) {
+			subUris.push(vscode.Uri.file(subPath));
+		}
+	}
+
+	return subUris;
+}
+
+/**
+ * Generates a named .code-workspace for a consolidated project.
+ * Returns true if the window is reopening into it.
+ */
+async function openConsolidatedAsWorkspace(context: vscode.ExtensionContext): Promise<boolean> {
+	try {
+		// Already a saved workspace file — nothing to do. Untitled workspaces get converted.
+		if (workspace.workspaceFile && workspace.workspaceFile.scheme !== 'untitled') {
+			return false;
+		}
+
+		const folders = workspace.workspaceFolders;
+		if (!folders || folders.length === 0) {
+			return false;
+		}
+
+		// Build the target folder set and collect the consolidated root(s).
+		const consolidatedRoots = new Set<string>();
+		const folderPaths: string[] = [];
+		for (const folder of folders) {
+			const folderPath = folder.uri.fsPath;
+			if (isConsolidatedProject(folderPath)) {
+				// Consolidated root opened directly: expand into its sub-projects.
+				consolidatedRoots.add(folderPath);
+				const subUris = await getSubProjectUris(folderPath);
+				folderPaths.push(...subUris.map(uri => uri.fsPath));
+			} else {
+				folderPaths.push(folderPath);
+				// A restored untitled workspace lists the sub-projects rather than
+				// the consolidated root — detect it via the parent directory.
+				const parent = path.dirname(folderPath);
+				if (isConsolidatedProject(parent)) {
+					consolidatedRoots.add(parent);
+				}
+			}
+		}
+
+		if (consolidatedRoots.size === 0 || folderPaths.length === 0) {
+			return false;
+		}
+
+		// Name the workspace after the first consolidated project.
+		const primaryRoot = [...consolidatedRoots][0];
+		const details = await readConsolidatedProjectDetails(primaryRoot);
+		const rawName = details?.artifactId?.trim() || path.basename(primaryRoot);
+		// Keep the file name filesystem-safe; it becomes the Explorer label.
+		const workspaceName = rawName.replace(/[<>:"/\\|?*]/g, '_') || 'consolidated-project';
+
+		const workspaceFileUri = await writeConsolidatedWorkspaceFile(context, primaryRoot, workspaceName, folderPaths);
+
+		// Workspace-target update is window-scoped: suppresses the save prompt only for
+		// the untitled workspace being discarded, not globally or in the new file.
+		if (workspace.workspaceFile?.scheme === 'untitled') {
+			try {
+				await workspace.getConfiguration().update(
+					'window.confirmSaveUntitledWorkspace',
+					false,
+					vscode.ConfigurationTarget.Workspace
+				);
+			} catch (err) {
+				// Fall back to VSCode's default (prompt) if the override fails.
+				console.error('Could not suppress untitled workspace save prompt', err);
+			}
+		}
+
+		await vscode.commands.executeCommand('vscode.openFolder', workspaceFileUri, false);
+		return true;
+	} catch (err) {
+		console.error('Error opening consolidated project as workspace', err);
+		return false;
+	}
+}
+
+/**
+ * Writes the .code-workspace file under a per-project hashed sub-directory,
+ * so its base name can stay "<name>.code-workspace".
+ */
+async function writeConsolidatedWorkspaceFile(
+	context: vscode.ExtensionContext,
+	consolidatedRoot: string,
+	workspaceName: string,
+	folderPaths: string[]
+): Promise<vscode.Uri> {
+	const projectHash = crypto.createHash('md5').update(consolidatedRoot).digest('hex').slice(0, 8);
+	const dir = path.join(context.globalStorageUri.fsPath, 'consolidated-workspaces', projectHash);
+	await fs.promises.mkdir(dir, { recursive: true });
+
+	const workspaceFilePath = path.join(dir, `${workspaceName}.code-workspace`);
+	// Preserve settings/extensions a user may have added to a previously generated
+	// workspace file — only the folder list is regenerated.
+	let existing: Record<string, unknown> = {};
+	try {
+		existing = JSON.parse(await fs.promises.readFile(workspaceFilePath, 'utf-8'));
+	} catch {
+		// No existing file, or it's unreadable/invalid — start fresh.
+	}
+
+	const content = {
+		...existing,
+		folders: folderPaths.map(folderPath => ({ path: folderPath })),
+		settings: existing.settings ?? {}
+	};
+	await fs.promises.writeFile(workspaceFilePath, JSON.stringify(content, null, 2), 'utf-8');
+
+	return vscode.Uri.file(workspaceFilePath);
 }

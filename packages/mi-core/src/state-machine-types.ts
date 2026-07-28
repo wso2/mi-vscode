@@ -100,6 +100,7 @@ export enum MACHINE_VIEW {
     ImportInboundConnectorForm = "Import Inbound Endpoint",
     IdpConnectorSchemaGeneratorForm = "IDP Connector Schema Generator Form",
     DataMapperMigrationForm = "DataMapper Migration Form",
+    WorkspaceOverview = "Workspace Overview",
 }
 
 export enum AI_MACHINE_VIEW {
@@ -374,6 +375,7 @@ export const getAIVisualizerState: RequestType<void, AIVisualizerLocation> = { m
 export const getPopupVisualizerState: RequestType<void, PopupVisualizerLocation> = { method: 'getPopupVisualizerState' };
 export const sendAIStateEvent: RequestType<AI_EVENT_TYPE, void> = { method: 'sendAIStateEvent' };
 export const onFileContentUpdate: NotificationType<void> = { method: `onFileContentUpdate` };
+export const onWorkspaceFoldersChanged: NotificationType<void> = { method: `onWorkspaceFoldersChanged` };
 export const webviewReady: NotificationType<void> = { method: `webviewReady` };
 export const onSwaggerSpecReceived: NotificationType<SwaggerData> = { method: `onSwaggerSpecReceived` };
 export const miServerRunStateChanged: NotificationType<MiServerRunStatus> = { method: `miServerRunStateChanged` };

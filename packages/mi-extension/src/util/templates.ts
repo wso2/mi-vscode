@@ -485,6 +485,22 @@ COPY resources/wso2carbon.jks \${WSO2_SERVER_HOME}/repository/resources/security
 COPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/security/client-truststore.jks
 # COPY libs/*.jar \${WSO2_SERVER_HOME}/lib/`;
 
+// Aggregate Dockerfile: one commented-out COPY line per real sub-project
+// module, from libs staged per-module by updateCopyModulesInAggregatePom.
+export const dockerBuildDockerfileContent = (modules: string[]) => {
+  const realModules = modules.filter(m => m && m !== "docker-build");
+  const libsCopyLines = realModules.map(m => `# COPY libs/${m}/ \${WSO2_SERVER_HOME}/lib/`);
+
+  return [
+    `ARG BASE_IMAGE`,
+    `FROM \${BASE_IMAGE}`,
+    `COPY CompositeApps/*.car \${WSO2_SERVER_HOME}/repository/deployment/server/carbonapps/`,
+    `COPY resources/wso2carbon.jks \${WSO2_SERVER_HOME}/repository/resources/security/wso2carbon.jks`,
+    `COPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/security/client-truststore.jks`,
+    ...libsCopyLines
+  ].join('\n');
+};
+
 export const consolidatedProjectPomContent = (projectName: string, groupID: string, artifactID: string, version: string, miVersion: string, modules: string[]) => {
 
   const modulesXml = modules
@@ -505,12 +521,21 @@ export const consolidatedProjectPomContent = (projectName: string, groupID: stri
     modulesXml,
     `    </modules>`,
     `    <properties>`,
+    `        <projectType>integration-project</projectType>`,
     `        <project.runtime.version>${miVersion}</project.runtime.version>`,
     `        <car.plugin.version>${LATEST_CAR_PLUGIN_VERSION}</car.plugin.version>`,
     `        <maven.compiler.source>1.8</maven.compiler.source>`,
     `        <maven.compiler.target>1.8</maven.compiler.target>`,
+    `        <dockerfile.base.image>wso2/wso2mi:${miVersion}</dockerfile.base.image>`,
     `        <is.consolidated.project>true</is.consolidated.project>`,
+    `        <is.remote.deployment.enabled>false</is.remote.deployment.enabled>`,
     `    </properties>`,
+    `    <pluginRepositories>`,
+    `        <pluginRepository>`,
+    `            <id>wso2-public</id>`,
+    `            <url>https://maven.wso2.org/nexus/content/groups/wso2-public/</url>`,
+    `        </pluginRepository>`,
+    `    </pluginRepositories>`,
     `</project>`
   ].join('\n');
 };

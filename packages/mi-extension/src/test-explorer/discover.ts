@@ -17,7 +17,7 @@
  */
 
 import { RelativePattern, TestItem, TestItemCollection, TestRunRequest, workspace } from "vscode";
-import { createTests, testController } from "./activator";
+import { createProjectNode, createTests, resetTestStateNodes, testController } from "./activator";
 
 export const testFileMatchPattern = '**/src/test/**/*.xml';
 
@@ -54,22 +54,26 @@ export function gatherTestItems(collection: TestItemCollection) {
     return items;
 }
 
-export function createTestsForAllFiles() {
+export async function createTestsForAllFiles() {
     if (!workspace.workspaceFolders) {
         return;
     }
 
-    // clear current test items
+    // clear current test items and node-id context state
     testController.items.forEach(item => {
         testController.items.delete(item.id);
     });
+    await resetTestStateNodes();
 
-    workspace.workspaceFolders.forEach(workspaceFolder => {
+    for (const workspaceFolder of workspace.workspaceFolders) {
+        // Always surface the project as a top-level node, even when it has no
+        // tests yet (mirrors the mock-services tree).
+        await createProjectNode(workspaceFolder.uri);
+
         const pattern = new RelativePattern(workspaceFolder, testFileMatchPattern);
-        workspace.findFiles(pattern, '**/resources/**').then(async files => {
-            for (const fileX of files) {
-                await createTests(fileX);
-            }
-        });
-    });
+        const files = await workspace.findFiles(pattern, '**/resources/**');
+        for (const fileX of files) {
+            await createTests(fileX);
+        }
+    }
 }

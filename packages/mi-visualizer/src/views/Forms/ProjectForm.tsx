@@ -60,7 +60,6 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
     const [isConsolidatedProject, setIsConsolidatedProject] = useState(false);
     const [isSubProjectsAdded, setIsSubProjectsAdded] = useState(false);
     const [addToConsolidatedProject, setAddToConsolidatedProject] = useState(false);
-    const [viewAddToConsolidatedProject, setViewAddToConsolidatedProject] = useState(false);
 
     const [supportedMIVersions, setSupportedMIVersions] = useState<OptionProps[]>([]);
     const [formSaved, setFormSaved] = useState(false);
@@ -126,7 +125,6 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
             const canCreate = await rpcClient.getMiDiagramRpcClient().canCreateConsolidatedProject();
             setCanCreateConsolidatedProject(canCreate.canCreateConsolidatedProject);
             setAddToConsolidatedProject(canCreate.isConsolidatedProject);
-            setViewAddToConsolidatedProject(canCreate.isConsolidatedProject);
         })();
     }, []);
 
@@ -135,10 +133,14 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
     }, [watch("name")]);
 
     useEffect(() => {
-        if (viewAddToConsolidatedProject) {
+        if (addToConsolidatedProject) {
             (async () => {
-                const currentDir = await rpcClient.getMiDiagramRpcClient().getWorkspaceRoot(!addToConsolidatedProject);
+                const currentDir = await rpcClient.getMiDiagramRpcClient().getWorkspaceRoot(false);
                 setValue("directory", currentDir.path);
+                const { version } = await rpcClient.getMiDiagramRpcClient().getMIVersionFromPom();
+                if (version) {
+                    setValue("miVersion", version);
+                }
             })();
         }
     }, [addToConsolidatedProject]);
@@ -205,29 +207,25 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                 {...register("name")}
                 onKeyDown={onKeyDown}
             />
-            {viewAddToConsolidatedProject &&
-                <CheckBox
-                    label="Add to current Consolidated Project"
-                    value="addToConsolidated"
-                    checked={addToConsolidatedProject}
-                    onChange={(isChecked: boolean) => setAddToConsolidatedProject(isChecked)}
+            {!addToConsolidatedProject &&
+                <Dropdown
+                    id='miVersion'
+                    label="WSO2 Integrator: MI runtime version"
+                    isRequired={true}
+                    errorMsg={errors.miVersion?.message.toString()}
+                    items={supportedMIVersions}
+                    {...register("miVersion")}
                 />
             }
-            <Dropdown
-                id='miVersion'
-                label="WSO2 Integrator: MI runtime version"
-                isRequired={true}
-                errorMsg={errors.miVersion?.message.toString()}
-                items={supportedMIVersions}
-                {...register("miVersion")}
-            />
-            <LocationSelector
-                label="Project Directory"
-                selectedFile={watch("directory")}
-                required
-                onSelect={handleProjecDirSelection}
-                {...register("directory")}
-            />
+            {!addToConsolidatedProject &&
+                <LocationSelector
+                    label="Project Directory"
+                    selectedFile={watch("directory")}
+                    required
+                    onSelect={handleProjecDirSelection}
+                    {...register("directory")}
+                />
+            }
             {!addToConsolidatedProject &&
                 <FormGroup title="Advanced Options">
                     <React.Fragment>
@@ -269,7 +267,9 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                     </React.Fragment>
                 </FormGroup>
             }
-            <DownloadLabel>If the necessary WSO2 Integrator: MI runtime and tools are not available, you will be prompted to download them after project creation.</DownloadLabel>
+            {!addToConsolidatedProject &&
+                <DownloadLabel>If the necessary WSO2 Integrator: MI runtime and tools are not available, you will be prompted to download them after project creation.</DownloadLabel>
+            }
             <FormActions>
                 <Button
                     appearance="secondary"

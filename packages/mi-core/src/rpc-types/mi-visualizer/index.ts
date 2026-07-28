@@ -38,6 +38,7 @@ import {
     OpenExternalRequest,
     OpenExternalResponse,
     ProjectOverviewResponse,
+    WorkspaceProjectSummary,
     ReadmeContentResponse,
     AddConfigurableRequest,
     ProjectDetailsResponse,
@@ -59,7 +60,10 @@ import {
     ExecuteRemoteDeployParams,
     DeployConfigParam,
     McpToolSuggestionRequest,
-    McpToolSuggestionResponse
+    McpToolSuggestionResponse,
+    ConsolidatedProjectDetails,
+    UpdateConsolidatedProjectDetailsRequest,
+    ConsolidatedRemoteDeployConfig
 } from "./types";
 import { GettingStartedData, SampleDownloadRequest } from "./types";
 
@@ -69,6 +73,7 @@ export interface MIVisualizerAPI {
     findOldProjects: () => Promise<string[]>;
     getProjectStructure: (params: ProjectStructureRequest) => Promise<ProjectStructureResponse>;
     getProjectOverview: (params: ProjectStructureRequest) => Promise<ProjectOverviewResponse>;
+    getWorkspaceProjectSummary: (params: ProjectStructureRequest) => Promise<WorkspaceProjectSummary>;
     getCurrentThemeKind: () => Promise<ColorThemeKind>;
     openView: (params: OpenViewRequest) => void;
     reloadWindow: () => Promise<void>;
@@ -119,4 +124,10 @@ export interface MIVisualizerAPI {
     executeRemoteDeployWithParams: (params: ExecuteRemoteDeployParams) => Promise<void>;
     getRemoteDeployConfigs: () => Promise<DeployConfigParam[]>;
     getMcpToolSuggestion: (params: McpToolSuggestionRequest) => Promise<McpToolSuggestionResponse>;
+    getConsolidatedProjectDetails: () => Promise<ConsolidatedProjectDetails | null>;
+    updateConsolidatedProjectDetails: (params: UpdateConsolidatedProjectDetailsRequest) => Promise<boolean>;
+    getConsolidatedRemoteDeployConfig: () => Promise<ConsolidatedRemoteDeployConfig | null>;
+    saveConsolidatedRemoteDeployConfig: (params: ConsolidatedRemoteDeployConfig) => Promise<boolean>;
+    getConsolidatedRemoteDeployConfigs: () => Promise<DeployConfigParam[]>;
+    executeConsolidatedRemoteDeployWithParams: (params: ExecuteRemoteDeployParams) => Promise<void>;
 }

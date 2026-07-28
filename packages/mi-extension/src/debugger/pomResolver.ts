@@ -20,6 +20,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import path from "path";
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
+import { dockerBuildDockerfileContent } from "../util/templates";
 
 type Project = {
     id: string; // groupId:artifactId
@@ -369,14 +370,44 @@ export function updateCopyModulesInAggregatePom(pomPath: string, modules: string
         throw new Error("<copy> section not found");
     }
 
-    const fileSets = modules.filter(
+    const realModules = modules.filter(
         (m) => m && m !== "docker-build"
-    ).map((module) => ({
+    );
+
+    const fileSets = realModules.map((module) => ({
         "@_dir": `../${module}/target`,
         include: {
             "@_name": "*.car"
         }
     }));
-    target.copy.fileset = fileSets;
+    // target.copy/mkdir become arrays after the first run (see below);
+    // normalize to always grab the CompositeApps entry, which stays first.
+    const carCopy = Array.isArray(target.copy) ? target.copy[0] : target.copy;
+    const carMkdir = Array.isArray(target.mkdir) ? target.mkdir[0] : target.mkdir;
+    carCopy.fileset = fileSets;
+
+    // One mkdir+copy pair per module: copy that module's "deployment/libs"
+    // jars into target/tmp_docker/libs/<module> for the Dockerfile to COPY from.
+    const libsMkdir = realModules.map((module) => ({
+        "@_dir": `\${basedir}/target/tmp_docker/libs/${module}`
+    }));
+    const libsCopy = realModules.map((module) => ({
+        "@_todir": `\${basedir}/target/tmp_docker/libs/${module}`,
+        "@_flatten": "true",
+        fileset: {
+            "@_dir": `../${module}/deployment/libs`,
+            include: {
+                "@_name": "*.jar"
+            }
+        }
+    }));
+    target.mkdir = [carMkdir, ...libsMkdir];
+    target.copy = [carCopy, ...libsCopy];
+
     writePom(pom, pomPath);
+
+    const dockerfilePath = path.join(path.dirname(pomPath), "deployment", "docker", "Dockerfile");
+    if (fs.existsSync(dockerfilePath)) {
+        fs.writeFileSync(dockerfilePath, dockerBuildDockerfileContent(realModules));
+    }
 }

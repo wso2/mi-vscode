@@ -1745,6 +1745,29 @@ export function isConsolidatedProject(filePath: string): boolean {
     }
 }
 
+export function isRemoteDeploymentEnabledInConsolidatedProject(consolidatedProjectPath: string): boolean {
+    try {
+        if (!consolidatedProjectPath) {
+            return false;
+        }
+        const pomPath = path.join(consolidatedProjectPath, 'pom.xml');
+        if (!fs.existsSync(pomPath)) {
+            return false;
+        }
+        const pomContent = fs.readFileSync(pomPath, 'utf-8');
+        const match = pomContent.match(
+            /<is\.remote\.deployment\.enabled>\s*(true|false)\s*<\/is\.remote\.deployment\.enabled>/i
+        );
+        if (!match) {
+            return false;
+        }
+        return match[1].toLowerCase() === 'true';
+    } catch (error) {
+        return false;
+    }
+}
+
+
 function isEulaPack(): boolean {
     try {
         if (!process.env.WSO2_INTEGRATOR_BALLERINA_HOME) {

@@ -243,6 +243,7 @@ import {
     editAPI,
     editOpenAPISpec,
     executeCommand,
+    exportConsolidatedProject,
     exportProject,
     getAPIDirectory,
     getAddressEndpoint,
@@ -1030,6 +1031,10 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
 
     exportProject(params: ExportProjectRequest): void {
         return this._messenger.sendNotification(exportProject, HOST_EXTENSION, params);
+    }
+
+    exportConsolidatedProject(): void {
+        return this._messenger.sendNotification(exportConsolidatedProject, HOST_EXTENSION);
     }
 
     checkOldProject(): Promise<boolean> {

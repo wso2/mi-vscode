@@ -300,21 +300,23 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
                 }
             }
 
-            let isRemoteDeploymentSupportEnabled = getValues("deployment-deployOnRemoteServer");
-            await rpcClient.getMiVisualizerRpcClient().updateProjectSettingsConfig({ configName: "REMOTE_DEPLOYMENT_ENABLED",
-                value: isRemoteDeploymentSupportEnabled });
-            if (isRemoteDeploymentSupportEnabled) {
-                await rpcClient.getMiVisualizerRpcClient().setDeployPlugin({
-                    truststorePath: getValues("deployment-truststorePath"),
-                    truststorePassword: getValues("deployment-truststorePassword"),
-                    truststoreType: getValues("deployment-truststoreType"),
-                    serverUrl: getValues("deployment-serverURL"),
-                    username: getValues("deployment-username"),
-                    password: getValues("deployment-password"),
-                    serverType: getValues("deployment-serverType"),
-                });
-            } else {
-                await rpcClient.getMiVisualizerRpcClient().removeDeployPlugin();
+            if (!isConsolidatedProject) {
+                let isRemoteDeploymentSupportEnabled = getValues("deployment-deployOnRemoteServer");
+                await rpcClient.getMiVisualizerRpcClient().updateProjectSettingsConfig({ configName: "REMOTE_DEPLOYMENT_ENABLED",
+                    value: isRemoteDeploymentSupportEnabled });
+                if (isRemoteDeploymentSupportEnabled) {
+                    await rpcClient.getMiVisualizerRpcClient().setDeployPlugin({
+                        truststorePath: getValues("deployment-truststorePath"),
+                        truststorePassword: getValues("deployment-truststorePassword"),
+                        truststoreType: getValues("deployment-truststoreType"),
+                        serverUrl: getValues("deployment-serverURL"),
+                        username: getValues("deployment-username"),
+                        password: getValues("deployment-password"),
+                        serverType: getValues("deployment-serverType"),
+                    });
+                } else {
+                    await rpcClient.getMiVisualizerRpcClient().removeDeployPlugin();
+                }
             }
 
             if (dirtyFields["primaryDetails-runtimeVersion"]) {
@@ -394,18 +396,20 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
                         selectedId={selectedId}
                         onSelect={handleClick}
                     />
-                    <TreeView
-                        rootTreeView
-                        id="Deployment"
-                        sx={selectedId === "Deployment" ? selectedTreeViewStyle : { cursor: "pointer" }}
-                        content={
-                            <Typography sx={selectedId === "Deployment" ? treeViewSelectedStyle : treeViewStyle} variant="h4">
-                                Deployment
-                            </Typography>
-                        }
-                        selectedId={selectedId}
-                        onSelect={handleClick}
-                    />
+                    { !isConsolidatedProject &&
+                        <TreeView
+                            rootTreeView
+                            id="Deployment"
+                            sx={selectedId === "Deployment" ? selectedTreeViewStyle : { cursor: "pointer" }}
+                            content={
+                                <Typography sx={selectedId === "Deployment" ? treeViewSelectedStyle : treeViewStyle} variant="h4">
+                                    Deployment
+                                </Typography>
+                            }
+                            selectedId={selectedId}
+                            onSelect={handleClick}
+                        />
+                    }
                     <TreeView
                         rootTreeView
                         id="Advanced"
@@ -658,63 +662,67 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
                                 {...register("unitTest-serverDownloadLink")}
                             />
                         </div>
-                        <Typography variant="h1" sx={sectionTitleStyle} > Deployment </Typography>
-                        <div ref={divRefs["Deployment"]} id="Deployment" style={fieldGroupStyle}>
-                            <FormCheckBox
-                                label="Deploy to a remote server"
-                                description="Enables deploying to a remote server"
-                                descriptionSx={{ margin: "10px 0" }}
-                                control={control as any}
-                                sx={fieldStyle}
-                                {...register("deployment-deployOnRemoteServer")}
-                            />
-                            {watch("deployment-deployOnRemoteServer") && (
-                                <>
-                                    <TextField
-                                        label="Truststore Path"
-                                        description="File path of the truststore used in the server"
-                                        descriptionSx={{ margin: "8px 0" }}
+                        { !isConsolidatedProject && (
+                            <>
+                                <Typography variant="h1" sx={sectionTitleStyle} > Deployment </Typography>
+                                <div ref={divRefs["Deployment"]} id="Deployment" style={fieldGroupStyle}>
+                                    <FormCheckBox
+                                        label="Deploy to a remote server"
+                                        description="Enables deploying to a remote server"
+                                        descriptionSx={{ margin: "10px 0" }}
+                                        control={control as any}
                                         sx={fieldStyle}
-                                        {...register("deployment-truststorePath")}
+                                        {...register("deployment-deployOnRemoteServer")}
                                     />
-                                    <PasswordField
-                                        label="Truststore Password"
-                                        description="Password of the truststore"
-                                        descriptionSx={{ margin: "8px 0" }}
-                                        sx={fieldStyle}
-                                        {...register("deployment-truststorePassword")}
-                                    />
-                                    <TextField
-                                        label="Truststore Type"
-                                        description="Type of the truststore"
-                                        descriptionSx={{ margin: "8px 0" }}
-                                        sx={fieldStyle}
-                                        {...register("deployment-truststoreType")}
-                                    />
-                                    <TextField
-                                        label="Server URL"
-                                        description="Management API URL of the server"
-                                        descriptionSx={{ margin: "8px 0" }}
-                                        sx={fieldStyle}
-                                        {...register("deployment-serverURL")}
-                                    />
-                                    <TextField
-                                        label="Username"
-                                        description="Server administrator username"
-                                        descriptionSx={{ margin: "8px 0" }}
-                                        sx={fieldStyle}
-                                        {...register("deployment-username")}
-                                    />
-                                    <PasswordField
-                                        label="Password"
-                                        description="Server administrator password"
-                                        descriptionSx={{ margin: "8px 0" }}
-                                        sx={fieldStyle}
-                                        {...register("deployment-password")}
-                                    />
-                                </>
-                            )}
-                        </div>
+                                    {watch("deployment-deployOnRemoteServer") && (
+                                        <>
+                                            <TextField
+                                                label="Truststore Path"
+                                                description="File path of the truststore used in the server"
+                                                descriptionSx={{ margin: "8px 0" }}
+                                                sx={fieldStyle}
+                                                {...register("deployment-truststorePath")}
+                                            />
+                                            <PasswordField
+                                                label="Truststore Password"
+                                                description="Password of the truststore"
+                                                descriptionSx={{ margin: "8px 0" }}
+                                                sx={fieldStyle}
+                                                {...register("deployment-truststorePassword")}
+                                            />
+                                            <TextField
+                                                label="Truststore Type"
+                                                description="Type of the truststore"
+                                                descriptionSx={{ margin: "8px 0" }}
+                                                sx={fieldStyle}
+                                                {...register("deployment-truststoreType")}
+                                            />
+                                            <TextField
+                                                label="Server URL"
+                                                description="Management API URL of the server"
+                                                descriptionSx={{ margin: "8px 0" }}
+                                                sx={fieldStyle}
+                                                {...register("deployment-serverURL")}
+                                            />
+                                            <TextField
+                                                label="Username"
+                                                description="Server administrator username"
+                                                descriptionSx={{ margin: "8px 0" }}
+                                                sx={fieldStyle}
+                                                {...register("deployment-username")}
+                                            />
+                                            <PasswordField
+                                                label="Password"
+                                                description="Server administrator password"
+                                                descriptionSx={{ margin: "8px 0" }}
+                                                sx={fieldStyle}
+                                                {...register("deployment-password")}
+                                            />
+                                        </>
+                                    )}
+                                </div>
+                            </>
+                        )}
                         <Typography variant="h1" sx={sectionTitleStyle} > Advanced </Typography>
                         <div ref={divRefs["Advanced"]} id="Advanced" style={{ ...fieldGroupStyle, paddingBottom: 0 }}>
                             <FormCheckBox

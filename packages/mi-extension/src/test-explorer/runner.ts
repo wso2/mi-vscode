@@ -62,162 +62,193 @@ export function runHandler(request: TestRunRequest, cancellation: CancellationTo
             window.showErrorMessage("No tests found.");
             return;
         }
-        const projectRoot = getProjectRoot(Uri.file(queue[0].test.id));
-        let stopTestServer: () => void;
 
-        if (!projectRoot) {
+        if (request.profile?.kind == TestRunProfileKind.Debug) {
+            window.showErrorMessage("Test debugging is not yet supported.");
+            run.end();
+            return;
+        }
+
+        if (request.profile?.kind != TestRunProfileKind.Run) {
+            run.end();
+            return;
+        }
+
+        // Group queued tests by their project root so consolidated/multi-project
+        // workspaces run every project's tests instead of only the first one's.
+        const projectGroups = new Map<string, { test: TestItem; data: any; }[]>();
+        for (const item of queue) {
+            const projectRoot = getProjectRoot(Uri.file(item.test.id));
+            if (!projectRoot) {
+                run.failed(item.test, new TestMessage("Project root not found."));
+                continue;
+            }
+            const group = projectGroups.get(projectRoot) ?? [];
+            group.push(item);
+            projectGroups.set(projectRoot, group);
+        }
+
+        if (projectGroups.size === 0) {
             run.end();
             window.showErrorMessage("Project root not found.");
             return;
         }
-        const startTime = Date.now();
 
-        if (request.profile?.kind == TestRunProfileKind.Run) {
-            run.appendOutput(`Start running tests\r\n`);
-
-            let testNames = "";
-            // mark tests as running in test explorer
-            for (const { test, } of queue) {
-                testNames = testNames == "" ? test.label : `${testNames},${test.label}`;
-                markSatusAsRunning(test);
+        // Run each project's test cycle sequentially (each project spins up its
+        // own MI test server on the same port, so they cannot overlap).
+        try {
+            for (const [projectRoot, projectQueue] of projectGroups) {
+                await runProjectTests(projectRoot, projectQueue);
             }
-
-            try {
-                // delete cars
-                const serverPath = await getServerPath(projectRoot);
-                if (!serverPath) {
-                    window.showErrorMessage("MI server path not found");
-                    failAllTests();
-                    run.end();
-                    return;
-                }
-
-                const printer = (line: string, isError: boolean) => {
-                    printToOutput(run, line, isError);
-                }
-
-                // compile project
-                await compileProject(projectRoot, printer);
-
-                // execute test
-                run.appendOutput(`Starting MI test server\r\n`);
-                const { cp } = await startTestServer(serverPath, projectRoot, printer);
-                stopTestServer = () => {
-                    treeKill(cp.pid!, 'SIGKILL');
-                }
-
-                run.appendOutput("\x1b[32m================== MI test server started ==================\x1b[0m\r\n");
-                run.appendOutput(`Running tests ${testNames}\r\n`);
-
-                // run tests
-                const triggerID = request?.include?.[0]?.id ?? "";
-                await runTests(testNames, projectRoot, triggerID, printer);
-                const EndTime = Date.now();
-                const timeElapsed = (EndTime - startTime) / queue.length;
-
-                // reading test results
-                const testsJson: JSON | undefined = await readJsonFile(path.join(projectRoot, TEST_RESULTS_PATH).toString());
-                if (!testsJson) {
-                    for (const { test, } of queue) {
-                        const testMessage: TestMessage = new TestMessage("Command failed");
-                        run.failed(test, testMessage, timeElapsed);
-                    }
-                    window.showErrorMessage("Test results not found.");
-                } else {
-
-                    for (const { test, } of queue) {
-                        let testResults;
-                        let testCases;
-                        if (test.id.endsWith(".xml")) {
-                            const id = normalize(test.id);
-
-                            testResults = Object.entries(testsJson).find(([key]) => normalize(key) === id)?.[1];
-                            testCases = test.children;
-                        } else {
-                            const strs = test.id.split("/");
-                            strs.pop();
-                            const suiteName = strs.join("/");
-                            testResults = testsJson[suiteName];
-                            testCases = [[test.id, test]]
-                        }
-
-                        if (!testResults) {
-                            const testMessage: TestMessage = new TestMessage("Test result not found");
-                            run.failed(test, testMessage, timeElapsed);
-                            continue;
-                        }
-
-                        const mediationStatus = testResults["mediationStatus"];
-                        const deploymentStatus = testResults["deploymentStatus"];
-                        const testCasesResults = testResults["testCases"];
-
-                        if (deploymentStatus === TEST_STATUS.PASSED && mediationStatus === TEST_STATUS.PASSED) {
-
-                            for (const testCase of testCases) {
-                                const testCaseItem = testCase[1];
-                                const testCaseName = testCaseItem.label;
-                                const testCaseResult = testCasesResults.find((testCaseResult: any) => testCaseResult["testCaseName"] === testCaseName);
-                                if (testCaseResult) {
-                                    const mediationStatus = testCaseResult["mediationStatus"];
-                                    const assertionStatus = testCaseResult["assertionStatus"];
-                                    if (mediationStatus === TEST_STATUS.PASSED && assertionStatus === TEST_STATUS.PASSED) {
-                                        run.passed(testCaseItem, timeElapsed);
-                                    } else {
-                                        let message: TestMessage;
-                                        if (assertionStatus === TEST_STATUS.FAILED) {
-                                            const failureAssertions = testCaseResult["failureAssertions"];
-                                            const table = new MarkdownString();
-                                            table.appendMarkdown(`| Test Case | Assert Expression | Failure Message |\n`);
-                                            table.appendMarkdown(`| --- | --- | --- |\n`);
-                                            for (const assertion of failureAssertions) {
-                                                const actualValue = assertion["actual"];
-                                                const expectedValue = assertion["expected"];
-                                                const failureMessage = `Expected: ${expectedValue}, Actual: ${actualValue}`
-                                                table.appendMarkdown(`| ${testCaseName} | ${assertion["assertionExpression"]} | ${failureMessage} |\n`);
-                                            }
-                                            message = new TestMessage(table);
-                                        } else {
-                                            message = new TestMessage("Test mediation failed");
-                                        }
-                                        run.failed(testCaseItem, message, timeElapsed);
-                                    }
-                                } else {
-                                    const testMessage: TestMessage = new TestMessage("Test result not found");
-                                    run.failed(testCaseItem, testMessage, timeElapsed);
-                                }
-                            }
-                            // run.passed(test, timeElapsed);
-                        } else {
-                            // test failed
-                            const testMessage: TestMessage = new TestMessage("Mediation failed");
-                            run.failed(test, testMessage, timeElapsed);
-                        }
-                    }
-                }
-            } catch (error: any) {
-                // exception.
-                window.showErrorMessage(`Error: ${error}`);
-                String(error).split('\n').forEach((line) => {
-                    printToOutput(run, line, true);
-                });
-                failAllTests();
-            }
-            run.appendOutput(`Test running finished\r\n`);
-            run.end();
-            if (stopTestServer!) {
-                stopTestServer();
-            }
-        } else if (request.profile?.kind == TestRunProfileKind.Debug) {
-            window.showErrorMessage("Test debugging is not yet supported.");
+        } finally {
             run.end();
         }
+    }
 
-        function failAllTests() {
+    async function runProjectTests(projectRoot: string, projectQueue: { test: TestItem; data: any; }[]) {
+        let stopTestServer: (() => void) | undefined;
+        const startTime = Date.now();
+
+        run.appendOutput(`Start running tests\r\n`);
+
+        let testNames = "";
+        // mark tests as running in test explorer
+        for (const { test, } of projectQueue) {
+            testNames = testNames == "" ? test.label : `${testNames},${test.label}`;
+            markSatusAsRunning(test);
+        }
+
+        const failProjectTests = () => {
             const EndTime = Date.now();
-            const timeElapsed = (EndTime - startTime) / queue.length;
-            for (const { test, } of queue) {
+            const timeElapsed = (EndTime - startTime) / projectQueue.length;
+            for (const { test, } of projectQueue) {
                 const testMessage: TestMessage = new TestMessage("Command failed");
                 run.failed(test, testMessage, timeElapsed);
+            }
+        };
+
+        try {
+            const serverPath = await getServerPath(projectRoot);
+            if (!serverPath) {
+                window.showErrorMessage("MI server path not found");
+                failProjectTests();
+                return;
+            }
+
+            const printer = (line: string, isError: boolean) => {
+                printToOutput(run, line, isError);
+            }
+
+            // compile project
+            await compileProject(projectRoot, printer);
+
+            // execute test
+            run.appendOutput(`Starting MI test server\r\n`);
+            const { cp } = await startTestServer(serverPath, projectRoot, printer);
+            stopTestServer = () => {
+                treeKill(cp.pid!, 'SIGKILL');
+            }
+
+            run.appendOutput("\x1b[32m================== MI test server started ==================\x1b[0m\r\n");
+            run.appendOutput(`Running tests ${testNames}\r\n`);
+
+            // run tests - derive the trigger from an explicitly selected test in this project.
+            const triggerID = request?.include?.find(
+                (item) => getProjectRoot(Uri.file(item.id)) === projectRoot)?.id ?? "";
+            await runTests(testNames, projectRoot, triggerID, printer);
+            const EndTime = Date.now();
+            const timeElapsed = (EndTime - startTime) / projectQueue.length;
+
+            // reading test results
+            const testsJson: JSON | undefined = await readJsonFile(path.join(projectRoot, TEST_RESULTS_PATH).toString());
+            if (!testsJson) {
+                for (const { test, } of projectQueue) {
+                    const testMessage: TestMessage = new TestMessage("Command failed");
+                    run.failed(test, testMessage, timeElapsed);
+                }
+                window.showErrorMessage("Test results not found.");
+            } else {
+
+                for (const { test, } of projectQueue) {
+                    let testResults;
+                    let testCases;
+                    if (test.id.endsWith(".xml")) {
+                        const id = normalize(test.id);
+
+                        testResults = Object.entries(testsJson).find(([key]) => normalize(key) === id)?.[1];
+                        testCases = test.children;
+                    } else {
+                        const strs = test.id.split("/");
+                        strs.pop();
+                        const suiteName = strs.join("/");
+                        testResults = testsJson[suiteName];
+                        testCases = [[test.id, test]]
+                    }
+
+                    if (!testResults) {
+                        const testMessage: TestMessage = new TestMessage("Test result not found");
+                        run.failed(test, testMessage, timeElapsed);
+                        continue;
+                    }
+
+                    const mediationStatus = testResults["mediationStatus"];
+                    const deploymentStatus = testResults["deploymentStatus"];
+                    const testCasesResults = testResults["testCases"];
+
+                    if (deploymentStatus === TEST_STATUS.PASSED && mediationStatus === TEST_STATUS.PASSED) {
+
+                        for (const testCase of testCases) {
+                            const testCaseItem = testCase[1];
+                            const testCaseName = testCaseItem.label;
+                            const testCaseResult = testCasesResults.find((testCaseResult: any) => testCaseResult["testCaseName"] === testCaseName);
+                            if (testCaseResult) {
+                                const mediationStatus = testCaseResult["mediationStatus"];
+                                const assertionStatus = testCaseResult["assertionStatus"];
+                                if (mediationStatus === TEST_STATUS.PASSED && assertionStatus === TEST_STATUS.PASSED) {
+                                    run.passed(testCaseItem, timeElapsed);
+                                } else {
+                                    let message: TestMessage;
+                                    if (assertionStatus === TEST_STATUS.FAILED) {
+                                        const failureAssertions = testCaseResult["failureAssertions"];
+                                        const table = new MarkdownString();
+                                        table.appendMarkdown(`| Test Case | Assert Expression | Failure Message |\n`);
+                                        table.appendMarkdown(`| --- | --- | --- |\n`);
+                                        for (const assertion of failureAssertions) {
+                                            const actualValue = assertion["actual"];
+                                            const expectedValue = assertion["expected"];
+                                            const failureMessage = `Expected: ${expectedValue}, Actual: ${actualValue}`
+                                            table.appendMarkdown(`| ${testCaseName} | ${assertion["assertionExpression"]} | ${failureMessage} |\n`);
+                                        }
+                                        message = new TestMessage(table);
+                                    } else {
+                                        message = new TestMessage("Test mediation failed");
+                                    }
+                                    run.failed(testCaseItem, message, timeElapsed);
+                                }
+                            } else {
+                                const testMessage: TestMessage = new TestMessage("Test result not found");
+                                run.failed(testCaseItem, testMessage, timeElapsed);
+                            }
+                        }
+                        // run.passed(test, timeElapsed);
+                    } else {
+                        // test failed
+                        const testMessage: TestMessage = new TestMessage("Mediation failed");
+                        run.failed(test, testMessage, timeElapsed);
+                    }
+                }
+            }
+        } catch (error: any) {
+            // exception.
+            window.showErrorMessage(`Error: ${error}`);
+            String(error).split('\n').forEach((line) => {
+                printToOutput(run, line, true);
+            });
+            failProjectTests();
+        } finally {
+            run.appendOutput(`Test running finished\r\n`);
+            if (stopTestServer) {
+                stopTestServer();
             }
         }
     }
