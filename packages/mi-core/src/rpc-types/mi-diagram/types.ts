@@ -2346,8 +2346,15 @@ export interface GetPomFileContentResponse{
     content: string;
 }
 
+export interface ExternalConnectorDetail {
+    name: string;
+    path: string;
+    type: 'connector' | 'inbound';
+}
+
 export interface GetExternalConnectorDetailsResponse{
     connectors: string[];
+    connectorDetails?: ExternalConnectorDetail[];
 }
 
 export interface WriteMockServicesRequest {
@@ -2481,6 +2488,9 @@ export interface UpdateConnectorDependencyOverrideRequest {
     version?: string;
     omit?: boolean;
     localPath?: string;
+    // Marks this override as a user-added dependency that has no entry in descriptor.yml,
+    // so the language server includes it in the effective dependency list.
+    additionalDependency?: boolean;
 }
 
 export interface ResetConnectorDependencyOverridesRequest {
@@ -2594,4 +2604,15 @@ export interface GetAPIOperationInputSchemasRequest {
 export interface GetAPIOperationInputSchemasResponse {
     schemas: { [operationId: string]: string };
     descriptions: { [operationId: string]: string };
+}
+
+export interface ExtractMavenCoordinatesRequest {
+    pomPath: string;
+}
+
+export interface ExtractMavenCoordinatesResponse {
+    groupId: string;
+    artifactId: string;
+    version: string;
+    packaging?: string;
 }

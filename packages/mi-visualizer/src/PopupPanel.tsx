@@ -47,7 +47,6 @@ import { DataSourceWizard } from './views/Forms/DataSourceForm';
 import { ImportConnectorForm } from './views/Forms/ConnectionForm/ImportConnector';
 import { ImportInboundConnectorForm } from './views/Forms/InboundEPform/ImportInboundConnector';
 import { CreateIdpConnectorSchema } from './views/Forms/IDPConnectorForm/CreateIdpConnectorSchema';
-import { DependencyManager } from './views/Overview/ProjectInformation/DependencyManager';
 
 const ViewContainer = styled.div`
     
@@ -139,14 +138,6 @@ const PopupPanel = (props: { formState: PopupMachineStateValue, handleClose?: ()
                     break;
                 case MACHINE_VIEW.AddDriverPopup:
                     setViewComponent(<AddDriver handlePopupClose={props.handleClose} path={machineSate.documentUri} identifier={machineSate.customProps.identifier} />);
-                    break;
-                case MACHINE_VIEW.ManageDependencies:
-                    setViewComponent(<DependencyManager
-                        onClose={props.handleClose}
-                        title={machineSate.customProps.title}
-                        type={machineSate.customProps.type}
-                    />
-                    );
                     break;
                 case MACHINE_VIEW.ManageConfigurables:
                     setViewComponent(<ManageConfigurables onClose={props.handleClose} configurables={machineSate.customProps.configs} />);

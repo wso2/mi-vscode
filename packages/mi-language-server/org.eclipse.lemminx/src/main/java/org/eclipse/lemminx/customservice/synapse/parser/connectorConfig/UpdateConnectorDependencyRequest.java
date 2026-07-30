@@ -40,4 +40,7 @@ public class UpdateConnectorDependencyRequest {
 
     /** Absolute path to a local JAR. When set, Maven download is skipped. */
     public String localPath;
+
+    /** When true, marks this override as an intentionally added dependency with no corresponding entry in descriptor.yml. */
+    public Boolean additionalDependency;
 }

@@ -22,6 +22,7 @@ import {
     ProjectStructureRequest,
     ProjectStructureResponse,
     WorkspacesResponse,
+    WorkspaceMiProjectsResponse,
     OpenViewRequest,
     HistoryEntryResponse,
     ToggleDisplayOverviewRequest,
@@ -66,6 +67,7 @@ import { GettingStartedData, SampleDownloadRequest } from "./types";
 export interface MIVisualizerAPI {
     getProjectUri: () => Promise<string>;
     getWorkspaces: () => Promise<WorkspacesResponse>;
+    getWorkspaceMiProjects: () => Promise<WorkspaceMiProjectsResponse>;
     findOldProjects: () => Promise<string[]>;
     getProjectStructure: (params: ProjectStructureRequest) => Promise<ProjectStructureResponse>;
     getProjectOverview: (params: ProjectStructureRequest) => Promise<ProjectOverviewResponse>;

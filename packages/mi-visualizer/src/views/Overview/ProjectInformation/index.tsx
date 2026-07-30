@@ -16,13 +16,13 @@
  * under the License.
  */
 
-import { DependencyDetails, MACHINE_VIEW, ParentPopupData, PomNodeDetails, POPUP_EVENT_TYPE, ProjectDetailsResponse } from "@wso2/mi-core";
+import { EVENT_TYPE, MACHINE_VIEW, ParentPopupData, PomNodeDetails, POPUP_EVENT_TYPE, ProjectDetailsResponse } from "@wso2/mi-core";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { useEffect, useState } from "react";
 
 import { Icon, ProgressIndicator, Typography, Divider, Button } from "@wso2/ui-toolkit";
 import styled from "@emotion/styled";
-import { ParamConfig, ParamManager } from "@wso2/mi-diagram";
+import { ParamManager } from "@wso2/mi-diagram";
 import { VSCodeLink } from "@vscode/webview-ui-toolkit/react";
 
 const Item = styled.div`
@@ -39,80 +39,33 @@ const Item = styled.div`
     }
 `;
 
+const Spinner = styled.span`
+    display: inline-flex;
+    @keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+    animation: spin 1s linear infinite;
+`;
+
 interface ProjectInformationProps {
 }
 export function ProjectInformation(props: ProjectInformationProps) {
     const { rpcClient } = useVisualizerContext();
     const [projectDetails, setProjectDetails] = useState<ProjectDetailsResponse>();
-    const [connectorDependencies, setConnectorDependencies] = useState<ParamConfig>({
-        paramValues: [],
-        paramFields: []
-    });
-    const [integrationProjectDependencies, setIntegrationProjectDependencies] = useState<ParamConfig>({
-        paramValues: [],
-        paramFields: []
-    });
-    const [otherDependencies, setOtherDependencies] = useState<ParamConfig>({
-        paramValues: [],
-        paramFields: []
-    });
     const [pomTimestamp, setPomTimestamp] = useState<number>(0);
+    const [isReloadingDependencies, setIsReloadingDependencies] = useState<boolean>(false);
 
     useEffect(() => {
         async function fetchData() {
             try {
                 const response = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
                 setProjectDetails(response);
-                setDependencies(response.dependencies?.connectorDependencies, setConnectorDependencies);
-                setDependencies(response.dependencies?.integrationProjectDependencies, setIntegrationProjectDependencies);
-                setDependencies(response.dependencies?.otherDependencies, setOtherDependencies);
             } catch (error) {
                 console.error("Error fetching project details:", error);
             }
         }
         fetchData();
     }, [props]);
-
-    const setDependencies = (dependencies: DependencyDetails[], setDependencies: any) => {
-        setDependencies({
-            paramValues: dependencies?.map((dep, index) => (
-                {
-                    id: index,
-                    key: dep.artifact,
-                    value: dep.version,
-                    icon: 'package',
-                    paramValues: [
-                        { value: dep.artifact },
-                        { value: dep.version },
-                    ]
-                }
-            )) || [],
-            paramFields: [
-                {
-                    "type": "TextField" as "TextField",
-                    "label": "Artifact ID",
-                    "defaultValue": "",
-                    "isRequired": false,
-                    "canChange": false
-                },
-                {
-                    "type": "TextField" as "TextField",
-                    "label": "Version",
-                    "defaultValue": "",
-                    "isRequired": false,
-                    "canChange": false
-                },
-            ]
-        });
-    };
-
-    const openManageDependencies = (title: string, type: string) => {
-        rpcClient.getMiVisualizerRpcClient().openView({
-            type: POPUP_EVENT_TYPE.OPEN_VIEW,
-            location: { view: MACHINE_VIEW.ManageDependencies, customProps: { title, type } },
-            isPopup: true
-        });
-    }
 
     const openManageConfigs = (configs: PomNodeDetails[]) => {
         rpcClient.getMiVisualizerRpcClient().openView({
@@ -122,42 +75,49 @@ export function ProjectInformation(props: ProjectInformationProps) {
         });
     }
 
+    const handleManageDependencies = () => {
+        rpcClient.getMiVisualizerRpcClient().openView({
+            type: EVENT_TYPE.OPEN_VIEW,
+            location: {
+                view: MACHINE_VIEW.ManageDependencies
+            },
+        });
+    }
+
+    const handleReloadDependencies = async () => {
+        if (isReloadingDependencies) {
+            return;
+        }
+        try {
+            setIsReloadingDependencies(true);
+            const result = await rpcClient.getMiVisualizerRpcClient().refetchIntegrationProjectDependencies();
+            if (result?.trim().toLowerCase() === "success") {
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: "Integration project dependencies reloaded successfully.",
+                    type: "info"
+                });
+            } else {
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: result || "Failed to reload integration project dependencies.",
+                    type: "error"
+                });
+            }
+        } catch (error) {
+            console.error("Error reloading dependencies:", error);
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: "Failed to reload integration project dependencies.",
+                type: "error"
+            });
+        } finally {
+            setIsReloadingDependencies(false);
+        }
+    }
+
     if (!projectDetails) {
         return <ProgressIndicator />;
     }
 
-    const { primaryDetails, buildDetails, dependencies, unitTest, configurables } = projectDetails;
-
-    function Dependencies(title: string, dependencies: DependencyDetails[], type: string, config: ParamConfig, onChange: (values: ParamConfig) => void) {
-        return <div>
-            {!dependencies || dependencies.length === 0 ? <Typography sx={{margin: "10px 0 0", opacity: 0.6}}>No dependencies found</Typography> :
-                <ParamManager
-                    sx={{ opacity: 0.8 }}
-                    paramConfigs={config}
-                    readonly={true}
-                    allowAddItem={false}
-                    onChange={(values: ParamConfig) => {
-                        values.paramValues = values.paramValues.map((param: any) => {
-                            const paramValues = param.paramValues;
-                            param.key = paramValues[0].value;
-                            param.value = paramValues[1].value;
-                            param.icon = 'query';
-                            return param;
-                        });
-                        onChange(values);
-                    }}
-                />}
-            <VSCodeLink onClick={() => openManageDependencies(title, type)}>
-                <div style={{
-                    display: 'flex',
-                    padding: '10px 0 0'
-                }}>Manage {title.includes('Connector') ? 
-                          'Connector' : title.includes('Project') ? 'Project' 
-                          : 'Other'} Dependencies <Icon name="link-external" id={"link-external-manage-dependencies-" + title} isCodicon sx={{ marginLeft: '5px' }} />
-                </div>
-            </VSCodeLink>
-        </div>;
-    }
+    const { primaryDetails, buildDetails, unitTest, configurables } = projectDetails;
 
     function Configurables(configs: PomNodeDetails[]) {
         return <>
@@ -208,10 +168,6 @@ export function ProjectInformation(props: ProjectInformationProps) {
         </>;
     }
 
-    const reloadDependencies = () => {
-       rpcClient.getMiVisualizerRpcClient().refetchIntegrationProjectDependencies();
-    }
-
     const handleEditProjectInformation = (componentType: string) => {
         rpcClient.getMiVisualizerRpcClient().openView({
             type: POPUP_EVENT_TYPE.OPEN_VIEW,
@@ -255,32 +211,28 @@ export function ProjectInformation(props: ProjectInformationProps) {
                 <Typography>Runtime Version: {primaryDetails?.runtimeVersion?.value}</Typography>
             </Item>
 
+            <div style={{ display: 'flex', alignItems: 'center', padding: '0 0 10px' }}>
+                <VSCodeLink onClick={handleManageDependencies}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>Manage Dependencies <Icon name="link-external" isCodicon sx={{ marginLeft: '5px' }} />
+                    </div>
+                </VSCodeLink>
+                <Button
+                    appearance="icon"
+                    tooltip="Reload Dependencies"
+                    onClick={handleReloadDependencies}
+                    disabled={isReloadingDependencies}
+                    sx={{ marginLeft: '8px' }}
+                >
+                    {isReloadingDependencies
+                        ? <Spinner><Icon name="refresh" isCodicon /></Spinner>
+                        : <Icon name="refresh" isCodicon />}
+                </Button>
+            </div>
+
             <Divider />
 
             <Typography variant="h4" sx={{margin: "10px 0 12px", opacity: 0.8}}>Configurables</Typography>
             {Configurables(configurables)}
-
-            <Divider />
-
-            <Typography variant="h4" sx={{margin: "10px 0 12px", opacity: 0.8}}>Connector Dependencies</Typography>
-            {Dependencies("Connector Dependencies", dependencies?.connectorDependencies, "zip", connectorDependencies, setConnectorDependencies)}
-
-            <Divider />
-
-            <Typography variant="h4" sx={{margin: "10px 0 12px", opacity: 0.8, display: 'flex', alignItems: 'center'}}>
-                Integration Project Dependencies
-                <div style={{ display: "flex", paddingRight: 6, flex: 1, justifyContent: "flex-end" }}>
-                    <Button appearance="icon" tooltip="Reload Integration Project Dependencies" onClick={() => reloadDependencies()}>
-                        <Icon name="refresh" isCodicon sx={{ flex: 1 }} />
-                    </Button>
-                </div>
-            </Typography>
-            {Dependencies("Integration Project Dependencies", dependencies?.integrationProjectDependencies, "car", integrationProjectDependencies, setIntegrationProjectDependencies)}
-
-            <Divider />
-
-            <Typography variant="h4" sx={{margin: "10px 0 12px", opacity: 0.8}}>Other Dependencies</Typography>
-            {Dependencies("Other Dependencies", dependencies?.otherDependencies, "jar", otherDependencies, setOtherDependencies)}
 
             <Divider />
 
