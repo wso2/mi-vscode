@@ -50,6 +50,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
+import { IOpenInConsoleCmdParams, WICommandIds as PlatformExtCommandIds } from "@wso2/wso2-platform-core";
 
 const Body = styled.div`
     padding: 0 32px 16px;
@@ -219,6 +220,7 @@ export function WorkspaceOverview() {
     const [projects, setProjects] = useState<ProjectData[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [workspaceName, setWorkspaceName] = useState("");
+    const [consolidatedRoot, setConsolidatedRoot] = useState("");
     const [isConsolidated, setIsConsolidated] = useState(false);
     const [isEditingDetails, setIsEditingDetails] = useState(false);
     const [remoteDeployConfig, setRemoteDeployConfig] = useState<ConsolidatedRemoteDeployConfig | null>(null);
@@ -291,6 +293,12 @@ export function WorkspaceOverview() {
         return parts[parts.length - 2] || "Workspace";
     };
 
+    const deriveConsolidatedRoot = (workspaces: WorkspaceFolder[]) => {
+        if (!workspaces.length) return "";
+        const sep = workspaces[0].fsPath.includes('\\') ? '\\' : '/';
+        return workspaces[0].fsPath.substring(0, workspaces[0].fsPath.lastIndexOf(sep));
+    };
+
     const fetchAll = async () => {
         try {
             const [{ workspaces }, consolidatedResult] = await Promise.all([
@@ -299,6 +307,7 @@ export function WorkspaceOverview() {
             ]);
 
             setWorkspaceName(deriveWorkspaceName(workspaces));
+            setConsolidatedRoot(deriveConsolidatedRoot(workspaces));
             setIsConsolidated(consolidatedResult?.isConsolidatedProject ?? false);
             // Keep already-loaded entries as-is so an unrelated folder add/remove
             // doesn't flash existing project cards back to a loading state.
@@ -421,7 +430,13 @@ export function WorkspaceOverview() {
 
     const goToDevant = () =>
         rpcClient.getMiDiagramRpcClient().executeCommand({
-            commands: ["MI.openAiPanel"],
+            commands: [
+                PlatformExtCommandIds.OpenInConsole,
+                {
+                    extName: "Devant",
+                    componentFsPath: consolidatedRoot,
+                    newComponentParams: { buildPackLang: "microintegrator" }
+                } as IOpenInConsoleCmdParams]
         });
 
     const EMPTY_COUNTS = { apis: 0, automations: 0, eventIntegrations: 0, other: 0 };

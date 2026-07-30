@@ -222,8 +222,11 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
     }, [rpcClient, reset]);
 
     const scrollTo = (id: string, behavior?: ScrollBehavior) => {
-        const targetDiv = divRefs[id].current;
+        const targetDiv = divRefs[id]?.current;
         const contentDiv = contentRef.current;
+        if (!targetDiv || !contentDiv) {
+            return;
+        }
         const targetPosition = targetDiv.getBoundingClientRect().top - contentDiv.getBoundingClientRect().top;
         contentDiv.scrollTo({
             top: targetPosition + contentDiv.scrollTop, // Add current scroll position
@@ -331,9 +334,12 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
     };
 
     useEffect(() => {
+        if (!props.selectedComponent) {
+            return;
+        }
         if (!divRefs["Unit Test"].current) {
             setTimeout(() => {
-                if (divRefs["Unit Test"].current) {
+                if (divRefs["Unit Test"].current && divRefs[props.selectedComponent]?.current) {
                     setSelectedId(props.selectedComponent);
                     scrollTo(props.selectedComponent);
                 }

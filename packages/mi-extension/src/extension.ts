@@ -36,7 +36,7 @@ import { RPCLayer } from './RPCLayer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import { COMMANDS, WI_EXTENSION_ID } from './constants';
-import { enableLS } from './util/workspace';
+import { enableLS, shouldShowWorkspaceOverview } from './util/workspace';
 import { disposeMIAgentPanelRpcManager } from './rpc-managers/agent-mode/rpc-handler';
 import { isConsolidatedProject } from './util/onboardingUtils';
 import { readConsolidatedProjectDetails } from './util/consolidatedPomUtils';
@@ -85,12 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	};
 
 	if (!oldProjects.length) {
-		const wsFolders = workspace.workspaceFolders;
-		const hasMultipleProjects = (wsFolders?.length ?? 0) > 1;
-		// A consolidated project opens as a workspace of its sub-projects
-		const isWorkspace = !!workspace.workspaceFile
-			|| (!!wsFolders?.length && isConsolidatedProject(path.dirname(wsFolders[0].uri.fsPath)));
-		const showWorkspaceOverview = hasMultipleProjects || isWorkspace;
+		const showWorkspaceOverview = shouldShowWorkspaceOverview();
 		getStateMachine(firstProject, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);
 	}
 	updateMultiProjectContext();
@@ -98,7 +93,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	workspace.onDidChangeWorkspaceFolders(async (event) => {
 		if (event.added.length > 0) {
 			// If several folders are added at once, this avoids opening one panel per folder.
-			const showWorkspaceOverview = (workspace.workspaceFolders?.length ?? 0) > 1;
+			const showWorkspaceOverview = shouldShowWorkspaceOverview();
 			getStateMachine(event.added[0].uri.fsPath, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);
 		}
 		if (event.removed.length > 0) {

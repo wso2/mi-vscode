@@ -872,10 +872,10 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
         const projectPath = params.documentUri ?? this.projectUri;
         const artifactsBase = path.join(projectPath, 'src', 'main', 'wso2mi', 'artifacts');
 
-        const countXmlFiles = async (folder: string): Promise<number> => {
+        const countArtifactFiles = async (folder: string): Promise<number> => {
             try {
                 const entries = await fs.promises.readdir(path.join(artifactsBase, folder));
-                return entries.filter((f: string) => f.endsWith('.xml')).length;
+                return entries.filter((f: string) => f.endsWith('.xml') || f.endsWith('.dbs')).length;
             } catch {
                 return 0;
             }
@@ -891,10 +891,10 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
         } catch { }
 
         const [apis, automations, eventIntegrations, ...otherCounts] = await Promise.all([
-            countXmlFiles('apis'),
-            countXmlFiles('tasks'),
-            countXmlFiles('inbound-endpoints'),
-            ...otherSubDirs.map(dir => countXmlFiles(dir)),
+            countArtifactFiles('apis'),
+            countArtifactFiles('tasks'),
+            countArtifactFiles('inbound-endpoints'),
+            ...otherSubDirs.map(dir => countArtifactFiles(dir)),
         ]);
 
         const { runtimeVersion } = getPomProjectDetails(projectPath);

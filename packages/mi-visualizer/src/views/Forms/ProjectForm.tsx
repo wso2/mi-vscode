@@ -16,7 +16,7 @@
  * under the License.
  */
 import React, { useEffect, useState } from "react";
-import { Button, Dropdown, FormActions, FormGroup, FormView, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, Tooltip, Icon } from "@wso2/ui-toolkit";
+import { Banner, Button, Dropdown, FormActions, FormGroup, FormView, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, Tooltip, Icon } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { EVENT_TYPE, MACHINE_VIEW } from "@wso2/mi-core";
 import { yupResolver } from "@hookform/resolvers/yup"
@@ -63,6 +63,7 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
 
     const [supportedMIVersions, setSupportedMIVersions] = useState<OptionProps[]>([]);
     const [formSaved, setFormSaved] = useState(false);
+    const [parentVersionError, setParentVersionError] = useState(false);
 
     const consolidatedHelpTip = <Tooltip
                 content="A consolidated project allows you to manage multiple related integration projects as a single unit"
@@ -140,6 +141,10 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                 const { version } = await rpcClient.getMiDiagramRpcClient().getMIVersionFromPom();
                 if (version) {
                     setValue("miVersion", version);
+                    setParentVersionError(false);
+                } else {
+                    setValue("miVersion", "");
+                    setParentVersionError(true);
                 }
             })();
         }
@@ -207,6 +212,13 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                 {...register("name")}
                 onKeyDown={onKeyDown}
             />
+            {addToConsolidatedProject && parentVersionError &&
+                <Banner
+                    messageTextSx={{ fontSize: "12px" }}
+                    type="error"
+                    message="Could not determine the WSO2 Integrator: MI runtime version of the consolidated project. Please check the parent project's pom.xml."
+                />
+            }
             {!addToConsolidatedProject &&
                 <Dropdown
                     id='miVersion'
@@ -280,7 +292,7 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                 <Button
                     appearance="primary"
                     onClick={handleSubmit(handleCreateProject)}
-                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || (isConsolidatedProject && !isSubProjectsAdded)}
+                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || (isConsolidatedProject && !isSubProjectsAdded) || parentVersionError}
                 >
                     {formSaved ? (
                         <>
