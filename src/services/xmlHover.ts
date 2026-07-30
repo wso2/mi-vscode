@@ -27,7 +27,30 @@ export function doHover(
   if (node.type === "element") {
     if (schemaProvider?.hasData() && node.name) {
       const info = schemaProvider.getElement(node.name);
-      if (!info) return null;
+      // Check if cursor is directly hovering over a specific attribute
+      const targetAttr = node.attributes.find(
+        (a) => offset >= a.nameStart && offset <= (a.valueEnd ?? a.nameEnd)
+      );
+      if (targetAttr) {
+        const attrInfo = info.attributes.find((a: any) => a.name === targetAttr.name);
+        if (attrInfo) {
+          const attrSections: string[] = [
+            `### Attribute \`${targetAttr.name}\` *(on \`<${node.name}>\`)*`,
+          ];
+          if (attrInfo.description) attrSections.push(attrInfo.description);
+          attrSections.push(
+            `**Type:** \`${attrInfo.type || "xs:string"}\`  \n**Required:** ${attrInfo.required ? "Yes" : "No"}`
+          );
+          return {
+            contents: attrSections.join("\n\n"),
+            range: offsetsToRange(
+              document.text,
+              targetAttr.nameStart,
+              targetAttr.valueEnd ?? targetAttr.nameEnd
+            ),
+          };
+        }
+      }
 
       const sections: string[] = [`### \`<${node.name}>\``];
 

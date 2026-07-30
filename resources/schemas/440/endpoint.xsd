@@ -410,6 +410,7 @@
                 <xs:restriction base="xs:string">
                     <xs:enumeration value="mtom"/>
                     <xs:enumeration value="swa"/>
+                    <xs:enumeration value="swa"/>
                 </xs:restriction>
             </xs:simpleType>
         </xs:attribute>

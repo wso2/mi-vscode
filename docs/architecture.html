@@ -6,7 +6,7 @@
   <title>Architecture — WSO2 MI Language Server</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body data-text-review>
+<body>
 
   <header class="topbar">
     <button class="topbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
@@ -116,8 +116,76 @@ flowchart LR
           <code>DiagnosticsHandler</code> owns — the wrapper itself just stores the XSD text.)</p>
 
         <h4>XsdCompletionProvider — the completion brain</h4>
-        <p>A hand-written XSD reader (462 lines) that parses element/attribute declarations out of the
-          XSD text and answers "what can go here?" for completion and hover.</p>
+        <p>A hand-written XSD reader (496 lines) that parses element/attribute declarations out of the
+          XSD text and answers "what can go here?" for completion and hover. It compiles XSD rules into a flat lookup registry (<code>Map&lt;string, ElementInfo&gt;</code>) using a three-phase pipeline inside <code>XsdCstParser</code>:</p>
+        
+        <ol style="margin-left: 20px; line-height: 1.6;">
+          <li>
+            <strong>Pre-Pass (<code>prePass</code>)</strong>: Scans the top-level XSD nodes to extract and cache reusable groups (<code>xs:attributeGroup</code> and <code>xs:group</code>) in temporary maps. This allows the parser to instantly expand group contents when referenced later via <code>ref="..."</code>.
+          </li>
+          <li>
+            <strong>Main Walk (<code>mainWalk</code>)</strong>: Recursively walks the XSD CST. For each <code>xs:element</code>, it registers an <code>ElementInfo</code> entry, parses its <code>xs:documentation</code> annotations, and recursively maps inline attributes. If the element specifies a type (e.g., <code>type="LogMediator"</code>), it records the reference for post-walk resolution. Named <code>xs:complexType</code> definitions are also parsed and cached during this walk.
+          </li>
+          <li>
+            <strong>Reference Resolution (<code>resolveReferences</code>)</strong>: Resolves type pointers by looking up the cached properties of the referenced <code>xs:complexType</code> definitions and merging them directly into the target elements.
+          </li>
+        </ol>
+
+        <div class="callout info" style="background-color: #0d1117; border-left: 4px solid var(--accent); padding: 16px; margin: 20px 0; border-radius: 6px;">
+          <p><span class="label" style="background: var(--accent); color: #0d1117; font-weight: bold; padding: 2px 6px; border-radius: 3px; font-size: 0.85em; margin-right: 8px;">Detailed Example:</span> Let's trace how the parser processes this sample XSD snippet:</p>
+          
+          <pre style="background: #161b22; padding: 12px; border-radius: 6px; border: 1px solid #30363d; overflow-x: auto; color: #e6edf3;"><code>&lt;!-- Reusable attribute group --&gt;
+&lt;xs:attributeGroup name="commonAttrs"&gt;
+  &lt;xs:attribute name="description" type="xs:string" /&gt;
+&lt;/xs:attributeGroup&gt;
+
+&lt;!-- Target element definition --&gt;
+&lt;xs:element name="log" type="LogMediator" /&gt;
+
+&lt;!-- Type declaration --&gt;
+&lt;xs:complexType name="LogMediator"&gt;
+  &lt;xs:sequence&gt;
+    &lt;xs:element ref="property" /&gt;
+  &lt;/xs:sequence&gt;
+  &lt;xs:attribute name="level" type="xs:string" /&gt;
+  &lt;xs:attributeGroup ref="commonAttrs" /&gt;
+&lt;/xs:complexType&gt;</code></pre>
+
+          <h5 style="margin-top: 16px; color: var(--accent);">Phase 1: Pre-Pass (Caching Groups)</h5>
+          <p>The parser scans the XSD root tags and hits <code>&lt;xs:attributeGroup name="commonAttrs"&gt;</code>. It registers its internal attributes and stores them in the <code>rawGroups</code> map:</p>
+          <pre style="background: #161b22; padding: 10px; border-radius: 6px; color: #79c0ff; font-family: monospace; font-size: 0.9em;"><code>rawGroups.set("commonAttrs", {
+  attrs: [{ name: "description", type: "xs:string", required: false }],
+  refs: []
+});</code></pre>
+
+          <h5 style="margin-top: 16px; color: var(--accent);">Phase 2: Main Walk (Tree Traversal & Element Stubs)</h5>
+          <p>The parser walks the XSD tree recursively:</p>
+          <ol style="margin-left: 20px; line-height: 1.5;">
+            <li>It registers the element <code>log</code> in the final output registry and records its type link in <code>elementTypeRefs</code>:
+              <pre style="background: #161b22; padding: 8px; border-radius: 4px; color: #a5d6ff; font-size: 0.85em;"><code>data.elements.set("log", { name: "log", attributes: [], children: [] });
+elementTypeRefs.set("log", "LogMediator");</code></pre>
+            </li>
+            <li>It visits the complexType definition <code>LogMediator</code>. It extracts its nested child names (<code>["property"]</code>) and attributes (direct attribute <code>level</code> + expanded group attribute <code>description</code> from Phase 1), storing them in temporary maps:
+              <pre style="background: #161b22; padding: 8px; border-radius: 4px; color: #a5d6ff; font-size: 0.85em;"><code>complexTypeChildren.set("LogMediator", ["property"]);
+complexTypeAttributes.set("LogMediator", [
+  { name: "level", type: "xs:string", required: false },
+  { name: "description", type: "xs:string", required: false }
+]);</code></pre>
+            </li>
+          </ol>
+
+          <h5 style="margin-top: 16px; color: var(--accent);">Phase 3: Reference Resolution (Merging & Compiling)</h5>
+          <p>After the walk completes, the parser resolves the type link (<code>log</code> &rarr; <code>LogMediator</code>) by pulling children and attributes from the complexType cache and merging them directly into the <code>log</code> element's record:</p>
+          <pre style="background: #161b22; padding: 10px; border-radius: 6px; color: #8b949e; font-family: monospace; font-size: 0.9em;"><code style="color: #ff7b72;">// Final compiled state in data.elements:</code>
+<code style="color: #79c0ff;">data.elements.get("log") == {
+  name: "log",
+  children: ["property"],
+  attributes: [
+    { name: "level", type: "xs:string", required: false },
+    { name: "description", type: "xs:string", required: false }
+  ]
+};</code></pre>
+        </div>
 
         <h2 id="dual">The two-engine model <span class="tag orange">important</span></h2>
         <p>This is the single most important thing to internalise. <strong>XSD semantics are
