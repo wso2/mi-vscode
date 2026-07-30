@@ -13,10 +13,10 @@ XERCES_LIB="$XERCES_BUILD/src/libxerces-c.a"
 BRIDGE="$PROJECT_ROOT/native/xerces_bridge.cpp"
 OUT_DIR="$PROJECT_ROOT/wasm"
 
-# ── Ensure emsdk submodule is checked out ─────────────────────────────────────
+# ── Ensure emsdk is available ───────────────────────────────────────────────────
 if [ ! -f "$EMSDK_DIR/emsdk" ]; then
-  echo "Initialising emsdk submodule..."
-  git -C "$PROJECT_ROOT" submodule update --init tools/emsdk
+  echo "Cloning emsdk repository..."
+  git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$EMSDK_DIR"
 fi
 
 # ── Install + activate the pinned Emscripten version (skip if already done) ───
@@ -33,8 +33,8 @@ source "$EMSDK_DIR/emsdk_env.sh"
 # ── Build Xerces-C as a WASM static library (only if not already built) ───────
 if [ ! -f "$XERCES_LIB" ]; then
   if [ ! -f "$XERCES_SRC/CMakeLists.txt" ]; then
-    echo "Initialising xerces-c submodule..."
-    git -C "$PROJECT_ROOT" submodule update --init native/xerces-c
+    echo "Cloning Xerces-C++ source repository..."
+    git clone --depth 1 --branch v3.2.4 https://github.com/apache/xerces-c.git "$XERCES_SRC"
   fi
 
   echo "Building Xerces-C for WASM (this takes a few minutes)..."
