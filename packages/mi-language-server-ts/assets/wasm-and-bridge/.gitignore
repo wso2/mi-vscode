@@ -1,0 +1,11 @@
+# Compiled WASM build outputs
+wasm/
+
+# Emscripten toolchain & Xerces-C build directories
+native/xerces-c/build-wasm/
+tools/emsdk/upstream/
+tools/emsdk/node/
+tools/emsdk/python/
+tools/emsdk/downloads/
+tools/emsdk/.emscripten
+tools/emsdk/.emscripten_cache/
