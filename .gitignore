@@ -5,3 +5,4 @@ github_issues.md
 .idea
 /dist
 /scripts
+/.vscode

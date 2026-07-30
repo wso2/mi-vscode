@@ -70,17 +70,20 @@ function findDocumentation(node: any): string {
 // --- CST Parser ---
 
 class XsdCstParser {
+  //Final Target Map 
   private data: SchemaCompletionData = { elements: new Map() };
-  
-  // Maps complexType name → direct child element names, for type-ref resolution.
+
+  //Temporary Caches
+
+  // Maps complexType name → direct child element names, for type-ref resolution. LogMediator → ["property"]
   private complexTypeChildren = new Map<string, string[]>();
-  // Maps complexType name → attribute list, for type-ref attribute resolution.
+  // Maps complexType name → attribute list, for type-ref attribute resolution. LogMediator → [level, description]
   private complexTypeAttributes = new Map<string, AttributeInfo[]>();
-  // Maps element name → type attribute value, for post-walk resolution.
+  // Maps element name → type attribute value, for post-walk resolution. log → "LogMediator"
   private elementTypeRefs = new Map<string, string>();
-  // Maps attributeGroup name → { direct attrs, referenced group names }.
+  // Maps attributeGroup name → { direct attrs, referenced group names }. commonAttrs → [description]
   private rawGroups = new Map<string, { attrs: AttributeInfo[]; refs: string[] }>();
-  // Maps xs:group name → { direct element names, referenced group names }.
+  // Maps xs:group name → { direct element names, referenced group names }. mediatorGroup → [log, property]
   private rawElementGroups = new Map<string, { elements: string[]; refs: string[] }>();
 
   constructor(private cst: any) {}
@@ -146,10 +149,13 @@ class XsdCstParser {
     const tagName = getTagName(node);
 
     if (isXsdTag(tagName, "element")) {
+      //data.elements (stub) + elementTypeRefs (pointer)
       this.handleElement(node, parentElementName);
     } else if (isXsdTag(tagName, "attribute")) {
+      //data.elements[parent].attributes (inline)
       this.handleAttribute(node, parentElementName);
     } else if (isXsdTag(tagName, "attributeGroup")) {
+      //data.elements[parent].attributes (expanded from rawGroups)
       this.handleAttributeGroup(node, parentElementName);
     } else if (isXsdTag(tagName, "complexType")) {
       this.handleComplexType(node, parentElementName);
@@ -178,6 +184,8 @@ class XsdCstParser {
   private handleElement(node: any, parentElementName: string | null): void {
     const name = getAttrValue(node, "name");
     const ref = getAttrValue(node, "ref");
+    //<xs:element name="log" type="LogMediator" />
+    //<xs:element ref="property" />
 
     // ref-only element: wire it to the parent without declaring a new element.
     if (!name && ref) {
@@ -195,7 +203,7 @@ class XsdCstParser {
       return;
     }
 
-    // Multi-occurrence handling.
+    // Multi-occurrence handling. Avoids Duplicate
     const existing = this.data.elements.get(name);
     const existingIsPopulated =
       !!existing && (existing.attributes.length > 0 || existing.children.length > 0);
@@ -261,7 +269,9 @@ class XsdCstParser {
     // xs:element type="X" declarations can be resolved after the walk.
     const typeName = getAttrValue(node, "name");
     if (typeName && parentElementName === null) {
+      // Collects all child element names (e.g., ["property", "message"]) and caches them in complexTypeChildren map
       this.complexTypeChildren.set(typeName, this.collectDirectElementNames(node));
+      // Collects all attributes (e.g., level, description) and caches them in complexTypeAttributes map
       this.complexTypeAttributes.set(typeName, this.collectComplexTypeAttributes(node));
     }
     // Always pass the current parent element name through.
