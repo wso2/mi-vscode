@@ -1,0 +1,43 @@
+#!c:/cygwin64/bin/bash
+
+set -e
+set -x
+
+PATH="/cygdrive/c/cygwin64/bin:$PATH"
+
+download_file()
+(
+    url="$1"
+    file="$2"
+    hash="$3"
+    hash_output="${hash} *$file"
+
+  if [ ! -f "$file" ]; then
+    echo "Downloading $file"
+  else
+    if [ "$(sha512sum "$file")" != "$hash_output" ]; then
+      echo "$file sha512sum mismatch"
+    fi
+  fi
+
+  if [ ! -f "$file" ] || [ "$(sha512sum "$file")" != "$hash_output" ]; then
+    rm -f "$file"
+    curl -L -o "$file" "$url"
+  fi
+  [ "$(sha512sum "$file")" = "$hash_output" ]
+)
+
+icu_source=icu4c-60_3-src.zip
+icu_url="https://github.com/unicode-org/icu/releases/download/release-60-3/${icu_source}"
+icu_hash="8b6b5d8f629c3daea9f8b4b368db8701915ffdc1c90fe79876dd39a9c13f30968af1371fc1dcd443a9a4e02754edbd96a3592c6e6affb6b895687a1a3f70b0f6"
+
+if [ "$msgloader" = "icu" ] || [ "$transcoder" = icu ]; then
+    cd "$AV_XERCES_CYG_DOWNLOAD"
+    download_file "$icu_url" "$icu_source" "$icu_hash"
+fi
+
+if [ "$msgloader" = "icu" ] || [ "$transcoder" = icu ]; then
+    cd "$AV_PROJECTS"
+    rm -rf icu
+    7z x "${AV_XERCES_DOWNLOAD}\\$icu_source"
+fi

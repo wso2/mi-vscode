@@ -1,0 +1,122 @@
+#!/bin/sh
+# This script is used for testing the build, primarily for use
+# with travis, but may be used by hand as well.
+
+set -e
+set -x
+
+# Test autoconf build
+autoconf_build()
+{
+    opts=""
+    # mutexmgr
+    case "$3" in
+        standard) opts="$opts --enable-mutexmgr-standard" ;;
+        posix) opts="$opts --enable-mutexmgr-posix" ;;
+        windows) opts="$opts --enable-mutexmgr-windows" ;;
+        nothreads) opts="$opts --enable-mutexmgr-nothreads" ;;
+    esac
+
+    # network
+    case "$4" in
+        ON) opts="$opts --enable-network" ;;
+        *)  opts="$opts --disable-network" ;;
+    esac
+
+    # netaccessor
+    case "$5" in
+        curl) opts="$opts --enable-netaccessor-curl" ;;
+        socket) opts="$opts --enable-netaccessor-socket" ;;
+        cfurl) opts="$opts --enable-netaccessor-cfurl" ;;
+        winsock) opts="$opts --enable-netaccessor-winsock" ;;
+    esac
+
+    # msgloader
+    case "$6" in
+        inmemory) opts="$opts --enable-msgloader-inmemory" ;;
+        icu) opts="$opts --enable-msgloader-icu" ;;
+        iconv) opts="$opts --enable-msgloader-iconv" ;;
+    esac
+
+    # transcoder
+    case "$7" in
+        # Testing on Linux, it's always GNU iconv
+        iconv) opts="$opts --enable-transcoder-gnuiconv" ;;
+        gnuiconv) opts="$opts --enable-transcoder-gnuiconv" ;;
+        icu) opts="$opts --enable-transcoder-icu" ;;
+        macosunicodeconverter) opts="$opts --enable-transcoder-macosunicodeconverter" ;;
+        windows) opts="$opts --enable-transcoder-windows" ;;
+    esac
+
+    # msgloader
+    case "$8" in
+        char16_t) opts="$opts --enable-xmlch-char16_t" ;;
+        uint16_t) opts="$opts --enable-xmlch-uint16_t" ;;
+    esac
+
+    autoreconf -ivf
+
+    mkdir autoconf-build
+    cd autoconf-build
+    echo "Running ../configure --prefix=$(pwd)/../autoconf-install) ${opts}"
+    ../configure --prefix=$(pwd)/../autoconf-install ${opts}
+    make
+    make install
+    make check
+}
+
+# Test autoconf build
+cmake_build()
+{
+    opts=""
+    if [ -n "$3" ]; then
+        opts="$opts -Dmutex-manager=$3"
+    fi
+    if [ -n "$4" ]; then
+        opts="$opts -Dnetwork:BOOL=$4"
+    fi
+    if [ -n "$5" ]; then
+        opts="$opts -Dnetwork-accessor=$5"
+    fi
+    if [ -n "$6" ]; then
+        opts="$opts -Dmessage-loader=$6"
+    fi
+    if [ -n "$7" ]; then
+        opts="$opts -Dtranscoder=$7"
+    fi
+    if [ -n "$8" ]; then
+        opts="$opts -Dxmlch-type=$8"
+    fi
+
+    PATH="$(pwd)/tools/bin:$PATH"
+    if [ "$(uname -s)" = "Darwin" ]; then
+        PATH="$(pwd)/tools/CMake.app/Contents/bin:$PATH"
+    fi
+    mkdir cmake-build
+    cd cmake-build
+    echo "Running cmake -G "$1" -DCMAKE_BUILD_TYPE="$2" -DCMAKE_INSTALL_PREFIX=../autoconf-install ${opts} .."
+    cmake -G "$1" -DCMAKE_BUILD_TYPE="$2" -DCMAKE_INSTALL_PREFIX=../autoconf-install ${opts} ..
+    cmake --build .
+    cmake --build . --target install
+    ctest -V
+}
+
+build=$1
+shift
+
+case $build in
+    autoconf)
+        echo "Testing Autoconf build"
+        autoconf_build "$@"
+        ;;
+    cmake)
+        echo "Testing CMake build"
+        cmake_build "$@"
+        ;;
+    *)
+        echo "Invalid argument: \"$arg\"" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

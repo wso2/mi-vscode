@@ -1,0 +1,81 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/*
+ * $Id: Xerces_autoconf_config.hpp.in 834826 2009-11-11 10:03:53Z borisk $
+ */
+
+//
+// There are two primary xerces configuration header files:
+//
+//	Xerces_autoconf_config.hpp
+//
+//      For configuration of items that must be accessable
+//	through public headers. This file has limited information
+//	and carefully works to avoid collision of macro names, etc.
+//
+//	This file is included by XercesDefs.h. In the event
+//	of a non-configured platform, a similar header specific
+//	to the platform will be included instead.
+//
+//	config.h
+//
+//      Generalized cmake-generated header file, with much more
+//	information, used to supply configuration information
+//	for use in implementation files.
+//
+// For CMake-based builds, this header is configured by cmake from the
+// .cmake.in template file of the same name.
+
+
+#ifndef XERCES_AUTOCONFIG_CONFIG_HPP
+#define XERCES_AUTOCONFIG_CONFIG_HPP
+
+// ---------------------------------------------------------------------------
+//  These defines are set by cmake as appropriate for the platform.
+// ---------------------------------------------------------------------------
+#cmakedefine XERCES_HAVE_SYS_TYPES_H 1
+#cmakedefine XERCES_HAVE_INTRIN_H 1
+#cmakedefine XERCES_HAVE_EMMINTRIN_H 1
+#cmakedefine XERCES_INCLUDE_WCHAR_H 1
+
+#define XERCES_XMLCH_T @XERCES_XMLCH_T@
+
+#cmakedefine XERCES_LSTRSUPPORT 1
+#cmakedefine XERCES_MFC_SUPPORT 1
+
+#cmakedefine XERCES_HAVE_CPUID_INTRINSIC 1
+#cmakedefine XERCES_HAVE_SSE2_INTRINSIC 1
+#cmakedefine XERCES_HAVE_GETCPUID 1
+
+#cmakedefine XERCES_DLL_EXPORT 1
+#cmakedefine XERCES_STATIC_LIBRARY 1
+#define XERCES_PLATFORM_EXPORT @XERCES_PLATFORM_EXPORT@
+#define XERCES_PLATFORM_IMPORT @XERCES_PLATFORM_IMPORT@
+#define XERCES_TEMPLATE_EXTERN @XERCES_TEMPLATE_EXTERN@
+#ifdef XERCES_DLL_EXPORT
+#  define DLL_EXPORT
+#endif
+
+// ---------------------------------------------------------------------------
+//  Force on the Xerces debug token if it is on in the build environment
+// ---------------------------------------------------------------------------
+#if defined(_DEBUG)
+#define XERCES_DEBUG
+#endif
+
+#endif
