@@ -481,15 +481,15 @@ export function WorkspaceOverview() {
                                 )}
                                 <ArtifactRow>
                                     <ArtifactBadge>
-                                        <Icon name="globe" isCodicon sx={{ fontSize: "12px" }} />
+                                        <Icon name="APIResource" sx={{ fontSize: "12px" }} />
                                         <span>{counts.apis} {counts.apis === 1 ? "API" : "APIs"}</span>
                                     </ArtifactBadge>
                                     <ArtifactBadge>
-                                        <Icon name="zap" isCodicon sx={{ fontSize: "12px" }} />
+                                        <Icon name="task" sx={{ fontSize: "12px" }} />
                                         <span>{counts.automations} {counts.automations === 1 ? "Automation" : "Automations"}</span>
                                     </ArtifactBadge>
                                     <ArtifactBadge>
-                                        <Icon name="broadcast" isCodicon sx={{ fontSize: "12px" }} />
+                                        <Icon name="inbound-endpoint" sx={{ fontSize: "12px" }} />
                                         <span>{counts.eventIntegrations} {counts.eventIntegrations === 1 ? "Event Integration" : "Event Integrations"}</span>
                                     </ArtifactBadge>
                                     {counts.other > 0 && (
