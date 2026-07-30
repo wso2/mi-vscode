@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flows &amp; Sequences — WSO2 MI Language Server</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <button class="topbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6"  x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <a href="index.html" class="topbar-brand">
+      <div class="logo">MI</div>
+      <span class="name">WSO2 MI Language Server</span>
+    </a>
+    <div class="topbar-crumb">
+      <span class="sep">/</span>
+      <span class="page">Flows &amp; Sequences</span>
+    </div>
+  </header>
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="group-label">Getting Started</div>
+        <a href="index.html">Overview</a>
+
+        <div class="group-label">Deep Dive</div>
+        <a href="architecture.html">Architecture <span class="sub">Layers, modules, the dual engine</span></a>
+        <a href="components.html">Component Reference <span class="sub">File-by-file</span></a>
+        <a href="flows.html" class="active">Flows &amp; Sequences <span class="sub">How things happen</span></a>
+        <a href="flows.html#startup">1 · Startup</a>
+        <a href="flows.html#validate">2 · Validation</a>
+        <a href="flows.html#resolve">3 · Schema resolution</a>
+        <a href="flows.html#complete">4 · Completion</a>
+        <a href="flows.html#hover">5 · Hover</a>
+        <a href="flows.html#config">6 · Config reload</a>
+
+        <div class="group-label">Scenarios</div>
+        <a href="flows.html#scenarios">User Scenarios</a>
+        <a href="flows.html#scenario-validate">↳ Opening a file</a>
+        <a href="flows.html#scenario-complete">↳ Typing in editor</a>
+
+        <div class="group-label">Development</div>
+        <a href="debugging.html">Debugging the Language Server <span class="sub">Attach a debugger to the server</span></a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="inner">
+        <span class="kicker">Deep Dive</span>
+        <h1>Flows &amp; Sequences</h1>
+        <p class="lead">How things actually happen at runtime — the six flows that cover almost
+          everything the server does.</p>
+
+        <!-- ── 1 ────────────────────────────────────────────────────────── -->
+        <h2 id="startup">1 · Startup &amp; initialization</h2>
+        <p>Simple two-step handshake. The extension scans the workspace for <code>pom.xml</code> files,
+          detects the MI version, and sends the matching schema nickname (<code>"430"</code> or
+          <code>"440"</code>) to the server at startup via <code>initializationOptions</code>.
+          The server looks up the bundled XSD for that nickname and registers it.
+          Validation is deferred until <code>initialized</code> is received.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as VS Code Client
+    participant S as server.ts
+    participant SA as SchemaAssociator
+
+    C->>S: initialize(params)
+    Note over S: read initializationOptions.schemas<br/>{pattern, schema: "440"}
+    S->>SA: registerSchemas() — pattern → bundled 430/440
+    S-->>C: capabilities (completion, hover, …)
+    C->>S: initialized
+    Note over S: initialConfigurationLoaded = true
+    S->>S: validateOpenDocumentsSafely()
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">How schemas are chosen:</span> The extension reads each workspace
+          folder's <code>pom.xml</code>, extracts <code>&lt;project.runtime.version&gt;</code>, and maps
+          it to a schema folder — <code>430</code> for MI 4.3 and below, <code>440</code> for 4.4 and
+          above. No manual configuration needed.</p>
+        </div>
+
+        <div class="callout info">
+          <p><span class="label">Why the deferral?</span> If a document change arrived before
+          <code>initialized</code>, it would try to validate before schemas were registered.
+          The <code>initialConfigurationLoaded</code> flag gates all validation until the handshake
+          completes.</p>
+        </div>
+
+        <!-- ── 2 ────────────────────────────────────────────────────────── -->
+        <h2 id="validate">2 · Document change → diagnostics</h2>
+        <p>The main loop. Edits are <strong>debounced 300&nbsp;ms per document</strong>, so a typing burst
+          runs this once after the user pauses. The JS AST (<code>parseXMLDocument</code>) is built
+          <strong>lazily</strong> — skipped entirely in the common case where a filename pattern resolves
+          the schema directly. The WASM validator runs on every edit but its instance is
+          <em>shared across all files using the same schema</em>.
+          A <strong>version guard</strong> at publish time discards results that went stale while
+          validation was running.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant S as server.ts
+    participant DH as DiagnosticsHandler
+    participant SP as SchemaProvider
+    participant W as Xerces WASM
+
+    C->>S: textDocument/didChangeContent
+    Note over S: debounce 300 ms per URI<br/>burst of keystrokes → one run
+    S->>DH: validateAndSend(document)
+    DH->>DH: capture document.version
+
+    Note over DH,SP: pass 1 — resolve by filename pattern only (no parse)
+    DH->>SP: resolveSchemaForDocument(file, xmlns=undefined, path)
+
+    alt no pattern matched
+        Note over DH: lazy parse — only if pass 1 missed
+        DH->>DH: parseXMLDocument() — extract xmlns
+        DH->>SP: resolveSchemaForDocument(file, xmlns, path)
+    end
+
+    alt schema resolved
+        opt first time for THIS file (!hasSchema)
+            Note over DH,SP: engine 2 — register completion schema (once per file)
+            DH->>DH: loadReferencedXsds() — follow XSD imports
+            DH->>SP: registerSchema(auto://path, imports)
+        end
+
+        Note over DH,W: engine 1 — WASM validation (every edit, uses raw text not AST)
+        DH->>DH: getOrCreateValidator(xsdPath)
+        Note over DH: first time → buildFilesMap() + compile WASM<br/>seen before → reuse cached validator
+        alt ProjectValidator succeeds
+            DH->>W: validator.validate(sanitizedText)
+            W-->>DH: parseErrors + schemaErrors
+            DH->>DH: deduplicate + map ranges
+        else ProjectValidator fails (or no absolute xsdPath)
+            DH->>SP: service.validate(autoUri, doc)
+            Note over SP: fallback to @xml-tools/parser<br/>syntax errors if no validator
+            SP-->>DH: raw diagnostics
+            DH->>DH: deduplicate + map ranges
+        end
+        alt version unchanged
+            DH-->>C: publishDiagnostics(uri, [...])
+        else newer edits arrived meanwhile
+            Note over DH: stale — result discarded
+        end
+    else no schema matched
+        DH-->>C: publishDiagnostics(uri, []) — clear stale
+    end
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Why lazy parse?</span> Building the JS AST on every keystroke was
+          expensive — and wasted, because the WASM engine takes raw text and re-parses internally in C++.
+          In the common case (file inside a pom.xml-detected project), the schema is resolved by filename
+          pattern alone, so <code>parseXMLDocument</code> is never called during validation.
+          It is only triggered as a fallback when no pattern matches, to extract the XML namespace and
+          retry. It is also triggered if WASM throws and the JS fallback validator is needed.</p>
+        </div>
+
+        <h4>What gets reused vs. created fresh</h4>
+        <table>
+          <thead><tr><th>Thing</th><th>Scope</th><th>When created</th><th>When reused</th></tr></thead>
+          <tbody>
+            <tr><td>JS AST (<code>parseXMLDocument</code>)</td><td>Per validation run</td><td>Only if pattern match failed or WASM threw</td><td>Cached within the same run via <code>getXmlDoc()</code></td></tr>
+            <tr><td>Completion schema (<code>auto://</code>)</td><td>Per file</td><td>First edit of that file</td><td>All later edits of the same file</td></tr>
+            <tr><td>WASM validator (<code>ProjectValidator</code>)</td><td>Per XSD folder</td><td>First file using that schema</td><td>All other files using the same schema</td></tr>
+          </tbody>
+        </table>
+
+        <h4>Example: two projects, three files</h4>
+        <ol class="steps">
+          <li><span class="st">Open project1/proxy.xml</span> Pattern matches → 440 XSD. No parse needed. Completion schema registered for <code>proxy.xml</code>. WASM validator for 440 created and cached.</li>
+          <li><span class="st">Open project2/sequence.xml</span> Pattern matches → 430 XSD. No parse needed. Completion schema registered for <code>sequence.xml</code>. WASM validator for 430 created and cached.</li>
+          <li><span class="st">Open project1/api.xml</span> Pattern matches → 440 XSD. No parse needed. Completion schema registered for <code>api.xml</code>. WASM validator for 440 — <strong>already cached, reused directly</strong>.</li>
+        </ol>
+
+        <h4>Step by step</h4>
+        <ol class="steps">
+          <li><span class="st">Debounce</span> Each edit cancels the previous timer; validation fires 300&nbsp;ms after the last keystroke.</li>
+          <li><span class="st">Snapshot version</span> <code>validateAndSend</code> captures <code>document.version</code> on entry — the live document keeps advancing while async work runs.</li>
+          <li><span class="st">Resolve pass 1</span> <code>SchemaAssociator</code> tries to match the file path against registered patterns — no parsing needed. Succeeds in the common case.</li>
+          <li><span class="st">Resolve pass 2 (fallback)</span> If pass 1 returned null, the document is parsed to extract its XML namespace, then resolution is retried. Handles files outside any project folder that carry a known namespace.</li>
+          <li><span class="st">Register completion schema</span> <em>(once per file)</em> The XSD import graph is loaded and registered under <code>auto://&lt;path&gt;</code>. Skipped on later edits via <code>hasSchema()</code>.</li>
+          <li><span class="st">Get validator</span> <em>(once per XSD folder)</em> A <code>ProjectValidator</code> is created with every <code>.xsd</code> file compiled into WASM — or the cached one is returned immediately.</li>
+          <li><span class="st">Validate</span> Xerces runs syntax + schema validation on the raw text in one SAX pass. If this fails (or no absolute XSD path is available), it falls back to <code>service.validate()</code> to extract syntax/lexical errors from the npm package (<code>@xml-tools/parser</code>).</li>
+          <li><span class="st">Deduplicate &amp; map</span> Structural errors appear in both parse and schema error lists — duplicates removed, then mapped to LSP ranges.</li>
+          <li><span class="st">Version guard</span> If <code>document.version</code> moved on during validation, the result is discarded.</li>
+          <li><span class="st">Publish</span> Diagnostics are sent; if no schema matched, any stale diagnostics are cleared.</li>
+        </ol>
+
+        <div class="callout info">
+          <p><span class="label">Why the version guard?</span> Validations for versions 5 and 6 can
+          finish out of order — if v5's (slower) run completed after v6's, it used to overwrite the
+          correct diagnostics with squiggles computed from text that no longer exists. The guard makes
+          publish order irrelevant; the debounce makes the race rare in the first place.</p>
+        </div>
+
+        <h4>WASM validator lifecycle &amp; cache</h4>
+        <p>Every call to <code>getOrCreateValidator()</code> either compiles a fresh grammar pool
+          or returns the cached one in a single map lookup. The state diagram shows what happens
+          inside that function; the sequence diagram shows the two runtime paths.</p>
+
+        <figure class="mermaid">
+stateDiagram-v2
+    [*] --> NotCreated : server start / config change
+
+    NotCreated --> Loading : first XML file opens for this XSD version
+
+    state Loading {
+        [*] --> ReadDisk
+        ReadDisk --> InRAM : buildFilesMap() · 82 files · ~836 KB in JS heap
+        InRAM --> SentToWASM : createProjectValidator(filesMap)
+        SentToWASM --> [*] : Xerces grammar pool compiled · JS strings GC-eligible
+    }
+
+    Loading --> Cached : validator ready
+
+    Cached --> Cached : cache hit · validate() only · no disk read · no WASM recompile
+
+    Cached --> NotCreated : dispose() · onDidChangeConfiguration
+        </figure>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant F as XML file (edit)
+    participant DH as DiagnosticsHandler
+    participant FS as File System
+    participant W as Xerces WASM
+
+    rect rgba(20, 50, 20, 0.5)
+        Note over F,W: Cold start — first file for this XSD version
+        F->>DH: validateAndSend(text)
+        DH->>DH: getOrCreateValidator() — cache miss
+        DH->>FS: buildFilesMap(schemaFolder)
+        FS-->>DH: 82 XSD files · ~836 KB loaded into JS heap
+        DH->>W: createProjectValidator(filesMap)
+        Note over W: Xerces compiles grammar pool<br/>into WASM linear memory
+        W-->>DH: ProjectValidator handle
+        Note over DH: filesMap goes out of scope → GC-eligible
+        DH->>W: validator.validate(xmlText)
+        W-->>DH: parseErrors + schemaErrors
+        DH-->>F: publishDiagnostics
+    end
+
+    rect rgba(20, 20, 55, 0.5)
+        Note over F,W: Warm path — same version, any later edit
+        F->>DH: validateAndSend(text)
+        DH->>DH: getOrCreateValidator() — cache HIT ✓
+        Note over DH: no disk read · no RAM load · no WASM recompile
+        DH->>W: validator.validate(xmlText)
+        W-->>DH: parseErrors + schemaErrors
+        DH-->>F: publishDiagnostics
+    end
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Two versions, two pools:</span> 430 and 440 each get their own
+          <code>ProjectValidator</code>, keyed by the full path to their <code>synapse_config.xsd</code>.
+          Both grammar pools coexist in WASM linear memory simultaneously — 430 files always hit the 430
+          pool, 440 files always hit the 440 pool, with no cross-contamination.</p>
+        </div>
+
+        <div class="callout info">
+          <p><span class="label">What the logs look like:</span> Cold start prints three lines —
+          <em>Loaded N XSD files into RAM</em>, <em>XSD text released from RAM</em>,
+          <em>Created ProjectValidator</em>. Every warm-path run prints only
+          <em>Cache hit — reusing ProjectValidator (no XSD reload)</em>.</p>
+        </div>
+
+        <!-- ── 3 ────────────────────────────────────────────────────────── -->
+        <h2 id="resolve">3 · Schema resolution priority</h2>
+        <p>The decision <code>SchemaAssociator.findSchema()</code> makes. User patterns always win over
+          built-in namespace matches.</p>
+
+        <figure class="mermaid">
+flowchart TD
+    A["findSchema(file, xmlns, path)"] --> B{user association<br/>pattern matches?}
+    B -- yes --> C["read XSD file"]
+    C --> D{readable?}
+    D -- yes --> E["✅ return custom schema"]
+    D -- no --> F["⚠️ return null<br/><i>no built-in fallback!</i>"]
+    B -- no --> G{built-in namespace<br/>matches xmlns?}
+    G -- yes --> H["✅ return built-in schema"]
+    G -- no --> I["return null → clear diagnostics"]
+
+    style E fill:#13241a,stroke:#3fb950,color:#f0f6fc
+    style H fill:#13241a,stroke:#3fb950,color:#f0f6fc
+    style F fill:#2a1416,stroke:#f85149,color:#f0f6fc
+        </figure>
+
+        <div class="callout warn">
+          <p><span class="label">The red branch:</span> a registered pattern that matches but points at an
+          unreadable XSD returns <code>null</code> rather than falling through to the built-in schema —
+          so a missing or corrupt bundled XSD silently disables validation for those files.
+          See <a href="architecture.html#tradeoffs">trade-offs</a>.</p>
+        </div>
+
+        <!-- ── 4 ────────────────────────────────────────────────────────── -->
+        <h2 id="complete">4 · Completion request</h2>
+        <p>Read-only and fast — served entirely by engine ②. It prefers the rich <code>auto://</code>
+          provider built during validation; if that isn't ready yet it builds a partial one on the fly.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant RH as requestHandlers
+    participant LS as languageService
+    participant SP as SchemaProvider
+    participant CP as XsdCompletionProvider
+
+    C->>RH: textDocument/completion(pos)
+    RH->>RH: getParsedDoc() — version cache
+    RH->>LS: doComplete(doc, pos, file, path)
+    LS->>SP: resolveSchemaForDocument(file, ns, path)
+    alt auto:// provider exists
+        SP-->>LS: cached full provider
+    else not yet registered
+        SP->>CP: new provider from raw XSD (partial, uncached)
+        CP-->>SP: provider
+    end
+    LS-->>RH: CompletionList
+    RH-->>C: items
+        </figure>
+
+        <!-- ── 5 ────────────────────────────────────────────────────────── -->
+        <h2 id="hover">5 · Hover (with diagnostic suppression)</h2>
+        <p>Hover is where the two engines meet. To avoid showing misleading hover content for something
+          Xerces flagged as invalid, the handler checks the diagnostics first.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant RH as requestHandlers
+    participant DH as DiagnosticsHandler
+    participant LS as languageService
+
+    C->>RH: textDocument/hover(pos)
+    RH->>DH: hasErrorAt(uri, line, char)
+    alt diagnostic covers this position
+        DH-->>RH: true
+        RH-->>C: null — let the diagnostic speak
+    else clean
+        DH-->>RH: false
+        RH->>LS: doHover(doc, pos, file, path)
+        LS-->>RH: hover content
+        RH-->>C: hover
+    end
+        </figure>
+
+        <div class="callout">
+          <p><span class="label">Reconciliation point:</span> this <code>hasErrorAt()</code> gate is how
+          the two engines are kept from contradicting each other in the UI — engine ① (Xerces) gets the
+          last word over engine ② (completion model).</p>
+        </div>
+
+        <!-- ── 6 ────────────────────────────────────────────────────────── -->
+        <h2 id="config">6 · Configuration reload</h2>
+        <p>Triggered when a new XML file is opened or a workspace folder is added. Everything
+          schema-related is rebuilt from scratch so the re-registered schemas are always in a clean state.</p>
+
+        <figure class="mermaid">
+flowchart TD
+    A["onDidChangeConfiguration"] --> B["invalidateAutoSchemas()<br/><i>drop auto:// validators + providers</i>"]
+    B --> C["diagnosticsHandler.dispose()<br/><i>destroy ProjectValidators</i>"]
+    C --> D["clearUserAssociations()<br/><i>wipe the slate</i>"]
+    D --> E["registerSchemas(initializationSchemas)<br/><i>re-apply bundled 430/440 patterns</i>"]
+    E --> F{initialConfigurationLoaded?}
+    F -- yes --> G["re-validate all open docs"]
+    F -- no --> H["defer"]
+
+    style D fill:#2a1f10,stroke:#d29922,color:#f0f6fc
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Why clear and re-register?</span> Without clearing first, calling
+          <code>registerSchemas</code> repeatedly would pile up duplicate associations. Wiping then
+          re-applying the startup schemas keeps the state identical to a fresh boot.</p>
+        </div>
+
+        <!-- ── User Scenarios ──────────────────────────────────────── -->
+        <h2 id="scenarios">User Scenarios</h2>
+        <p>What actually happens end-to-end when a developer uses the editor.
+          Both traces use a 4.3.0 project file (<code>df.xml</code>) as the example.</p>
+
+        <!-- ── Scenario 1 ──────────────────────────────────────────── -->
+        <h3 id="scenario-validate">Opening a file for the first time</h3>
+        <p>The developer opens <code>df.xml</code> inside a 430 project.
+          Two things happen in parallel: the completion model is built once from the
+          inlined XSD, and the WASM validator is compiled from the full schema folder.
+          Every edit after this hits both caches.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Ed as VS Code
+    participant LS as Language Server
+    participant FS as File System
+    participant W as Xerces WASM
+
+    Dev->>Ed: opens df.xml (430 project)
+    Ed->>LS: textDocument/didChangeContent
+
+    Note over LS: debounce 300 ms
+
+    LS->>LS: pattern "test-mi-430/**/*.xml" → 430 XSD matched
+
+    rect rgba(20, 50, 20, 0.45)
+        Note over LS,FS: Build completion model — once per schema version
+        LS->>FS: loadReferencedXsds() — follow xs:include chain
+        FS-->>LS: 77 XSD files merged into one 150 KB flat string
+        LS->>LS: XsdCompletionProvider() — parse + walk → 195-element Map
+        Note over LS: cached · future edits skip this entire block
+    end
+
+    rect rgba(20, 20, 55, 0.45)
+        Note over LS,W: Compile WASM validator — once per schema version
+        LS->>FS: buildFilesMap() — read all 82 XSD files (~836 KB)
+        FS-->>LS: files in JS heap
+        LS->>W: createProjectValidator(filesMap)
+        Note over W: Xerces compiles grammar pool into WASM linear memory
+        W-->>LS: ProjectValidator handle
+        Note over LS: JS text GC-eligible · validator cached
+    end
+
+    LS->>W: validator.validate(xmlText)
+    W-->>LS: errors / warnings
+    LS-->>Ed: publishDiagnostics — red squiggles appear
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Second edit onwards:</span> the two <code>rect</code> blocks above
+          are completely skipped. The LS goes straight to
+          <code>validator.validate()</code> using the cached WASM pool, and completions
+          are served from the already-built 195-element Map — zero disk reads.</p>
+        </div>
+
+        <!-- ── Scenario 2 ──────────────────────────────────────────── -->
+        <h3 id="scenario-complete">Typing in the editor</h3>
+        <p>The developer is editing <code>df.xml</code> and types inside a tag.
+          The completion engine detects the cursor context and does a direct map lookup —
+          no XSD parsing, no disk access.</p>
+
+        <figure class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Dev as Developer
+    participant Ed as VS Code
+    participant LS as Language Server
+    participant CP as XsdCompletionProvider (cached Map)
+
+    rect rgba(30, 30, 10, 0.45)
+        Note over Dev,CP: Context 1 — typing a new child element
+        Dev->>Ed: types  <  inside &lt;api&gt; body
+        Ed->>LS: textDocument/completion(position)
+        LS->>LS: text before cursor matches /&lt;\w*$/ → element context
+        LS->>LS: findNodeAt() → current node is "api", cursor in content area
+        LS->>CP: getChildren("api")
+        CP-->>LS: ["resource"]
+        LS-->>Ed: suggest  resource&gt;$0&lt;/resource&gt;
+    end
+
+    rect rgba(10, 30, 30, 0.45)
+        Note over Dev,CP: Context 2 — typing an attribute
+        Dev->>Ed: types space after  &lt;log
+        Ed->>LS: textDocument/completion(position)
+        LS->>LS: text matches open-tag pattern → attribute context
+        LS->>LS: extract tag name = "log"
+        LS->>CP: getAttributes("log")
+        CP-->>LS: [level, category, separator, description]
+        LS-->>Ed: suggest  level="$0"  category="$0"  …
+    end
+
+    rect rgba(30, 10, 10, 0.45)
+        Note over Dev,CP: Context 3 — closing a tag
+        Dev->>Ed: types  </
+        Ed->>LS: textDocument/completion(position)
+        LS->>LS: text matches /&lt;\/$/ → close-tag context
+        LS->>LS: findNodeAt() → current open element = "log"
+        LS-->>Ed: suggest  log&gt;   (no schema lookup needed)
+    end
+        </figure>
+
+        <div class="callout info">
+          <p><span class="label">Why it feels instant:</span> by the time the developer types anything,
+          the <code>XsdCompletionProvider</code> is already built and cached from the first
+          <code>didChangeContent</code> event. Every completion request is a single
+          <code>Map.get()</code> call on an in-memory structure — no file I/O, no XSD parsing,
+          no WASM involved.</p>
+        </div>
+
+        <hr />
+        <h3>All six flows at a glance</h3>
+        <table>
+          <thead><tr><th>#</th><th>Trigger</th><th>Engine(s)</th><th>Outcome</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><code>initialize</code> / <code>initialized</code></td><td>—</td><td>schemas registered, capabilities advertised</td></tr>
+            <tr><td>2</td><td><code>didChangeContent</code> (debounced 300&nbsp;ms)</td><td>① + ②</td><td>diagnostics published (stale results discarded)</td></tr>
+            <tr><td>3</td><td>(internal) <code>findSchema</code></td><td>—</td><td>an XSD chosen, or none</td></tr>
+            <tr><td>4</td><td><code>completion</code></td><td>②</td><td>completion list</td></tr>
+            <tr><td>5</td><td><code>hover</code></td><td>① gates ②</td><td>hover or null</td></tr>
+            <tr><td>6</td><td><code>didChangeConfiguration</code></td><td>—</td><td>caches rebuilt, docs re-validated</td></tr>
+          </tbody>
+        </table>
+
+        <div class="footer-nav">
+          <a class="prev" href="components.html">
+            <span class="dir">← Prev</span>
+            <span class="lbl">Component Reference</span>
+          </a>
+          <a class="next" href="debugging.html">
+            <span class="dir">Next →</span>
+            <span class="lbl">Debugging the Language Server</span>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="docs.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true, theme: 'dark',
+      themeVariables: { primaryColor: '#1c2128', primaryBorderColor: '#ff7300', primaryTextColor: '#f0f6fc', lineColor: '#8b949e', fontSize: '14px', actorBkg: '#1c2128', actorBorder: '#ff7300', actorTextColor: '#f0f6fc', signalColor: '#8b949e', signalTextColor: '#c9d1d9', noteBkgColor: '#1f2a18', noteTextColor: '#c9d1d9', noteBorderColor: '#3fb950' },
+      flowchart: { curve: 'basis', htmlLabels: true },
+      sequence: { actorMargin: 50, mirrorActors: false, messageFontSize: 13 }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+export interface SchemaAssociation {
+  pattern: string;     // glob-like: 'project-430/**/*.xml' or '**/*.xml'
+  namespace?: string;  // xmlns namespace URI
+  xsdPath: string;     // absolute path to XSD file
+  isBuiltIn: boolean;  // true for bundled schemas
+}
+
+export interface ResolvedSchema {
+  xsdText: string;
+  xsdPath: string;
+  source: "builtin" | "custom";
+}
+
+// Resolve schemas root for both production bundle (dist/server.js) and test environment.
+// Production: import.meta.url → dist/server.js, schemas are co-located at dist/resources/schemas.
+// Tests: import.meta.url → src/schema/schemaAssociator.ts, two levels up reaches the project root.
+function resolveSchemaRoot(): string {
+  try {
+    const dir = path.dirname(fileURLToPath(import.meta.url));
+    const bundled = path.join(dir, "resources", "schemas");
+    if (fs.existsSync(bundled)) return bundled;
+    return path.join(dir, "..", "..", "resources", "schemas");
+  } catch {
+    return path.join(process.cwd(), "resources", "schemas");
+  }
+}
+
+const SCHEMAS_ROOT = resolveSchemaRoot();
+
+export class SchemaAssociator {
+  private builtInAssociations: SchemaAssociation[];
+  private userAssociations: SchemaAssociation[];
+
+  constructor() {
+    this.builtInAssociations = [
+      {
+        namespace: "http://ws.apache.org/ns/synapse",
+        xsdPath: path.join(SCHEMAS_ROOT, "440", "synapse_config.xsd"),
+        pattern: "**/*.xml",
+        isBuiltIn: true,
+      },
+      {
+        namespace: "http://maven.apache.org/POM/4.0.0",
+        xsdPath: path.join(SCHEMAS_ROOT, "maven", "maven-4.0.0.xsd"),
+        pattern: "**/pom.xml",
+        isBuiltIn: true,
+      },
+    ];
+    this.userAssociations = [];
+  }
+
+  /**
+   * Registers a custom schema association.
+   * Custom associations take priority over built-in schemas when patterns overlap.
+   */
+  addUserAssociation(association: SchemaAssociation): void {
+    this.userAssociations.push(association);
+  }
+
+  clearUserAssociations(): void {
+    this.userAssociations = [];
+  }
+
+  /**
+   * Finds and reads the XSD schema for the given file name and optional xmlns namespace.
+   * Priority: user associations (pattern match) > built-in associations (namespace match).
+   * Returns null if no matching schema is found.
+   */
+  findSchema(fileName: string, xmlns?: string, documentPath?: string): ResolvedSchema | null {
+
+    // 0. Hardcoded for pom.xml to prevent custom **/*.xml associations
+    // from incorrectly mapping Maven files to Synapse schemas.
+    if (fileName === "pom.xml" || fileName.endsWith("/pom.xml") || fileName.endsWith("\\pom.xml")) {
+      const pomAssoc = this.builtInAssociations.find((a) => a.namespace === "http://maven.apache.org/POM/4.0.0");
+      if (pomAssoc) {
+        const xsdText = this.readXsdFile(pomAssoc.xsdPath);
+        if (xsdText) return { xsdText, xsdPath: pomAssoc.xsdPath, source: "builtin" };
+      }
+    }
+
+    // 1. user associations checked (pattern match)
+    for (const assoc of this.userAssociations) {
+      if (this.matchesPattern(fileName, assoc.pattern, documentPath)) {
+        const xsdText = this.readXsdFile(assoc.xsdPath);
+        if (xsdText === null) return null;
+        return { xsdText, xsdPath: assoc.xsdPath, source: "custom" };
+      }
+    }
+
+    // built-ins matched by namespace
+    for (const assoc of this.builtInAssociations) {
+      if (xmlns !== undefined && assoc.namespace === xmlns) {
+        const xsdText = this.readXsdFile(assoc.xsdPath);
+        if (xsdText === null) return null;
+        return { xsdText, xsdPath: assoc.xsdPath, source: "builtin" };
+      }
+    }
+
+    // 3. built-ins matched by specific pattern (fallback for files without namespace)
+    // NOTE: This block is currently not hit in practice because the only specific built-in pattern is
+    // '**/pom.xml' which is already intercepted in Step 0. This is kept active for future extensibility
+    // (e.g. if we add new built-in schemas with specific file patterns like '**/registry.xml').
+    for (const assoc of this.builtInAssociations) {
+      if (assoc.pattern && assoc.pattern !== "**/*.xml" && this.matchesPattern(fileName, assoc.pattern, documentPath)) {
+        const xsdText = this.readXsdFile(assoc.xsdPath);
+        if (xsdText === null) return null;
+        return { xsdText, xsdPath: assoc.xsdPath, source: "builtin" };
+      }
+    }
+
+    return null;
+  }
+
+  private matchesPattern(fileName: string, pattern: string, documentPath?: string): boolean {
+    if (fileName === pattern) return true;
+    if (documentPath && this.globMatches(pattern, documentPath)) return true;
+    // Fallback for simple **/*.ext patterns — match by filename suffix alone.
+    const stripped = pattern.replace(/^\*\*\//, "");
+    return !stripped.includes("/") && fileName.endsWith(stripped);
+  }
+
+  // Converts a glob pattern to a RegExp and tests it against filePath.
+  // Supports * (single-segment wildcard) and ** (multi-segment wildcard).
+  private globMatches(glob: string, filePath: string): boolean {
+    let re = "";
+    let i = 0;
+    while (i < glob.length) {
+      const ch = glob[i];
+      if (ch === "*" && glob[i + 1] === "*") {
+        re += ".*";
+        i += 2;
+        if (glob[i] === "/") i++;
+      } else if (ch === "*") {
+        re += "[^/]*";
+        i++;
+      } else if (ch === "?") {
+        re += "[^/]";
+        i++;
+      } else {
+        re += ch.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+        i++;
+      }
+    }
+    return new RegExp(`(^|/)${re}$`).test(filePath);
+  }
+
+  /** Reads and returns the content of an XSD file, or null if not found. */
+  private readXsdFile(xsdPath: string): string | null {
+    try {
+      return fs.readFileSync(xsdPath, "utf-8");
+    } catch (err) {
+      console.warn(`Schema file not found at "${xsdPath}": ${(err as Error).message}`);
+      return null;
+    }
+  }
+}
