@@ -116,11 +116,10 @@ public class GenericApiObjectDefinition {
 
         if (resource.getUrlMapping() != null) {
             uri = StringEscapeUtils.unescapeHtml4(resource.getUrlMapping());
-            generateParameterList(parameterList, uri, false);
         } else {
             uri = StringEscapeUtils.unescapeHtml4(resource.getUriTemplate());
-            generateParameterList(parameterList, uri, true);
         }
+        generateParameterList(parameterList, uri);
         if (log.isLoggable(Level.FINE)) {
             log.info("Parameters processed for the URI + " + uri + " size " + parameterList.size());
         }
@@ -131,30 +130,15 @@ public class GenericApiObjectDefinition {
     }
 
     /**
-     * Generate URI and Path parameters for the given URI.
+     * Generate Path parameters for the given URI.
      *
-     * @param parameterList     List of maps to be populated with parameters
-     * @param uriString         URI string to be used to extract parameters
-     * @param generateBothTypes Indicates whether to consider both query and uri parameters. True if both to be
-     *                          considered.
+     * @param parameterList List of maps to be populated with parameters
+     * @param uriString     URI string to be used to extract parameters
      */
-    private static void generateParameterList(ArrayList<Map<String, Object>> parameterList, String uriString, boolean
-            generateBothTypes) {
+    private static void generateParameterList(ArrayList<Map<String, Object>> parameterList, String uriString) {
 
         if (uriString == null) {
             return;
-        }
-        if (generateBothTypes) {
-            String[] params = getQueryStringFromUrl(uriString).split("&");
-            for (String parameter : params) {
-                if (parameter != null) {
-                    int pos = parameter.indexOf('=');
-                    if (pos > 0) {
-                        parameterList.add(getParametersMap(parameter.substring(0, pos),
-                                SwaggerConstants.PARAMETER_IN_QUERY));
-                    }
-                }
-            }
         }
         Matcher matcher = SwaggerConstants.PATH_PARAMETER_PATTERN.matcher(getPathFromUrl(uriString));
         while (matcher.find()) {
@@ -235,21 +219,6 @@ public class GenericApiObjectDefinition {
             return uri.substring(0, pos);
         }
         return uri;
-    }
-
-    /**
-     * Get query parameter portion from the URI.
-     *
-     * @param uri String URI to be analysed
-     * @return String containing the URI parameter portion of the URI
-     */
-    private static String getQueryStringFromUrl(String uri) {
-
-        int pos = uri.indexOf("?");
-        if (pos > 0) {
-            return uri.substring(pos + 1);
-        }
-        return "";
     }
 
     /**

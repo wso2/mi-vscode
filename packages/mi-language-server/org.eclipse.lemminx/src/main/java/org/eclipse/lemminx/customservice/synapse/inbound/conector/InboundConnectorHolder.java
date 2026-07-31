@@ -27,6 +27,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.customservice.synapse.connectors.UiSchemaFlattener;
+import org.eclipse.lemminx.customservice.synapse.connectors.entity.ConnectorVariableSchemaUtils;
+import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.Property;
 import org.eclipse.lemminx.customservice.synapse.parser.Node;
 import org.eclipse.lemminx.customservice.synapse.parser.OverviewPageDetailsResponse;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
@@ -57,13 +59,17 @@ import static org.eclipse.lemminx.customservice.synapse.parser.pom.PomParser.get
 public class InboundConnectorHolder {
 
     private static final Logger LOGGER = Logger.getLogger(InboundConnectorHolder.class.getName());
+    public static final String INPUT_SCHEMA_FILE_SUFFIX = "_inputschema.json";
+    private static InboundConnectorHolder instance;
     private String projectId;
     private String projectPath;
     private String tempFolderPath;
     // <Connector name, Connector ID> map
-    private HashMap<String, String> connectorIdMap;
+    private final HashMap<String, String> connectorIdMap;
     // <Connector ID, UI schema path> map
-    private HashMap<String, String> inboundConnectors;
+    private final HashMap<String, String> inboundConnectors;
+    // <Connector ID, input schema path> map
+    private final HashMap<String, String> inboundConnectorInputSchemas;
     private Map<String, JsonObject> localInboundConnectors;
     private JsonObject inboundConnectorListJson;
     private String projectRuntimeVersion;
@@ -78,6 +84,15 @@ public class InboundConnectorHolder {
 
         this.inboundConnectors = new HashMap<>();
         this.connectorIdMap = new HashMap<>();
+        this.inboundConnectorInputSchemas = new HashMap<>();
+    }
+
+    public static InboundConnectorHolder getInstance() {
+
+        if (instance == null) {
+            throw new IllegalStateException("InboundConnectorHolder has not yet been initialized");
+        }
+        return instance;
     }
 
     public void init(String projectPath, String projectRuntimeVersion) {
@@ -107,6 +122,7 @@ public class InboundConnectorHolder {
         getCustomInboundConnectors();
         loadInboundConnectors();
         this.localInboundEndpointsListForCopilot = generateInboundConnectorArray();
+        instance = this;
     }
 
     private void loadInboundConnectors() {
@@ -154,23 +170,30 @@ public class InboundConnectorHolder {
                 Utils.extractZip(zip, extractToFolder);
                 String schema = Utils.readFile(extractToFolder.toPath().resolve(Constant.RESOURCES)
                         .resolve(Constant.UI_SCHEMA_JSON).toFile());
-                if (saveInboundConnector(Utils.getJsonObject(schema).get(Constant.NAME).getAsString(), schema)) {
-					JsonObject connectorSchema = Utils.getJsonObject(schema);
-					JsonArray connectorArray = this.inboundConnectorListJson.getAsJsonArray(Constant.INBOUND_CONNECTOR_DATA);
-					String connectorId = connectorSchema.get(Constant.ID) != null ?
-							connectorSchema.get(Constant.ID).getAsString() : StringUtils.EMPTY;
-					if (!isConnectorAlreadyListed(connectorArray, connectorId)) {
-						JsonObject newConnector = new JsonObject();
-						newConnector.addProperty(Constant.NAME, connectorSchema.get(Constant.TITLE) != null ?
-								connectorSchema.get(Constant.TITLE).getAsString() : StringUtils.EMPTY);
-						newConnector.addProperty(Constant.ID, connectorId);
-						newConnector.addProperty(Constant.DESCRIPTION, connectorSchema.get(Constant.DESCRIPTION) != null ?
-								connectorSchema.get(Constant.DESCRIPTION).getAsString() : StringUtils.EMPTY);
-						newConnector.addProperty(Constant.TYPE, Constant.INBOUND_DASH_ENDPOINT);
-						connectorArray.add(newConnector);
-					}
-					isInboundConnectorAdded = true;
-				}
+                JsonObject connectorSchema = Utils.getJsonObject(schema);
+                if (saveInboundConnector(connectorSchema.get(Constant.NAME).getAsString(), schema)) {
+                    File inputSchemaFile = extractToFolder.toPath().resolve(Constant.RESOURCES)
+                            .resolve(Constant.INPUT_SCHEMA_JSON).toFile();
+                    if (inputSchemaFile.exists()) {
+                        saveInboundConnectorInputSchema(connectorSchema.get(Constant.NAME).getAsString(),
+                                connectorSchema.has(Constant.ID) ? connectorSchema.get(Constant.ID).getAsString() : null,
+                                Utils.readFile(inputSchemaFile));
+                    }
+                    JsonArray connectorArray = this.inboundConnectorListJson.getAsJsonArray(Constant.INBOUND_CONNECTOR_DATA);
+                    String connectorId = connectorSchema.get(Constant.ID) != null ?
+                            connectorSchema.get(Constant.ID).getAsString() : StringUtils.EMPTY;
+                    if (!isConnectorAlreadyListed(connectorArray, connectorId)) {
+                        JsonObject newConnector = new JsonObject();
+                        newConnector.addProperty(Constant.NAME, connectorSchema.get(Constant.TITLE) != null ?
+                                connectorSchema.get(Constant.TITLE).getAsString() : StringUtils.EMPTY);
+                        newConnector.addProperty(Constant.ID, connectorId);
+                        newConnector.addProperty(Constant.DESCRIPTION, connectorSchema.get(Constant.DESCRIPTION) != null ?
+                                connectorSchema.get(Constant.DESCRIPTION).getAsString() : StringUtils.EMPTY);
+                        newConnector.addProperty(Constant.TYPE, Constant.INBOUND_DASH_ENDPOINT);
+                        connectorArray.add(newConnector);
+                    }
+                    isInboundConnectorAdded = true;
+                }
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Failed to import custom inbound-connector:" + zipName, e);
             }
@@ -217,8 +240,13 @@ public class InboundConnectorHolder {
 
     private void loadInboundConnector(File file) {
 
+        String fileName = file.getName();
+        // Input schema files are loaded together with their uischema, skip them here.
+        if (fileName.endsWith(INPUT_SCHEMA_FILE_SUFFIX)) {
+            return;
+        }
         try {
-            String connectorName = file.getName().replace(".json", "");
+            String connectorName = fileName.replace(Constant.JSON_FILE_EXT, StringUtils.EMPTY);
             String uiSchema = Utils.readFile(file);
             JsonObject inboundConnector = Utils.getJsonObject(uiSchema);
             if (inboundConnector == null || !inboundConnector.has(Constant.ID)) {
@@ -227,6 +255,10 @@ public class InboundConnectorHolder {
             String id = inboundConnector.get(Constant.ID).getAsString();
             connectorIdMap.put(connectorName, id);
             inboundConnectors.put(id, file.getAbsolutePath());
+            File inputSchemaFile = Path.of(tempFolderPath, connectorName + INPUT_SCHEMA_FILE_SUFFIX).toFile();
+            if (inputSchemaFile.exists()) {
+                inboundConnectorInputSchemas.put(id, inputSchemaFile.getAbsolutePath());
+            }
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Error occurred while loading inbound connector schema from file", e);
         }
@@ -247,6 +279,47 @@ public class InboundConnectorHolder {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Persists the input schema shipped by an inbound connector (its
+     * {@code resources/inputschema.json}) next to the uischema in the per-project
+     * temp folder and registers it against the connector id.
+     *
+     * @param connectorName the connector name (uischema {@code name})
+     * @param id            the connector id (uischema {@code id})
+     * @param inputSchema   the raw input schema JSON
+     */
+    public void saveInboundConnectorInputSchema(String connectorName, String id, String inputSchema) {
+
+        if (StringUtils.isEmpty(id) || StringUtils.isEmpty(inputSchema)) {
+            return;
+        }
+        Path filePath = Path.of(tempFolderPath, connectorName + INPUT_SCHEMA_FILE_SUFFIX);
+        if (saveToFile(filePath.toFile(), inputSchema)) {
+            inboundConnectorInputSchemas.put(id, filePath.toString());
+        }
+    }
+
+    /**
+     * Returns the input schema of the inbound connector with the given id as a
+     * {@link Property} tree (built the same way as regular connector output schemas),
+     * or {@code null} if no input schema is registered.
+     */
+    public Property getInboundConnectorInputSchema(String id) {
+
+        String inputSchemaPath = inboundConnectorInputSchemas.get(id);
+        if (StringUtils.isEmpty(inputSchemaPath)) {
+            return null;
+        }
+        try {
+            String inputSchema = Utils.readFile(new File(inputSchemaPath));
+            JsonObject inputSchemaJson = Utils.getJsonObject(inputSchema);
+            return ConnectorVariableSchemaUtils.buildSchemaProperty(inputSchemaJson);
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error occurred while reading inbound connector input schema from file", e);
+        }
+        return null;
     }
 
     public InboundConnectorResponse getInboundConnectorSchema(File inboundEPFile) {
