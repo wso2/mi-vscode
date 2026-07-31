@@ -556,6 +556,9 @@ importers:
       '@wso2/syntax-tree':
         specifier: workspace:*
         version: link:../syntax-tree
+      '@wso2/webview-giga-bridge':
+        specifier: workspace:*
+        version: link:../../submodules/vscode-extensions/workspaces/common-libs/vscode-webview-bridge
       adm-zip:
         specifier: 0.6.0
         version: 0.6.0
@@ -875,6 +878,9 @@ importers:
       '@wso2/ui-toolkit':
         specifier: workspace:*
         version: link:../../submodules/vscode-extensions/workspaces/common-libs/ui-toolkit
+      '@wso2/webview-giga-bridge':
+        specifier: workspace:*
+        version: link:../../submodules/vscode-extensions/workspaces/common-libs/vscode-webview-bridge
       '@wso2/wso2-platform-core':
         specifier: workspace:*
         version: link:../../submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core
@@ -1345,6 +1351,25 @@ importers:
       vite:
         specifier: 6.0.14
         version: 6.0.14(@types/node@22.15.24)(jiti@2.7.0)(terser@5.49.0)(yaml@2.8.3)
+
+  ../../submodules/vscode-extensions/workspaces/common-libs/vscode-webview-bridge:
+    dependencies:
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+    devDependencies:
+      '@types/vscode':
+        specifier: 1.100.0
+        version: 1.100.0
+      '@types/ws':
+        specifier: 8.18.1
+        version: 8.18.1
+      rimraf:
+        specifier: 5.0.5
+        version: 5.0.5
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
 
   ../../submodules/vscode-extensions/workspaces/wso2-platform/wso2-platform-core:
     dependencies:
@@ -12089,6 +12114,11 @@ packages:
   rimraf@3.0.2:
     resolution: {integrity: sha512-JZkJMZkAGFFPP2YqXZXPbMlMBgsxzE8ILs4lMIX/2o0L9UBw9O/Y3o6wFw/i9YLapcUJWwqbi3kdxIPdC62TIA==}
     deprecated: Rimraf versions prior to v4 are no longer supported
+    hasBin: true
+
+  rimraf@5.0.5:
+    resolution: {integrity: sha512-CqDakW+hMe/Bz202FPEymy68P+G50RfMQK+Qo5YUqc9SPipvbGjCGKd0RSKEelbsfQuw3g5NZDSrlZZAJurH1A==}
+    engines: {node: '>=14'}
     hasBin: true
 
   rimraf@6.0.1:
@@ -29115,6 +29145,10 @@ snapshots:
   rimraf@3.0.2:
     dependencies:
       glob: 7.2.3
+
+  rimraf@5.0.5:
+    dependencies:
+      glob: 10.5.0
 
   rimraf@6.0.1:
     dependencies:
