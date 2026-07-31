@@ -381,7 +381,7 @@ import { replaceFullContentToFile, saveIdpSchemaToFile } from "../../util/worksp
 import { VisualizerWebview, webviews } from "../../visualizer/webview";
 import path = require("path");
 import { importCapp } from "../../util/importCapp";
-import { compareVersions, filterConnectorVersion, generateInitialDependencies, getDefaultProjectPath, getMIVersionFromPom, buildBallerinaModule, updatePomForClassMediator, isConsolidatedProject, getProjectJavaVersion } from "../../util/onboardingUtils";
+import { compareVersions, filterConnectorVersion, generateInitialDependencies, getDefaultProjectPath, getMIVersionFromPom, buildBallerinaModule, updatePomForClassMediator, isConsolidatedProject, isRemoteDeploymentEnabledInConsolidatedProject, getProjectJavaVersion } from "../../util/onboardingUtils";
 import { Range as STRange } from '@wso2/syntax-tree/lib/src';
 import { checkForWso2IntegratorExt } from "../../extension";
 import { getAPIMetadata } from "../../util/template-engine/mustach-templates/API";
@@ -392,7 +392,7 @@ import { getKubernetesConfiguration, getKubernetesDataConfiguration } from "../.
 import { parseStringPromise, Builder } from "xml2js";
 import { MILanguageClient } from "../../lang-client/activator";
 import { addWSO2AIConfigProperties } from "../../ai-features/configUtils";
-import { reorderModulesByBuildOrder, updatePomModules } from "../../debugger/pomResolver";
+import { getModules, parseConsolidatedProjectPom, reorderModulesByBuildOrder, updatePomModules } from "../../debugger/pomResolver";
 import {
     buildInputSchemasForAPITools,
     cleanPathForToolName,
@@ -3350,8 +3350,18 @@ ${endpointAttributes}
         const parentUri = vscode.Uri.file(parentFolderPath);
         const entries = await vscode.workspace.fs.readDirectory(parentUri);
 
+        let declaredModules: string[];
+        try {
+            const pom = parseConsolidatedProjectPom(path.join(parentFolderPath, 'pom.xml'));
+            declaredModules = getModules(pom.project);
+        } catch (err) {
+            console.error('Could not read modules from consolidated project pom.xml', err);
+            window.showErrorMessage('Could not read modules from the consolidated project pom.xml.');
+            return;
+        }
+
         const folderEntries = entries.filter(
-            ([_, type]) => type === vscode.FileType.Directory
+            ([name, type]) => type === vscode.FileType.Directory && declaredModules.includes(name)
         );
 
         const foldersToAdd = (
@@ -5333,10 +5343,38 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const workspaceFolderUri = vscode.Uri.file(path.resolve(this.projectUri));
             if (workspaceFolderUri) {
-                const config = vscode.workspace.getConfiguration('MI', workspaceFolderUri);
-                const isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED");
+                const consolidatedRoot = path.dirname(this.projectUri);
+                let isRemoteDeploymentEnabled: boolean;
+                if (isConsolidatedProject(consolidatedRoot)) {
+                    isRemoteDeploymentEnabled = isRemoteDeploymentEnabledInConsolidatedProject(consolidatedRoot);
+                } else {
+                    const config = vscode.workspace.getConfiguration('MI', workspaceFolderUri);
+                    isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED") ?? false;
+                }
                 if (isRemoteDeploymentEnabled) {
-                    await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
+                    if (isConsolidatedProject(consolidatedRoot)) {
+                        const subprojects = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
+                        const failures: { subprojectPath: string; err: unknown }[] = [];
+                        for (const subprojectPath of subprojects) {
+                            try {
+                                await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, subprojectPath, false);
+                            } catch (err) {
+                                console.error(`Remote deploy failed for ${subprojectPath}`, err);
+                                failures.push({ subprojectPath, err });
+                            }
+                        }
+                        if (failures.length > 0) {
+                            vscode.window.showErrorMessage(
+                                `Remote deployment failed for: ${failures.map(f => path.basename(f.subprojectPath)).join(', ')}`
+                            );
+                        }
+                    } else {
+                        await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
+                    }
+                } else if (isConsolidatedProject(consolidatedRoot)) {
+                    vscode.window.showInformationMessage(
+                        'Remote deployment is not configured. Use the Workspace Overview page to set up remote deployment.'
+                    );
                 } else {
                     const configure = await vscode.window.showWarningMessage(
                         'Remote deployment is not enabled. Do you want to enable and configure it now?',
@@ -5372,8 +5410,21 @@ ${keyValuesXML}`;
 
             let integrationType: string | undefined;
             if (this.projectUri) {
-                const rootPath = (await this.getProjectRoot({ path: this.projectUri })).path;
-                const resp = await langClient.getProjectIntegrationType(rootPath);
+                const consolidatedRoot = path.dirname(this.projectUri);
+                const consolidated = isConsolidatedProject(consolidatedRoot);
+
+                // Collect integration types across all relevant project paths, deduplicated
+                const projectPaths = consolidated
+                    ? (vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [])
+                    : [this.projectUri];
+
+                const allTypes = new Set<string>();
+                for (const projectPath of projectPaths) {
+                    const rootPath = (await this.getProjectRoot({ path: projectPath })).path;
+                    const types = await langClient.getProjectIntegrationType(rootPath);
+                    types.forEach((t: string) => allTypes.add(t));
+                }
+                const resp = [...allTypes];
 
                 function mapTypeToScope(type: string): string | undefined {
                     switch (type) {
@@ -5393,35 +5444,33 @@ ${keyValuesXML}`;
                 }
 
                 if (resp.length === 1) {
-                    const type = resp[0]
-                    integrationType = mapTypeToScope(type);
+                    integrationType = mapTypeToScope(resp[0]);
                 } else if (resp.length === 0) {
                     window.showErrorMessage("You don't have any artifacts within this project. Please add an artifact and try again.");
                 } else {
-                    // Show a quick pick to select deployment option
                     const selectedScope = await window.showQuickPick(resp, {
                         placeHolder: 'You have different types of artifacts within this project. Select the artifact type to be deployed'
                     });
-
                     if (selectedScope) {
                         integrationType = mapTypeToScope(selectedScope);
                     }
                 }
 
                 if (!integrationType) {
-                    return { success: false };
+                    resolve({ success: false });
+                    return;
                 }
 
-                const paramsWithType: ICreateNewIntegrationCmdParams = { 
-                    buildPackLang: "microintegrator", 
-                    workspaceDir: this.projectUri, 
-                    integrations: [{ 
-                        fsPath: this.projectUri, 
-                        name: path.basename(this.projectUri), 
+                const workspaceDir = consolidated ? consolidatedRoot : this.projectUri;
+                const paramsWithType: ICreateNewIntegrationCmdParams = {
+                    buildPackLang: "microintegrator",
+                    workspaceDir,
+                    integrations: [{
+                        fsPath: workspaceDir,
+                        name: path.basename(workspaceDir),
                         supportedIntegrationTypes: [integrationType]
                     }]
-                }
-                
+                };
                 commands.executeCommand(WICommandIds.CreateNewComponent, paramsWithType);
                 resolve({ success: true });
 
@@ -5464,7 +5513,7 @@ ${keyValuesXML}`;
     }
 
     async exportProject(params: ExportProjectRequest): Promise<void> {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             const exportTask = async () => {
                 const carFile = await vscode.workspace.findFiles(
                     new vscode.RelativePattern(params.projectPath, 'target/*.car'),
@@ -5543,7 +5592,110 @@ ${keyValuesXML}`;
                     }
                 }
             }
-            await commands.executeCommand(COMMANDS.BUILD_PROJECT, this.projectUri, false, exportTask);
+            commands.executeCommand(COMMANDS.BUILD_PROJECT, this.projectUri, false, exportTask).then(undefined, reject);
+        });
+    }
+
+    async exportConsolidatedProject(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const exportTask = async () => {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (!workspaceFolders || workspaceFolders.length === 0) {
+                    const errorMessage = 'Error: No workspace folder is opened.';
+                    window.showErrorMessage(errorMessage);
+                    log(errorMessage);
+                    return reject(errorMessage);
+                }
+
+                const carFiles: vscode.Uri[] = [];
+                for (const folder of workspaceFolders) {
+                    const found = await vscode.workspace.findFiles(
+                        new vscode.RelativePattern(folder.uri.fsPath, 'target/*.car')
+                    );
+                    carFiles.push(...found);
+                }
+
+                if (carFiles.length === 0) {
+                    const errorMessage =
+                        'Error: No .car files found in the target directories. Please build the project before exporting.';
+                    window.showErrorMessage(errorMessage);
+                    log(errorMessage);
+                    return reject(errorMessage);
+                }
+
+                const consolidatedRoot = path.dirname(this.projectUri);
+                const lastExportedPath: string | undefined = extension.context.globalState.get(LAST_EXPORTED_CAR_PATH);
+                const quickPicks: vscode.QuickPickItem[] = [
+                    {
+                        label: "Select Destination",
+                        description: "Select a destination folder to export .car files",
+                    },
+                ];
+                if (lastExportedPath) {
+                    quickPicks.push({
+                        label: "Last Exported Path: " + lastExportedPath,
+                        description: "Use the last exported path to export .car files",
+                    });
+                }
+                const selection = await vscode.window.showQuickPick(
+                    quickPicks,
+                    {
+                        placeHolder: "Export Options",
+                    }
+                );
+
+                if (selection) {
+                    let destination: string | undefined;
+                    if (selection.label == "Select Destination") {
+                        // Get the destination folder
+                        const selectedLocation = await this.browseFile({
+                            canSelectFiles: false,
+                            canSelectFolders: true,
+                            canSelectMany: false,
+                            defaultUri: lastExportedPath ?? consolidatedRoot,
+                            title: "Select a folder to export the project",
+                            openLabel: "Select Folder"
+                        });
+                        destination = selectedLocation.filePath;
+                        await extension.context.globalState.update(LAST_EXPORTED_CAR_PATH, destination);
+                    } else {
+                        destination = lastExportedPath;
+                    }
+                    if (destination) {
+                        const relativeToProject = path.relative(consolidatedRoot, destination);
+                        const isInsideProject = relativeToProject === '' ||
+                            (!relativeToProject.startsWith('..') && !path.isAbsolute(relativeToProject));
+                        if (isInsideProject) {
+                            const errorMessage = 'Error: The export destination cannot be inside the project. Please select a folder outside the project.';
+                            window.showErrorMessage(errorMessage);
+                            log(errorMessage);
+                            return reject(errorMessage);
+                        }
+                        try {
+                            carFiles.forEach(carFile => {
+                                const destinationPath = path.join(destination, path.basename(carFile.fsPath));
+                                if (fs.existsSync(destinationPath)) {
+                                    fs.rmSync(destinationPath, { force: true });
+                                }
+                                fs.copyFileSync(carFile.fsPath, destinationPath);
+                            });
+                            window.showInformationMessage(`Exported ${carFiles.length} project(s) successfully!`);
+                            log(`Exported ${carFiles.length} project(s) to: ${destination}`);
+                            resolve();
+                        } catch (err) {
+                            const errorMessage = `Error exporting projects: ${err instanceof Error ? err.message : String(err)}`;
+                            window.showErrorMessage("Failed to export projects. Please try again.");
+                            log(errorMessage);
+                            reject(errorMessage);
+                        }
+                    } else {
+                        resolve();
+                    }
+                } else {
+                    resolve();
+                }
+            }
+            commands.executeCommand(COMMANDS.BUILD_PROJECT, this.projectUri, false, exportTask, true).then(undefined, reject);
         });
     }
 

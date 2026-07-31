@@ -166,6 +166,7 @@ import {
     editAPI,
     editOpenAPISpec,
     executeCommand,
+    exportConsolidatedProject,
     exportProject,
     fetchDSSTables,
     generateDSSQueries,
@@ -506,6 +507,7 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onNotification(remoteDeploy, () => rpcManger.remoteDeploy());
     messenger.onRequest(getDevantMetadata, () => rpcManger.getDevantMetadata());
     messenger.onNotification(exportProject, (args: ExportProjectRequest) => rpcManger.exportProject(args));
+    messenger.onNotification(exportConsolidatedProject, () => rpcManger.exportConsolidatedProject());
     messenger.onRequest(checkOldProject, () => rpcManger.checkOldProject());
     messenger.onNotification(refreshAccessToken, () => rpcManger.refreshAccessToken());
     messenger.onRequest(getOpenAPISpec, (args: SwaggerTypeRequest) => rpcManger.getOpenAPISpec(args));

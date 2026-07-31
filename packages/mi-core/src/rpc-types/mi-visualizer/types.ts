@@ -207,6 +207,19 @@ export interface UpdateConfigValuesRequest {
 export interface UpdatePropertiesRequest {
     properties: PropertyDetails[];
 }
+
+export interface ConsolidatedProjectDetails {
+    groupId: string;
+    artifactId: string;
+    version: string;
+    runtimeVersion: string;
+    cappBuildPluginVersion: string;
+    dockerBaseImage: string;
+}
+
+export interface UpdateConsolidatedProjectDetailsRequest {
+    details: ConsolidatedProjectDetails;
+}
 export interface UpdateDependenciesRequest {
     dependencies: DependencyDetails[];
 }
@@ -435,6 +448,17 @@ export interface ProjectOverviewResponse {
     projectDetails: ProjectDetailsResponse;
 }
 
+export interface WorkspaceProjectSummary {
+    name: string;
+    artifactCounts: {
+        apis: number;
+        automations: number;
+        eventIntegrations: number;
+        other: number;
+    };
+    runtimeVersion?: string;
+}
+
 export interface Connection {
     name: string;
 }
@@ -498,6 +522,17 @@ export interface MavenDeployPluginDetails {
 export interface ProjectConfig {
     configName: string;
     value: boolean;
+}
+
+export interface ConsolidatedRemoteDeployConfig {
+    serverUrl: string;
+    username: string;
+    password: string;
+    truststorePath?: string;
+    truststorePassword?: string;
+    truststoreType?: string;
+    serverType?: string;
+    isEnabled: boolean;
 }
 
 export interface UpdateAiDependenciesRequest {

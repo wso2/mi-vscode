@@ -438,6 +438,7 @@ export const deployProject: RequestType<DeployProjectRequest, DeployProjectRespo
 export const remoteDeploy: NotificationType<void> = { method: `${_preFix}/remoteDeploy` };
 export const getDevantMetadata: RequestType<void, DevantMetadata> = { method: `${_preFix}/getDevantMetadata` };
 export const exportProject: NotificationType<ExportProjectRequest> = { method: `${_preFix}/exportProject` };
+export const exportConsolidatedProject: NotificationType<void> = { method: `${_preFix}/exportConsolidatedProject` };
 export const checkOldProject: RequestType<void, boolean> = { method: `${_preFix}/checkOldProject` };
 export const refreshAccessToken: NotificationType<void> = { method: `${_preFix}/refreshAccessToken` };
 export const getOpenAPISpec: RequestType<SwaggerTypeRequest, SwaggerFromAPIResponse> = { method: `${_preFix}/getOpenAPISpec` };

@@ -82,6 +82,7 @@ export const COMMANDS = {
     REVEAL_ITEM_COMMAND: 'MI.project-explorer.revealItem',
     OPEN_SERVICE_DESIGNER: 'MI.project-explorer.open-service-designer',
     OPEN_PROJECT_OVERVIEW: 'MI.project-explorer.open-project-overview',
+    OPEN_WORKSPACE_OVERVIEW: 'MI.project-explorer.open-workspace-overview',
     ADD_REGISTERY_RESOURCE_COMMAND: 'MI.project-explorer.add-registry-resource',
     EDIT_REGISTERY_RESOURCE_COMMAND: 'MI.project-explorer.edit-reg-resource',
     EDIT_REGISTRY_RESOURCE_METADATA_COMMAND: 'MI.registry-explorer.edit-reg-metadata',

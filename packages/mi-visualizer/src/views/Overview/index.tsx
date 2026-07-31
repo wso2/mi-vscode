@@ -121,6 +121,7 @@ export function Overview(props: OverviewProps) {
     const [isConsolidatedProject, setIsConsolidatedProject] = React.useState<boolean>(false);
     const [remoteDeployConfigs, setRemoteDeployConfigs] = React.useState<DeployConfigParam[] | null>(null);
     const [isWindows, setIsWindows] = React.useState<boolean>(false);
+    const [consolidatedRoot, setConsolidatedRoot] = React.useState<string>("");
     const { data: devantMetadata } = useQuery({
         queryKey: ["devant-metadata", workspaces],
         queryFn: () => rpcClient.getMiDiagramRpcClient().getDevantMetadata(),
@@ -140,7 +141,9 @@ export function Overview(props: OverviewProps) {
                 setActiveWorkspace(response.workspaces.find((workspace) => workspace.fsPath === projectUri));
                 const consolidated = await rpcClient.getMiDiagramRpcClient().canCreateConsolidatedProject();
                 if (consolidated?.isConsolidatedProject) {
-                    setIsConsolidatedProject(consolidated.isConsolidatedProject);
+                    setIsConsolidatedProject(true);
+                    const sep = projectUri.includes('\\') ? '\\' : '/';
+                    setConsolidatedRoot(projectUri.substring(0, projectUri.lastIndexOf(sep)));
                 }
 
                 rpcClient.getMiVisualizerRpcClient().getProjectOverview({}).then((response) => {
@@ -251,7 +254,7 @@ export function Overview(props: OverviewProps) {
                 PlatformExtCommandIds.OpenInConsole,
                 {
                     extName: "Devant",
-                    componentFsPath: activeWorkspace.fsPath,
+                    componentFsPath: isConsolidatedProject ? consolidatedRoot : activeWorkspace.fsPath,
                     newComponentParams: { buildPackLang: "microintegrator" }
                 } as IOpenInConsoleCmdParams]
         })
@@ -305,14 +308,16 @@ export function Overview(props: OverviewProps) {
                         <Codicon name="add" sx={{ marginRight: "8px" }} />
                         Add Artifact
                     </Button>
-                    <Button
-                        appearance="icon"
-                        onClick={handleExport}
-                        tooltip="Export"
-                    >
-                        <Codicon name="export" sx={{ marginRight: "4px" }} />
-                        Export
-                    </Button>
+                    {!isConsolidatedProject &&
+                        <Button
+                            appearance="icon"
+                            onClick={handleExport}
+                            tooltip="Export"
+                        >
+                            <Codicon name="export" sx={{ marginRight: "4px" }} />
+                            Export
+                        </Button>
+                    }
                 </ViewHeader>
             </div>
             <Body>
@@ -392,18 +397,20 @@ export function Overview(props: OverviewProps) {
 
                     </Rows>
                     <div>
-                        <ProjectInfoColumn>
-                            <DeploymentOptions
-                                handleDockerBuild={handleDockerBuild}
-                                handleConfigureKubernetes={handleConfigureKubernetes}
-                                handleCAPPBuild={handleCappBuild}
-                                handleConsolidatedBuild={handleConsolidatedBuild}
-                                handleRemoteDeploy={handleRemoteDeploy}
-                                handleDeploy={handleDeploy}
-                                goToDevant={goToDevant}
-                                devantMetadata={devantMetadata}
-                                isConsolidatedProject={isConsolidatedProject} />
-                        </ProjectInfoColumn>
+                        {!isConsolidatedProject && (
+                            <ProjectInfoColumn>
+                                <DeploymentOptions
+                                    handleDockerBuild={handleDockerBuild}
+                                    handleConfigureKubernetes={handleConfigureKubernetes}
+                                    handleCAPPBuild={handleCappBuild}
+                                    handleConsolidatedBuild={handleConsolidatedBuild}
+                                    handleRemoteDeploy={handleRemoteDeploy}
+                                    handleDeploy={handleDeploy}
+                                    goToDevant={goToDevant}
+                                    devantMetadata={devantMetadata}
+                                    isConsolidatedProject={isConsolidatedProject} />
+                            </ProjectInfoColumn>
+                        )}
                         <ProjectInfoColumn style={{ marginTop: '10px' }}>
                             <Typography variant="h3" sx={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', opacity: 0.8 }}>
                                 Project Summary

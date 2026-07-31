@@ -17,3 +17,7 @@ CVE-2026-26996
 # file-type v19+ is ESM-only which is incompatible with the CommonJS VS Code extension build.
 # Upgrading requires significant refactoring. Risk is low as this package handles binary file detection.
 CVE-2026-31808
+
+# a major version bump is required from 1.1.16 to 5.0.8 in the submodule
+# to be fixed before releasing the extension
+CVE-2026-14257

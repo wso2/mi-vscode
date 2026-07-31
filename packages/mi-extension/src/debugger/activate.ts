@@ -32,7 +32,7 @@ import { MACHINE_VIEW } from '@wso2/mi-core';
 import { askForProject } from '../util/workspace';
 import { webviews } from '../visualizer/webview';
 import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
-import { createAggregatePomInRoot, dockerfileContent } from '../util/templates';
+import { createAggregatePomInRoot, dockerBuildDockerfileContent } from '../util/templates';
 import { copyDockerResources, copyMavenWrapper } from '../util';
 import { getModules, parseConsolidatedProjectPom, updateCopyModulesInAggregatePom, updatePomModules } from './pomResolver';
 
@@ -102,7 +102,7 @@ export function activateDebugger(context: vscode.ExtensionContext) {
                 fs.mkdirSync(path.join(rootProject, 'docker-build', 'deployment', 'docker', 'resources'), { recursive: true });
                 fs.mkdirSync(path.join(rootProject, 'docker-build', 'deployment', 'libs'), { recursive: true });
                 copyDockerResources(extension.context.asAbsolutePath(path.join('resources', 'docker-resources')), path.join(rootProject, 'docker-build'));
-                fs.writeFileSync(path.join(rootProject, 'docker-build', 'deployment', 'docker', 'Dockerfile'), dockerfileContent());
+                fs.writeFileSync(path.join(rootProject, 'docker-build', 'deployment', 'docker', 'Dockerfile'), dockerBuildDockerfileContent(getModules(pom.project)));
                 await copyMavenWrapper(
                     extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
                     rootProject
@@ -110,6 +110,8 @@ export function activateDebugger(context: vscode.ExtensionContext) {
                 await createAggregatePomInRoot(rootProject, getModules(pom.project));
                 fs.writeFileSync(path.join(rootProject, 'docker-build', '.docker-build'), "");
                 updatePomModules(path.join(rootProject, "pom.xml"), "docker-build", "add");
+                // Refresh explicitly as docker-build isn't a real workspace folder
+                await vscode.commands.executeCommand(COMMANDS.REFRESH_COMMAND);
             } else {
                 updateCopyModulesInAggregatePom(path.join(rootProject, "docker-build", "pom.xml"), getModules(pom.project));
             }

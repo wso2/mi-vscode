@@ -55,7 +55,7 @@ export function NavButtonGroup(props: NavButtonGroupProps) {
     return (
         <>
             <>
-                {machineView?.view !== MACHINE_VIEW.Overview && machineView?.view !== MACHINE_VIEW.UnsupportedProject && (
+                {machineView?.view !== MACHINE_VIEW.Overview && machineView?.view !== MACHINE_VIEW.UnsupportedProject && machineView?.view !== MACHINE_VIEW.WorkspaceOverview && (
                     <>
                         <VSCodeButton appearance="icon" title="Go Back" onClick={handleBackButtonClick}>
                             <Codicon name="arrow-left" />

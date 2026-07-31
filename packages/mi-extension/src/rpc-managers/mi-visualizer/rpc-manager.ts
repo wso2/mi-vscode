@@ -39,6 +39,7 @@ import {
     POPUP_EVENT_TYPE,
     PopupVisualizerLocation,
     ProjectOverviewResponse,
+    WorkspaceProjectSummary,
     ProjectStructureRequest,
     ProjectStructureResponse,
     ReadmeContentResponse,
@@ -74,7 +75,10 @@ import {
     ExecuteRemoteDeployParams,
     DeployConfigParam,
     McpToolSuggestionRequest,
-    McpToolSuggestionResponse
+    McpToolSuggestionResponse,
+    ConsolidatedProjectDetails,
+    UpdateConsolidatedProjectDetailsRequest,
+    ConsolidatedRemoteDeployConfig
 } from "@wso2/mi-core";
 import * as https from "https";
 import Mustache from "mustache";
@@ -98,7 +102,13 @@ const fs = require('fs');
 import { TextEdit } from "vscode-languageclient";
 import { downloadJavaFromMI, downloadMI, getProjectSetupDetails, getSupportedMIVersionsHigherThan, setPathsInWorkSpace, updateRuntimeVersionsInPom, getMIVersionFromPom, isConsolidatedProject } from '../../util/onboardingUtils';
 import { extractCAppDependenciesAsProjects, loadCAppResources } from "../../visualizer/activate";
-import { findMultiModuleProjectsInWorkspaceDir } from "../../util/migrationUtils";
+import { findMultiModuleProjectsInWorkspaceDir, getProjectDetails as getPomProjectDetails } from "../../util/migrationUtils";
+import {
+    readConsolidatedProjectDetails,
+    writeConsolidatedProjectDetails,
+    readConsolidatedRemoteDeployConfig,
+    writeConsolidatedRemoteDeployConfig,
+} from "../../util/consolidatedPomUtils";
 import { MILanguageClient } from "../../lang-client/activator";
 import { reorderModulesByBuildOrder } from "../../debugger/pomResolver";
 import { buildDeployExtraArgs, executeRemoteDeployTask } from "../../debugger/debugHelper";
@@ -193,7 +203,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
         });
     }
 
-    async getProjectStructure(params: ProjectStructureRequest): Promise<ProjectStructureResponse> {
+    async getProjectStructure(_params: ProjectStructureRequest): Promise<ProjectStructureResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
 
@@ -436,7 +446,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
             params.dependencies.forEach(dep => {
                 const dependenciesToCheck = dep.type === 'zip' ? existingDependencies.connectorDependencies : existingDependencies.otherDependencies;
                 let alreadyAvailable = false;
-                dependenciesToCheck.forEach(existingDep => {
+                dependenciesToCheck.forEach((existingDep: any) => {
                     if (existingDep.groupId === dep.groupId &&
                         existingDep.artifact === dep.artifact) {
                         if (existingDep.version !== dep.version) {
@@ -548,7 +558,9 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
     }
 
     openView(params: OpenViewRequest): void {
-        (params.location as VisualizerLocation).projectUri = this.projectUri;
+        if (!(params.location as VisualizerLocation).projectUri) {
+            (params.location as VisualizerLocation).projectUri = this.projectUri;
+        }
         if (params.isPopup) {
             const view = params.location.view;
 
@@ -739,7 +751,6 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
                 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
                 const token = Buffer.from(`${username}:${password}`, 'utf8').toString('base64');
-                const authHeader = `Basic ${token}`;
                 // Create an HTTPS agent that ignores SSL certificate verification
                 // MI has ignored the verification for management api, check on this
                 const agent = new https.Agent({ rejectUnauthorized: false });
@@ -902,6 +913,49 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
         });
     }
 
+    async getWorkspaceProjectSummary(params: ProjectStructureRequest): Promise<WorkspaceProjectSummary> {
+        const projectPath = params.documentUri ?? this.projectUri;
+        const artifactsBase = path.join(projectPath, 'src', 'main', 'wso2mi', 'artifacts');
+
+        const countArtifactFiles = async (folder: string): Promise<number> => {
+            try {
+                const entries = await fs.promises.readdir(path.join(artifactsBase, folder));
+                return entries.filter((f: string) => f.endsWith('.xml') || f.endsWith('.dbs')).length;
+            } catch {
+                return 0;
+            }
+        };
+
+        const primaryFolders = new Set(['apis', 'tasks', 'inbound-endpoints']);
+        let otherSubDirs: string[] = [];
+        try {
+            const dirEntries = await fs.promises.readdir(artifactsBase, { withFileTypes: true });
+            otherSubDirs = dirEntries
+                .filter((d: any) => d.isDirectory() && !primaryFolders.has(d.name))
+                .map((d: any) => d.name);
+        } catch { }
+
+        const [apis, automations, eventIntegrations, ...otherCounts] = await Promise.all([
+            countArtifactFiles('apis'),
+            countArtifactFiles('tasks'),
+            countArtifactFiles('inbound-endpoints'),
+            ...otherSubDirs.map(dir => countArtifactFiles(dir)),
+        ]);
+
+        const { runtimeVersion } = getPomProjectDetails(projectPath);
+
+        return {
+            name: path.basename(projectPath),
+            artifactCounts: {
+                apis,
+                automations,
+                eventIntegrations,
+                other: otherCounts.reduce((a, b) => a + b, 0),
+            },
+            runtimeVersion,
+        };
+    }
+
     openReadme(): void {
         const readmePath = path.join(this.projectUri, "README.md");
 
@@ -1058,6 +1112,99 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
 
             resolve(false);
         });
+    }
+
+    async getConsolidatedProjectDetails(): Promise<ConsolidatedProjectDetails | null> {
+        const consolidatedRoot = path.dirname(this.projectUri);
+        if (!isConsolidatedProject(consolidatedRoot)) return null;
+        return readConsolidatedProjectDetails(consolidatedRoot);
+    }
+
+    async updateConsolidatedProjectDetails(params: UpdateConsolidatedProjectDetailsRequest): Promise<boolean> {
+        const consolidatedRoot = path.dirname(this.projectUri);
+        if (!isConsolidatedProject(consolidatedRoot)) return false;
+        const subprojectPaths = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+        return writeConsolidatedProjectDetails(consolidatedRoot, params.details, subprojectPaths);
+    }
+
+    async getConsolidatedRemoteDeployConfig(): Promise<ConsolidatedRemoteDeployConfig | null> {
+        const consolidatedRoot = path.dirname(this.projectUri);
+        if (!isConsolidatedProject(consolidatedRoot)) return null;
+        return readConsolidatedRemoteDeployConfig(consolidatedRoot);
+    }
+
+    async saveConsolidatedRemoteDeployConfig(config: ConsolidatedRemoteDeployConfig): Promise<boolean> {
+        const consolidatedRoot = path.dirname(this.projectUri);
+        if (!isConsolidatedProject(consolidatedRoot)) return false;
+        const subprojectPaths = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+        return writeConsolidatedRemoteDeployConfig(consolidatedRoot, config, subprojectPaths);
+    }
+
+    // Maps DeployConfigParam keys to the corresponding ConsolidatedRemoteDeployConfig field, 
+    // so the form can be reused as-is.
+    private readonly consolidatedDeployFieldMap: [string, keyof ConsolidatedRemoteDeployConfig][] = [
+        ['serverUrl', 'serverUrl'],
+        ['userName', 'username'],
+        ['password', 'password'],
+        ['trustStorePath', 'truststorePath'],
+        ['trustStorePassword', 'truststorePassword'],
+        ['trustStoreType', 'truststoreType'],
+        ['serverType', 'serverType'],
+    ];
+
+    async getConsolidatedRemoteDeployConfigs(): Promise<DeployConfigParam[]> {
+        const consolidatedRoot = path.dirname(this.projectUri);
+        if (!isConsolidatedProject(consolidatedRoot)) return [];
+        const config = await readConsolidatedRemoteDeployConfig(consolidatedRoot);
+        if (!config) return [];
+
+        const configs: DeployConfigParam[] = [];
+        for (const [paramKey, configKey] of this.consolidatedDeployFieldMap) {
+            const value = config[configKey] as string | undefined;
+            if (!value) continue;
+            const paramMatch = value.match(/^\$\{([^}]+)\}$/);
+            if (paramMatch) {
+                configs.push({ key: paramKey, value: "", isParameterized: true, paramName: paramMatch[1] });
+            } else {
+                configs.push({ key: paramKey, value, isParameterized: false });
+            }
+        }
+        return configs;
+    }
+
+    async executeConsolidatedRemoteDeployWithParams(params: ExecuteRemoteDeployParams): Promise<void> {
+        const consolidatedRoot = path.dirname(this.projectUri);
+        if (!isConsolidatedProject(consolidatedRoot)) return;
+        const config = await readConsolidatedRemoteDeployConfig(consolidatedRoot);
+        if (!config) return;
+
+        const updatedConfig: ConsolidatedRemoteDeployConfig = { ...config };
+        const paramValues: Record<string, string> = {};
+        let hasPermanentUpdates = false;
+
+        for (const [paramKey, configKey] of this.consolidatedDeployFieldMap) {
+            const userVal = params.values[paramKey];
+            if (userVal === undefined) continue;
+
+            const currentValue = config[configKey] as string | undefined;
+            const paramMatch = currentValue?.match(/^\$\{([^}]+)\}$/);
+            if (paramMatch) {
+                if (userVal) paramValues[paramMatch[1]] = userVal;
+            } else if (userVal !== (currentValue ?? "")) {
+                (updatedConfig as any)[configKey] = userVal;
+                hasPermanentUpdates = true;
+            }
+        }
+
+        const subprojectPaths = (vscode.workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+        if (hasPermanentUpdates) {
+            await writeConsolidatedRemoteDeployConfig(consolidatedRoot, updatedConfig, subprojectPaths);
+        }
+
+        const extraArgs = buildDeployExtraArgs(paramValues);
+        for (const subprojectPath of subprojectPaths) {
+            await executeRemoteDeployTask(subprojectPath, undefined, extraArgs);
+        }
     }
 
     replaceHostname(originalUrl: string, targetHost: string) {

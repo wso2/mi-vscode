@@ -32,7 +32,10 @@ export class ProjectExplorer {
         }
     }
 
-    private treeItem(label: string): string {
+    private treeItem(label: string, matchPrefix: boolean = false): string {
+        if (matchPrefix) {
+            return `div[role="treeitem"][aria-label^="${label} ("]`;
+        }
         return `div[role="treeitem"][aria-label="${label}"], div[role="treeitem"][aria-label^="${label}, "]`;
     }
 
@@ -40,11 +43,11 @@ export class ProjectExplorer {
         await this.explorer.waitFor();
     }
 
-    public async findItem(path: string[], click: boolean = false): Promise<Locator | undefined> {
+    public async findItem(path: string[], click: boolean = false, matchPrefix: boolean = false): Promise<Locator | undefined> {
         let currentItem: Locator | undefined = undefined;
         for (let i = 0; i < path.length; i++) {
 
-            currentItem = this.explorer.locator(this.treeItem(path[i]));
+            currentItem = this.explorer.locator(this.treeItem(path[i], matchPrefix));
             await currentItem.waitFor();
 
             if (i < path.length - 1) {

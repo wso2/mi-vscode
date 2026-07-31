@@ -85,9 +85,7 @@ interface UnitTestData {
 }
 
 export class UnitTest {
-    private projectName: string = 'testProject';
-
-    constructor(private _page: Page) {
+    constructor(private _page: Page, private projectName: string = 'testProject') {
     }
 
     public async init() {
@@ -105,10 +103,15 @@ export class UnitTest {
     }
 
     public async openUnitTestFormByMainBtn() {
-        console.log('Opening Unit Test Form by "Add MI Unit Test" button');
-        const addUnitTestBtn = this._page.getByRole('button', { name: 'Add MI Unit Test', exact: true });
+        console.log('Opening Unit Test Form by project node\'s "Add MI Unit Test" inline action');
+        // Match label prefix only; the run-state suffix (e.g. "Not yet run") changes after a test runs.
+        const testExplorerRoot = this._page.locator('div[role="tree"][aria-label="Test Explorer"]');
+        await testExplorerRoot.waitFor();
+        const projectNode = testExplorerRoot.locator(`div[role="treeitem"][aria-label^="${this.projectName} ("]`);
+        await projectNode.waitFor();
+        await projectNode.hover();
+        const addUnitTestBtn = projectNode.getByLabel('Add MI Unit Test');
         await addUnitTestBtn.waitFor({ state: 'visible', timeout: 60000 });
-        await addUnitTestBtn.scrollIntoViewIfNeeded();
         await addUnitTestBtn.click();
     }
 
@@ -456,12 +459,16 @@ export class UnitTest {
         await form.submit('Create');
     }
 
+    private unitTestTreePath(name: string): string[] {
+        return [this.projectName, name];
+    }
+
     private async openAddTestCaseViewOfUnitTest(name: string) {
         console.log('Opening Add Test Case view of Unit Test:', name);
         const testExplorer = new ProjectExplorer(this._page, 'Test Explorer');
         await testExplorer.init();
         await this._page.waitForTimeout(1000);
-        const treeItem = await testExplorer.findItem([`${this.projectName} (Not yet run)`, `${name} (Not yet run)`]) as Locator;
+        const treeItem = await testExplorer.findItem(this.unitTestTreePath(name), false, true) as Locator;
         if (!treeItem) {
             throw new Error(`Unit test "${name}" not found in Test Explorer`);
         }
@@ -475,7 +482,7 @@ export class UnitTest {
         console.log('Opening Edit view of Unit Test:', name);
         const testExplorer = new ProjectExplorer(this._page, 'Test Explorer');
         await testExplorer.init();
-        const treeItem = await testExplorer.findItem([`${this.projectName} (Not yet run)`, `${name} (Not yet run)`]) as Locator;
+        const treeItem = await testExplorer.findItem(this.unitTestTreePath(name), false, true) as Locator;
         if (!treeItem) {
             throw new Error(`Unit test "${name}" not found in Test Explorer`);
         }
