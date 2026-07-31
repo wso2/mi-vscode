@@ -17,3 +17,12 @@ CVE-2026-26996
 # file-type v19+ is ESM-only which is incompatible with the CommonJS VS Code extension build.
 # Upgrading requires significant refactoring. Risk is low as this package handles binary file detection.
 CVE-2026-31808
+
+# brace-expansion DoS. The advisory declares a single "< 5.0.8" range, so it still matches the 1.x/2.x
+# maintenance releases even though the fix was backported to them. We resolve to 1.1.18 / 2.1.4 / 5.0.9
+# (see common/config/rush/.pnpmfile.cjs); all three carry the `maxLength` bound and survive the
+# advisory's PoC under a 512 MB heap. Moving everything to 5.x is not possible: from 3.0.0 the CommonJS
+# build exports { expand } rather than a callable, which breaks minimatch 3.x/5.x, and no callable
+# minimatch release uses brace-expansion 5.x. minimatch 3.x cannot be dropped either -- eslint-plugin-react,
+# @eslint/eslintrc, tslint and copyfiles all still require it at their latest published versions.
+CVE-2026-14257

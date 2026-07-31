@@ -92,6 +92,11 @@ module.exports = {
         if (deps['bn.js']) {
           deps['bn.js'] = deps['bn.js'].startsWith('^5') ? '5.2.3' : '4.12.3';
         }
+        if (deps['postcss']) { // security fix: GHSA-r28c-9q8g-f849 (source map path traversal). Bump the 8.x line only; 7.x consumers would break on a major upgrade.
+          if (/^[\s\^~><=]*8\b/.test(deps['postcss'])) {
+            deps['postcss'] = '8.5.25';
+          }
+        }
         if (deps['minimatch']) {
           const currentVersion = deps['minimatch'];
           let newVersion;
@@ -117,17 +122,17 @@ module.exports = {
           }
           deps['minimatch'] = newVersion;
         }
-        if (deps['brace-expansion']) {
+        if (deps['brace-expansion']) { // security fix: CVE-2026-14257 / CVE-2026-13149. Pin per major: 5.x is ESM-first and its CJS build exports { expand } instead of a callable, which breaks minimatch 3.x/5.x.
           const currentVersion = deps['brace-expansion'];
           let newVersion;
           if (currentVersion.startsWith('^1') || currentVersion.startsWith('1')) {
-            newVersion = '1.1.16';
+            newVersion = '1.1.18';
           } else if (currentVersion.startsWith('^2') || currentVersion.startsWith('2')) {
-            newVersion = '2.1.2';
+            newVersion = '2.1.4';
           } else if (currentVersion.startsWith('^3') || currentVersion.startsWith('3')) {
-            newVersion = '3.0.2';
+            newVersion = '3.0.6';
           } else if (currentVersion.startsWith('^5') || currentVersion.startsWith('5')) {
-            newVersion = '5.0.7';
+            newVersion = '5.0.9';
           } else {
             context.log(`Unexpected brace-expansion version: ${currentVersion}`);
             newVersion = currentVersion;
