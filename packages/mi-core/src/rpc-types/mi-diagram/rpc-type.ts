@@ -306,6 +306,8 @@ import {
     ResetConnectorDependencyOverridesRequest,
     UpdateConnectorFlagsRequest,
     UpdateGlobalConnectorFlagsRequest,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
 } from "./types";
 import { RequestType, NotificationType } from "vscode-messenger-common";
 
@@ -405,6 +407,7 @@ export const rangeFormat: RequestType<RangeFormatRequest, ApplyEditResponse> = {
 export const downloadConnector: RequestType<DownloadConnectorRequest, DownloadConnectorResponse> = { method: `${_preFix}/downloadConnector` };
 export const downloadInboundConnector: RequestType<DownloadInboundConnectorRequest, DownloadInboundConnectorResponse> = { method: `${_preFix}/downloadInboundConnector` };
 export const copyConnectorZip: RequestType<CopyConnectorZipRequest, CopyConnectorZipResponse> = { method: `${_preFix}/copyConnectorZip` };
+export const extractMavenCoordinates: RequestType<ExtractMavenCoordinatesRequest, ExtractMavenCoordinatesResponse> = { method: `${_preFix}/extractMavenCoordinates` };
 export const copyArtifact: RequestType<CopyArtifactRequest, CopyArtifactResponse> = { method: `${_preFix}/copyArtifact` };
 export const askImportFileDir: RequestType<void, FileDirResponse> = { method: `${_preFix}/askImportFileDir` };
 export const getAvailableConnectors: RequestType<GetAvailableConnectorRequest, GetAvailableConnectorResponse> = { method: `${_preFix}/getAvailableConnectors` };

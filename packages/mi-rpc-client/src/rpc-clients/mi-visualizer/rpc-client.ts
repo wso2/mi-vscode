@@ -44,6 +44,7 @@ import {
     ToggleDisplayOverviewRequest,
     UpdateContextRequest,
     WorkspacesResponse,
+    WorkspaceMiProjectsResponse,
     addToHistory,
     downloadSelectedSampleFromGithub,
     fetchSamplesFromGithub,
@@ -57,6 +58,7 @@ import {
     getReadmeContent,
     getProjectUri,
     getWorkspaces,
+    getWorkspaceMiProjects,
     findOldProjects,
     goBack,
     goHome,
@@ -136,6 +138,10 @@ export class MiVisualizerRpcClient implements MIVisualizerAPI {
 
     getWorkspaces(): Promise<WorkspacesResponse> {
         return this._messenger.sendRequest(getWorkspaces, HOST_EXTENSION);
+    }
+
+    getWorkspaceMiProjects(): Promise<WorkspaceMiProjectsResponse> {
+        return this._messenger.sendRequest(getWorkspaceMiProjects, HOST_EXTENSION);
     }
 
     findOldProjects(): Promise<string[]> {

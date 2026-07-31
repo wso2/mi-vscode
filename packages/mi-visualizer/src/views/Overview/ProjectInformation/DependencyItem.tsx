@@ -223,7 +223,8 @@ interface DependencyFormData {
 interface DependencyItemProps {
     dependency: DependencyDetails;
     onClose: () => void;
-    onEdit?: (updatedDependency: { groupId: string; artifact: string; version: string }) => void;
+    // Returning false keeps the edit form opened when new coordinates could not be resolved
+    onEdit?: (updatedDependency: { groupId: string; artifact: string; version: string }) => Promise<boolean> | boolean | void;
     onDelete?: (dependency: DependencyDetails) => void;
     connectors?: any[];
     inboundConnectors?: any[];
@@ -248,6 +249,11 @@ export function DependencyItem(props: DependencyItemProps) {
         connectionType: string | undefined;
         groupId: string | undefined;
         artifactId: string | undefined;
+        // true for user-added dependencies, which expose all three maven coordinates
+        isAdded: boolean;
+        // editable field values.
+        groupIdValue: string;
+        artifactIdValue: string;
         value: string;
     } | null>(null);
     const [confirmOmitDriver, setConfirmOmitDriver] = useState<{
@@ -256,6 +262,11 @@ export function DependencyItem(props: DependencyItemProps) {
         artifactId: string | undefined;
     } | null>(null);
     const [confirmOmitAllDrivers, setConfirmOmitAllDrivers] = useState(false);
+    const [addDriverForm, setAddDriverForm] = useState<{
+        groupId: string;
+        artifactId: string;
+        version: string;
+    } | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
     const { reset } = useForm<DependencyFormData>({
@@ -283,19 +294,75 @@ export function DependencyItem(props: DependencyItemProps) {
         setIsEditFormOpen(true);
     };
 
+    const handleEditDependencySave = async (updated: { groupId: string; artifact: string; version: string }) => {
+        const result = await onEdit?.(updated);
+        if (result !== false) {
+            setIsEditFormOpen(false);
+        }
+    };
+
     // ── Driver helpers ───────────────────────────────────────────────────────
 
     const connectorArtifactId = dependency.artifact;
     const driverDeps = driverData?.dependencies ?? [];
-    const activeDeps = driverDeps.filter(d => d.isConnectionTypeActive !== false);
-    const inactiveDeps = driverDeps.filter(d => d.isConnectionTypeActive === false);
+    // A manually-added dependency isn't part of the descriptor defaults, so it has no defaultVersion.
+    const isManuallyAdded = (d: ConnectorEffectiveDependency) =>
+        !d.defaultVersion && (d.isOverridden || !!d.overriddenVersion || !!d.localPath);
+    const activeDeps = driverDeps.filter(d => d.isConnectionTypeActive !== false || isManuallyAdded(d));
+    const inactiveDeps = driverDeps.filter(d => d.isConnectionTypeActive === false && !isManuallyAdded(d));
     const driverCount = activeDeps.length;
 
-    const driverDepLabel = (dep: ConnectorEffectiveDependency) =>
-        dep.connectionType ?? dep.artifactId ?? 'driver';
+    const driverDepLabel = (dep: ConnectorEffectiveDependency) => {
+        if (dep.connectionType) return dep.connectionType;
+        if (dep.artifactId) return dep.groupId ? `${dep.groupId}: ${dep.artifactId}` : dep.artifactId;
+        return 'driver';
+    };
 
-    const handleDriverVersionSave = async () => {
+    const handleDriverEditSave = async () => {
         if (!driverEditState) return;
+        const version = driverEditState.value.trim();
+
+        if (driverEditState.isAdded) {
+            // Added deps allow editing all coordinates. Validate the full set.
+            const newGroupId = driverEditState.groupIdValue.trim();
+            const newArtifactId = driverEditState.artifactIdValue.trim();
+            if (!newGroupId || !newArtifactId || !version) return;
+
+            const coordsChanged = newGroupId !== (driverEditState.groupId ?? '')
+                || newArtifactId !== (driverEditState.artifactId ?? '');
+
+            setIsSaving(true);
+            try {
+                if (coordsChanged) {
+                    await rpcClient.getMiDiagramRpcClient().resetConnectorDependencyOverrides({
+                        connectorArtifactId,
+                        groupId: driverEditState.groupId,
+                        artifactId: driverEditState.artifactId,
+                    });
+                }
+                await rpcClient.getMiDiagramRpcClient().updateConnectorDependencyOverride({
+                    connectorArtifactId,
+                    groupId: newGroupId,
+                    artifactId: newArtifactId,
+                    version,
+                    localPath: '',
+                    additionalDependency: true,
+                });
+                setDriverEditState(null);
+                await onDriverUpdated?.();
+            } catch (e) {
+                console.error("Failed to update driver dependency override", e);
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: "Failed to update the driver dependency.",
+                    type: "error"
+                });
+            } finally {
+                setIsSaving(false);
+            }
+            return;
+        }
+
+        if (!version) return;
         setIsSaving(true);
         try {
             await rpcClient.getMiDiagramRpcClient().updateConnectorDependencyOverride({
@@ -303,10 +370,33 @@ export function DependencyItem(props: DependencyItemProps) {
                 connectionType: driverEditState.connectionType,
                 groupId: driverEditState.groupId,
                 artifactId: driverEditState.artifactId,
-                version: driverEditState.value.trim(),
+                version,
                 localPath: '',
             });
             setDriverEditState(null);
+            await onDriverUpdated?.();
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleAddDriverSave = async () => {
+        if (!addDriverForm) return;
+        const groupId = addDriverForm.groupId.trim();
+        const artifactId = addDriverForm.artifactId.trim();
+        const version = addDriverForm.version.trim();
+        if (!groupId || !artifactId || !version) return;
+        setIsSaving(true);
+        try {
+            await rpcClient.getMiDiagramRpcClient().updateConnectorDependencyOverride({
+                connectorArtifactId,
+                groupId,
+                artifactId,
+                version,
+                localPath: '',
+                additionalDependency: true,
+            });
+            setAddDriverForm(null);
             await onDriverUpdated?.();
         } finally {
             setIsSaving(false);
@@ -325,22 +415,6 @@ export function DependencyItem(props: DependencyItemProps) {
                 artifactId: dep.artifactId,
                 localPath: result.path,
                 version: '',
-            });
-            await onDriverUpdated?.();
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const handleClearLocalJar = async (dep: ConnectorEffectiveDependency) => {
-        setIsSaving(true);
-        try {
-            await rpcClient.getMiDiagramRpcClient().updateConnectorDependencyOverride({
-                connectorArtifactId,
-                connectionType: dep.connectionType,
-                groupId: dep.groupId,
-                artifactId: dep.artifactId,
-                localPath: '',
             });
             await onDriverUpdated?.();
         } finally {
@@ -443,7 +517,7 @@ export function DependencyItem(props: DependencyItemProps) {
                 version={dependency.version}
                 title="Edit Dependency"
                 onClose={() => setIsEditFormOpen(false)}
-                onUpdate={(updated) => { onEdit?.(updated); setIsEditFormOpen(false); }}
+                onUpdate={handleEditDependencySave}
             />
         );
     }
@@ -504,7 +578,7 @@ export function DependencyItem(props: DependencyItemProps) {
                                             appearance="icon"
                                             onClick={handleConnectorOmitToggle}
                                             tooltip={driverData.omit ? "Re-enable connector packing" : "Omit connector from CAR"}
-                                            buttonSx={{ color: driverData.omit ? 'var(--vscode-charts-green)' : 'var(--vscode-charts-orange)' }}
+                                            buttonSx={{ color: driverData.omit ? 'var(--vscode-charts-green)' : 'var(--vscode-editorWarning-foreground)' }}
                                             disabled={isSaving}
                                         >
                                             <Codicon name={driverData.omit ? "plug" : "debug-disconnect"} />
@@ -548,9 +622,17 @@ export function DependencyItem(props: DependencyItemProps) {
                         <DriverPanelHeader>
                             <DriverLabel>from descriptor.yml</DriverLabel>
                             <div style={{ display: 'flex', gap: '4px' }}>
+                                <DriverToggleButton
+                                    color="var(--vscode-charts-blue)"
+                                    onClick={() => setAddDriverForm({ groupId: '', artifactId: '', version: '' })}
+                                    disabled={isSaving || addDriverForm !== null}
+                                >
+                                    <Codicon name="add" />
+                                    <span>Add</span>
+                                </DriverToggleButton>
                                 {!driverData.omitAllDrivers && (
                                     <DriverToggleButton
-                                        color="var(--vscode-charts-orange)"
+                                        color="var(--vscode-editorWarning-foreground)"
                                         onClick={() => setConfirmOmitAllDrivers(true)}
                                         disabled={isSaving}
                                     >
@@ -571,6 +653,47 @@ export function DependencyItem(props: DependencyItemProps) {
                             </div>
                         </DriverPanelHeader>
 
+                        {addDriverForm && (
+                            <DriverDepRow style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    <VSCodeTextField
+                                        value={addDriverForm.groupId}
+                                        placeholder="com.example"
+                                        onInput={(e: any) => setAddDriverForm({ ...addDriverForm, groupId: e.target.value })}
+                                        style={{ width: '100%' }}
+                                    >
+                                        Group ID
+                                    </VSCodeTextField>
+                                    <VSCodeTextField
+                                        value={addDriverForm.artifactId}
+                                        placeholder="my-dependency"
+                                        onInput={(e: any) => setAddDriverForm({ ...addDriverForm, artifactId: e.target.value })}
+                                        style={{ width: '100%' }}
+                                    >
+                                        Artifact ID
+                                    </VSCodeTextField>
+                                    <VSCodeTextField
+                                        value={addDriverForm.version}
+                                        placeholder="1.0.0"
+                                        onInput={(e: any) => setAddDriverForm({ ...addDriverForm, version: e.target.value })}
+                                        style={{ width: '100%' }}
+                                    >
+                                        Version
+                                    </VSCodeTextField>
+                                </div>
+                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                    <Button
+                                        appearance="primary"
+                                        onClick={handleAddDriverSave}
+                                        disabled={isSaving || !addDriverForm.groupId.trim() || !addDriverForm.artifactId.trim() || !addDriverForm.version.trim()}
+                                    >
+                                        Add
+                                    </Button>
+                                    <Button appearance="secondary" onClick={() => setAddDriverForm(null)}>Cancel</Button>
+                                </div>
+                            </DriverDepRow>
+                        )}
+
                         {driverData.omitAllDrivers && (
                             <div style={{ fontSize: '11px', color: 'var(--vscode-inputValidation-errorForeground)', background: 'var(--vscode-inputValidation-errorBackground)', padding: '4px 8px', borderRadius: '4px', marginBottom: '6px' }}>
                                 All drivers omitted for this connector
@@ -581,8 +704,10 @@ export function DependencyItem(props: DependencyItemProps) {
                             const label = driverDepLabel(dep);
                             const effectiveVersion = dep.overriddenVersion ?? dep.defaultVersion ?? '';
                             const isEditing = driverEditState?.connectionType === dep.connectionType
+                                && driverEditState?.groupId === dep.groupId
                                 && driverEditState?.artifactId === dep.artifactId;
                             const isEffectivelyOmitted = dep.omit || driverData.omitAllDrivers;
+                            const isAddedDep = !dep.defaultVersion;
 
                             return (
                                 <DriverDepRow key={`${label}-${idx}`}>
@@ -592,81 +717,175 @@ export function DependencyItem(props: DependencyItemProps) {
                                             <DriverBadge variant="omit">omitted</DriverBadge>
                                         ) : dep.localPath ? (
                                             <>
-                                                <DriverBadge variant="override" title={dep.localPath} style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                <DriverBadge title={dep.localPath} style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                                     📁 {dep.localPath.split(/[\\/]/).pop()}
                                                 </DriverBadge>
                                                 <span style={{ fontSize: '11px', opacity: 0.55 }}>local JAR</span>
                                             </>
+                                        ) : dep.isOverridden && dep.defaultVersion ? (
+                                            <>
+                                                <DriverBadge>{effectiveVersion}</DriverBadge>
+                                                <span style={{ fontSize: '11px', opacity: 0.55 }}>default: {dep.defaultVersion}</span>
+                                            </>
                                         ) : dep.isOverridden ? (
                                             <>
-                                                <DriverBadge variant="override">{effectiveVersion}</DriverBadge>
-                                                <span style={{ fontSize: '11px', opacity: 0.55 }}>default: {dep.defaultVersion}</span>
+                                                <DriverBadge>{effectiveVersion}</DriverBadge>
+                                                <span style={{ fontSize: '11px', opacity: 0.55 }}>added</span>
                                             </>
                                         ) : (
                                             <DriverBadge>{effectiveVersion}</DriverBadge>
                                         )}
 
-                                        {isEditing && (
+                                        {isEditing && (driverEditState.isAdded ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px', width: '100%' }}>
+                                                <VSCodeTextField
+                                                    value={driverEditState.groupIdValue}
+                                                    placeholder="com.example"
+                                                    onInput={(e: any) => setDriverEditState({ ...driverEditState, groupIdValue: e.target.value })}
+                                                    style={{ width: '100%' }}
+                                                >
+                                                    Group ID
+                                                </VSCodeTextField>
+                                                <VSCodeTextField
+                                                    value={driverEditState.artifactIdValue}
+                                                    placeholder="my-dependency"
+                                                    onInput={(e: any) => setDriverEditState({ ...driverEditState, artifactIdValue: e.target.value })}
+                                                    style={{ width: '100%' }}
+                                                >
+                                                    Artifact ID
+                                                </VSCodeTextField>
+                                                <VSCodeTextField
+                                                    value={driverEditState.value}
+                                                    placeholder="1.0.0"
+                                                    onInput={(e: any) => setDriverEditState({ ...driverEditState, value: e.target.value })}
+                                                    style={{ width: '100%' }}
+                                                >
+                                                    Version
+                                                </VSCodeTextField>
+                                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                                                    <Button
+                                                        appearance="primary"
+                                                        onClick={handleDriverEditSave}
+                                                        disabled={isSaving || !driverEditState.groupIdValue.trim() || !driverEditState.artifactIdValue.trim() || !driverEditState.value.trim()}
+                                                    >
+                                                        Save
+                                                    </Button>
+                                                    <Button appearance="secondary" onClick={() => setDriverEditState(null)}>Cancel</Button>
+                                                </div>
+                                            </div>
+                                        ) : (
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', width: '100%' }}>
                                                 <VSCodeTextField
                                                     value={driverEditState.value}
-                                                    placeholder="e.g. 9.0.0"
+                                                    placeholder="1.0.0"
                                                     onInput={(e: any) => setDriverEditState({ ...driverEditState, value: e.target.value })}
                                                     style={{ flex: 1 }}
                                                 />
-                                                <Button appearance="primary" onClick={handleDriverVersionSave} disabled={!driverEditState.value.trim() || isSaving}>Save</Button>
+                                                <Button appearance="primary" onClick={handleDriverEditSave} disabled={!driverEditState.value.trim() || isSaving}>Save</Button>
                                                 <Button appearance="secondary" onClick={() => setDriverEditState(null)}>Cancel</Button>
                                             </div>
-                                        )}
+                                        ))}
                                     </div>
 
                                     {!isEditing && (
                                         <DriverActions className="driver-actions">
-                                            {!isEffectivelyOmitted && !dep.localPath && (
-                                                <Button
-                                                    appearance="icon"
-                                                    tooltip="Override version"
-                                                    onClick={() => setDriverEditState({ connectionType: dep.connectionType, groupId: dep.groupId, artifactId: dep.artifactId, value: effectiveVersion })}
-                                                    buttonSx={{ color: 'var(--vscode-charts-green)' }}
-                                                    disabled={isSaving}
-                                                >
-                                                    <Codicon name="edit" />
-                                                </Button>
-                                            )}
-                                            {!isEffectivelyOmitted && (
-                                                <Button
-                                                    appearance="icon"
-                                                    tooltip={dep.localPath ? "Change local JAR" : "Use local JAR"}
-                                                    onClick={() => handleBrowseLocalJar(dep)}
-                                                    buttonSx={{ color: 'var(--vscode-charts-blue)' }}
-                                                    disabled={isSaving}
-                                                >
-                                                    <Codicon name="folder-opened" />
-                                                </Button>
-                                            )}
-                                            {!isEffectivelyOmitted && !driverData.omitAllDrivers && (
-                                                <Button
-                                                    appearance="icon"
-                                                    tooltip="Omit from CAR"
-                                                    onClick={() => setConfirmOmitDriver({ connectionType: dep.connectionType, groupId: dep.groupId, artifactId: dep.artifactId })}
-                                                    buttonSx={{ color: 'var(--vscode-charts-orange)' }}
-                                                    disabled={isSaving}
-                                                >
-                                                    <Codicon name="circle-slash" />
-                                                </Button>
-                                            )}
-                                            {(dep.isOverridden || dep.omit || dep.localPath) && !driverData.omitAllDrivers && (
-                                                <Button
-                                                    appearance="icon"
-                                                    tooltip="Reset to default"
-                                                    onClick={() => dep.localPath
-                                                        ? handleClearLocalJar(dep)
-                                                        : handleDriverReset(dep.connectionType, dep.groupId, dep.artifactId)}
-                                                    buttonSx={{ color: 'var(--vscode-charts-red)' }}
-                                                    disabled={isSaving}
-                                                >
-                                                    <Codicon name="discard" />
-                                                </Button>
+                                            {isAddedDep ? (
+                                                <>
+                                                    {!isEffectivelyOmitted && !dep.localPath && (
+                                                        <Button
+                                                            appearance="icon"
+                                                            tooltip="Edit dependency"
+                                                            onClick={() => setDriverEditState({
+                                                                connectionType: dep.connectionType,
+                                                                groupId: dep.groupId,
+                                                                artifactId: dep.artifactId,
+                                                                isAdded: true,
+                                                                groupIdValue: dep.groupId ?? '',
+                                                                artifactIdValue: dep.artifactId ?? '',
+                                                                value: effectiveVersion
+                                                            })}
+                                                            buttonSx={{ color: 'var(--vscode-charts-green)' }}
+                                                            disabled={isSaving}
+                                                        >
+                                                            <Codicon name="edit" />
+                                                        </Button>
+                                                    )}
+                                                    {!isEffectivelyOmitted && (
+                                                        <Button
+                                                            appearance="icon"
+                                                            tooltip={dep.localPath ? "Change local JAR" : "Use local JAR"}
+                                                            onClick={() => handleBrowseLocalJar(dep)}
+                                                            buttonSx={{ color: 'var(--vscode-charts-blue)' }}
+                                                            disabled={isSaving}
+                                                        >
+                                                            <Codicon name="folder-opened" />
+                                                        </Button>
+                                                    )}
+                                                    <Button
+                                                        appearance="icon"
+                                                        tooltip="Delete dependency"
+                                                        onClick={() => handleDriverReset(dep.connectionType, dep.groupId, dep.artifactId)}
+                                                        buttonSx={{ color: 'var(--vscode-charts-red)' }}
+                                                        disabled={isSaving}
+                                                    >
+                                                        <Codicon name="trash" />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {!isEffectivelyOmitted && !dep.localPath && (
+                                                        <Button
+                                                            appearance="icon"
+                                                            tooltip="Override version"
+                                                            onClick={() => setDriverEditState({
+                                                                connectionType: dep.connectionType,
+                                                                groupId: dep.groupId,
+                                                                artifactId: dep.artifactId,
+                                                                isAdded: false,
+                                                                groupIdValue: dep.groupId ?? '',
+                                                                artifactIdValue: dep.artifactId ?? '',
+                                                                value: effectiveVersion
+                                                            })}
+                                                            buttonSx={{ color: 'var(--vscode-charts-green)' }}
+                                                            disabled={isSaving}
+                                                        >
+                                                            <Codicon name="edit" />
+                                                        </Button>
+                                                    )}
+                                                    {!isEffectivelyOmitted && (
+                                                        <Button
+                                                            appearance="icon"
+                                                            tooltip={dep.localPath ? "Change local JAR" : "Use local JAR"}
+                                                            onClick={() => handleBrowseLocalJar(dep)}
+                                                            buttonSx={{ color: 'var(--vscode-charts-blue)' }}
+                                                            disabled={isSaving}
+                                                        >
+                                                            <Codicon name="folder-opened" />
+                                                        </Button>
+                                                    )}
+                                                    {!isEffectivelyOmitted && !driverData.omitAllDrivers && (
+                                                        <Button
+                                                            appearance="icon"
+                                                            tooltip="Omit from CAR"
+                                                            onClick={() => setConfirmOmitDriver({ connectionType: dep.connectionType, groupId: dep.groupId, artifactId: dep.artifactId })}
+                                                            buttonSx={{ color: 'var(--vscode-editorWarning-foreground)' }}
+                                                            disabled={isSaving}
+                                                        >
+                                                            <Codicon name="circle-slash" />
+                                                        </Button>
+                                                    )}
+                                                    {(dep.isOverridden || dep.omit || dep.localPath) && !driverData.omitAllDrivers && (
+                                                        <Button
+                                                            appearance="icon"
+                                                            tooltip="Reset to default"
+                                                            onClick={() => handleDriverReset(dep.connectionType, dep.groupId, dep.artifactId)}
+                                                            buttonSx={{ color: 'var(--vscode-charts-red)' }}
+                                                            disabled={isSaving}
+                                                        >
+                                                            <Codicon name="discard" />
+                                                        </Button>
+                                                    )}
+                                                </>
                                             )}
                                         </DriverActions>
                                     )}
@@ -709,7 +928,7 @@ export function DependencyItem(props: DependencyItemProps) {
                 sx={{ width: '400px', padding: '24px' }}
             >
                 <DialogMessage>
-                    Omit the <strong>{confirmOmitDriver ? driverDepLabel(driverDeps.find(d => d.connectionType === confirmOmitDriver.connectionType && d.artifactId === confirmOmitDriver.artifactId) ?? {}) : ''}</strong> driver from the CAR?
+                    Omit the <strong>{confirmOmitDriver ? driverDepLabel(driverDeps.find(d => d.connectionType === confirmOmitDriver.connectionType && d.groupId === confirmOmitDriver.groupId && d.artifactId === confirmOmitDriver.artifactId) ?? {}) : ''}</strong> driver from the CAR?
                     <br /><br />
                     It will not be packed at build time. Click Reset to undo.
                 </DialogMessage>

@@ -406,6 +406,9 @@ import {
     CopyConnectorZipRequest,
     CopyConnectorZipResponse,
     copyConnectorZip,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
+    extractMavenCoordinates,
     askOpenAPIDirPath,
     RemoveConnectorRequest,
     removeConnector,
@@ -906,6 +909,10 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
 
     copyConnectorZip(params: CopyConnectorZipRequest): Promise<CopyConnectorZipResponse> {
         return this._messenger.sendRequest(copyConnectorZip, HOST_EXTENSION, params);
+    }
+
+    extractMavenCoordinates(params: ExtractMavenCoordinatesRequest): Promise<ExtractMavenCoordinatesResponse> {
+        return this._messenger.sendRequest(extractMavenCoordinates, HOST_EXTENSION, params);
     }
 
     copyArtifact(params: CopyArtifactRequest): Promise<CopyArtifactResponse> {

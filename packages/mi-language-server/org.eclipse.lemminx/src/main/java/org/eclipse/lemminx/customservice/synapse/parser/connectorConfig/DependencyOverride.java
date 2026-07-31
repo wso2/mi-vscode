@@ -27,4 +27,6 @@ public class DependencyOverride {
     public Boolean omit;
     /** Absolute path to a local JAR. When set, Maven download is skipped and this file is used directly. */
     public String localPath;
+    /** When true, marks this override as an intentionally added dependency with no corresponding entry in descriptor.yml. */
+    public Boolean additionalDependency;
 }

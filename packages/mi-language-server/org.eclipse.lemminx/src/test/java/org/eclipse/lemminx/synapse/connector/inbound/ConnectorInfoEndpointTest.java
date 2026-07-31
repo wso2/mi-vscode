@@ -141,7 +141,7 @@ public class ConnectorInfoEndpointTest {
 
     @Test
     public void testReadConnector_InboundZip_ReturnsEmptyOperations() {
-        // An inbound connector zip has a stub connector.xml with no subComponents.
+        // An inbound endpoint zip has a stub connector.xml with no subComponents.
         // ConnectorReader will return a Connector with empty operations.
         // This is why getConnectorInfo routes mi-inbound-* to the inbound path instead.
         String inboundPath = tempPath.resolve("mi-inbound-amazonsqs-2.0.2").toString();
@@ -151,7 +151,7 @@ public class ConnectorInfoEndpointTest {
         assertNotNull(connector,
                 "ConnectorReader should return a non-null Connector for the inbound fixture");
         assertTrue(connector.getActions().isEmpty(),
-                "Inbound connector should have no operations when read by ConnectorReader");
+                "Inbound endpoint should have no operations when read by ConnectorReader");
     }
 
     @Test

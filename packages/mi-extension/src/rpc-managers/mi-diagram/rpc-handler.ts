@@ -290,6 +290,8 @@ import {
     getConnectionSchema,
     CopyConnectorZipRequest,
     copyConnectorZip,
+    ExtractMavenCoordinatesRequest,
+    extractMavenCoordinates,
     ApplyEditsRequest,
     askOpenAPIDirPath,
     RemoveConnectorRequest,
@@ -473,6 +475,7 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onRequest(downloadConnector, (args: DownloadConnectorRequest) => rpcManger.downloadConnector(args));
     messenger.onRequest(downloadInboundConnector, (args: DownloadInboundConnectorRequest) => rpcManger.downloadInboundConnector(args));
     messenger.onRequest(copyConnectorZip, (args: CopyConnectorZipRequest) => rpcManger.copyConnectorZip(args));
+    messenger.onRequest(extractMavenCoordinates, (args: ExtractMavenCoordinatesRequest) => rpcManger.extractMavenCoordinates(args));
     messenger.onRequest(copyArtifact, (args: CopyArtifactRequest) => rpcManger.copyArtifact(args));
     messenger.onRequest(askImportFileDir, () => rpcManger.askImportFileDir());
     messenger.onRequest(removeConnector, (args: RemoveConnectorRequest) => rpcManger.removeConnector(args));

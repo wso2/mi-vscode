@@ -309,6 +309,7 @@ import {
     SubmitFeedbackRequest,
     SubmitFeedbackResponse,
     GetPomFileContentResponse,
+    ExternalConnectorDetail,
     GetExternalConnectorDetailsResponse,
     GetMockServicesResponse,
     ConfigureKubernetesRequest,
@@ -330,6 +331,8 @@ import {
     ResetConnectorDependencyOverridesRequest,
     UpdateConnectorFlagsRequest,
     UpdateGlobalConnectorFlagsRequest,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
 } from "@wso2/mi-core";
 import axios from 'axios';
 import { error } from "console";
@@ -4138,6 +4141,32 @@ ${endpointAttributes}
         }
     }
 
+    async extractMavenCoordinates(params: ExtractMavenCoordinatesRequest): Promise<ExtractMavenCoordinatesResponse> {
+        const { pomPath } = params;
+        if (!pomPath || !fs.existsSync(pomPath) || !fs.statSync(pomPath).isFile()) {
+            const errorMsg = `pom.xml not found at path: ${pomPath}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+        }
+        try {
+            const { XMLParser } = require("fast-xml-parser");
+            const xmlData = fs.readFileSync(pomPath, "utf8");
+            const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false });
+            const parsed = parser.parse(xmlData);
+            const project = parsed?.project ?? {};
+            const parent = project?.parent ?? {};
+            return {
+                groupId: String(project.groupId ?? parent.groupId ?? ""),
+                artifactId: String(project.artifactId ?? ""),
+                version: String(project.version ?? parent.version ?? ""),
+                packaging: project.packaging !== undefined ? String(project.packaging) : undefined,
+            };
+        } catch (error) {
+            console.error(`Failed to extract maven coordinates from ${pomPath}:`, error);
+            throw new Error(`Failed to parse pom.xml at path: ${pomPath}`);
+        }
+    }
+
     async copyConnectorZip(params: CopyConnectorZipRequest): Promise<CopyConnectorZipResponse> {
         const { connectorPath, isInbound } = params;
         const langClient = await MILanguageClient.getInstance(this.projectUri);
@@ -6526,23 +6555,35 @@ ${keyValuesXML}`;
     }
 
     async getExternalConnectorDetails(): Promise<GetExternalConnectorDetailsResponse> {
-        return new Promise((resolve, reject) => {
-            const connectorsPath = path.join(this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'connectors');
+        const readConnectorZips = (dir: string, type: 'connector' | 'inbound'): ExternalConnectorDetail[] => {
+            if (!fs.existsSync(dir)) {
+                return [];
+            }
+            try {
+                return fs.readdirSync(dir, { withFileTypes: true })
+                    .filter(entry => entry.isFile() && entry.name.endsWith('.zip'))
+                    .map(entry => ({
+                        name: entry.name.replace('.zip', ''),
+                        path: path.join(dir, entry.name),
+                        type
+                    }));
+            } catch {
+                return [];
+            }
+        };
 
-            fs.readdir(connectorsPath, { withFileTypes: true }, (err, entries) => {
-                if (err) {
-                    // If directory doesn't exist or can't be read, return empty array
-                    resolve({ connectors: [] });
-                } else {
-                    // Filter only zip files and get their names without extension
-                    const connectorNames = entries
-                        .filter(entry => entry.isFile() && entry.name.endsWith('.zip'))
-                        .map(entry => entry.name.replace('.zip', ''));
+        const resourcesPath = path.join(this.projectUri, 'src', 'main', 'wso2mi', 'resources');
+        const connectorDetails = [
+            ...readConnectorZips(path.join(resourcesPath, 'connectors'), 'connector'),
+            ...readConnectorZips(path.join(resourcesPath, 'inbound-endpoints'), 'inbound'),
+            // below path is added to maintain backward compatibility
+            ...readConnectorZips(path.join(resourcesPath, 'inbound-connectors'), 'inbound'),
+        ];
 
-                    resolve({ connectors: connectorNames });
-                }
-            });
-        });
+        // `connectors` keeps the outbound connector names only, for backward compatibility with existing callers.
+        const connectors = connectorDetails.filter(c => c.type === 'connector').map(c => c.name);
+
+        return { connectors, connectorDetails };
     }
 
     async getMockServices(): Promise<GetMockServicesResponse> {
