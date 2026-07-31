@@ -35,8 +35,7 @@
     ],
     "paths": {
       "@wso2/mi-diagram": ["../mi-diagram/lib"],
-      "react": ["./node_modules/@types/react"],
-      "@wso2/webview-giga-bridge/webview": ["./node_modules/@wso2/webview-giga-bridge/dist/webview"]
+      "react": ["./node_modules/@types/react"]
     }
   },
   "include": ["src"],

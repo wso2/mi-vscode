@@ -30,7 +30,6 @@ import { refreshDiagram } from './activate';
 import { MILanguageClient } from '../lang-client/activator';
 import { hasOpenedDocumentInProject } from '../util/workspace';
 import { disposeProjectResourcesIfOrphaned } from '../util/projectResources';
-import { DefaultServer } from '../webview-communication/DefaultServer';
 
 export const webviews: Map<string, VisualizerWebview> = new Map();
 export class VisualizerWebview {
@@ -48,7 +47,6 @@ export class VisualizerWebview {
         this._panel.onDidDispose(async () => await this.dispose(), null, this._disposables);
         this._panel.webview.html = this.getWebviewContent(this._panel.webview);
         RPCLayer.create(this._panel, projectUri);
-        this._disposables.push(DefaultServer.getInstance().registerVisualizerPanel(this._panel));
 
         this._panel.onDidChangeViewState(() => {
             // Enable the Run and Build Project, Open AI Panel commands when the webview is active

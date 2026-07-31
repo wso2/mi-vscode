@@ -28,8 +28,6 @@ export * from "./interfaces/mi-copilot";
 // ------ History class and interface -------->
 export * from "./history";
 
-export * from "./rpc-types/webview-bridge";
-
 export * from "./rpc-types/mi-diagram/index";
 export * from "./rpc-types/mi-diagram/rpc-type";
 export * from "./rpc-types/mi-diagram/types";
