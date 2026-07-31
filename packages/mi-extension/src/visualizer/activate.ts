@@ -39,9 +39,13 @@ import { extractZip, formatAndSavePomDocument, getHash, zipProjectFolder, delete
 import { MILanguageClient } from '../lang-client/activator';
 import { ConflictingDependency } from '../lang-client/ExtendedLanguageClient';
 import { askForProject, shouldShowWorkspaceOverview } from '../util/workspace';
+import { DefaultServer } from '../webview-communication/DefaultServer';
 
 export function activateVisualizer(context: vscode.ExtensionContext, firstProject: string) {
     context.subscriptions.push(
+        commands.registerCommand(COMMANDS.GET_MI_FORM_WS_BOOTSTRAP, () => {
+            return DefaultServer.getInstance().getWsBootstrap();
+        }),
         vscode.commands.registerCommand(COMMANDS.OPEN_PROJECT, (providedUri?: vscode.Uri) => {
             const processUri = async (uri: vscode.Uri[] | undefined) => {
                 if (uri && uri[0]) {
