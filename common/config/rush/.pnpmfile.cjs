@@ -124,14 +124,16 @@ module.exports = {
         }
         if (deps['brace-expansion']) { // security fix: CVE-2026-14257 / CVE-2026-13149. Pin per major: 5.x is ESM-first and its CJS build exports { expand } instead of a callable, which breaks minimatch 3.x/5.x.
           const currentVersion = deps['brace-expansion'];
+          const majorMatch = String(currentVersion).match(/^\s*[\^~><=]*\s*(\d+)\b/);
+          const major = majorMatch ? Number(majorMatch[1]) : null;
           let newVersion;
-          if (currentVersion.startsWith('^1') || currentVersion.startsWith('1')) {
+          if (major === 1) {
             newVersion = '1.1.18';
-          } else if (currentVersion.startsWith('^2') || currentVersion.startsWith('2')) {
+          } else if (major === 2) {
             newVersion = '2.1.4';
-          } else if (currentVersion.startsWith('^3') || currentVersion.startsWith('3')) {
+          } else if (major === 3) {
             newVersion = '3.0.6';
-          } else if (currentVersion.startsWith('^5') || currentVersion.startsWith('5')) {
+          } else if (major === 5) {
             newVersion = '5.0.9';
           } else {
             context.log(`Unexpected brace-expansion version: ${currentVersion}`);
