@@ -33,7 +33,6 @@ export const WEBVIEW_WS_EVENTS = {
 export interface WebviewWsRequest {
     action: string;
     params?: unknown;
-    token?: string;
 }
 
 export interface WebviewWsResponseMessage {
