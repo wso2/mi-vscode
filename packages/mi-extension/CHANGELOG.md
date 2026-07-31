@@ -33,6 +33,15 @@ Fixed: Datasource is not marked as required in Data Service create form ([#708](
 Fixed: Update unit test page artifact select dropdowns don't work properly  ([#487](https://github.com/wso2/mi-vscode/issues/487))    
 Fixed: Improvements to the MI Copilot ([#1640](https://github.com/wso2/product-integrator/issues/1640))    
 
+## [4.1.4] - 2026-07-30      
+
+### Fixed   
+
+Fixed: Shell arguments handling inconsistencies      
+Fixed: Gaps in query parameters support for APIs via the OpenAPI specification     
+Fixed: Class mediator build issues with JDK 25          
+Fixed: Input-variable suggestion support for inbound endpoints ([#1539](https://github.com/wso2/mi-vscode/issues/1539))     
+
 ## [4.1.0] - 2026-06-11   
 
 ### New Features   
