@@ -49,12 +49,13 @@ module.exports = {
         if (deps['flatted']) deps['flatted'] = '3.4.2'; // security fix
         if (deps['handlebars']) deps['handlebars'] = '4.7.9'; // security fix: prototype pollution
         if (deps['tmp']) deps['tmp'] = '0.2.7'; // security fix
-        if (deps['undici']) deps['undici'] = '7.28.0'; // security fixes
+        if (deps['undici']) deps['undici'] = '7.29.0'; // security fixes
         if (deps['@opentelemetry/core']) deps['@opentelemetry/core'] = '2.8.0'; // security fix
         if (deps['@opentelemetry/propagator-jaeger']) deps['@opentelemetry/propagator-jaeger'] = '2.9.0';
         if (deps['uuid']) deps['uuid'] = '14.0.0'; // security fix
         if (deps['@nevware21/ts-utils']) deps['@nevware21/ts-utils'] = '0.14.0'; // security fix: CVE-2026-46681 (prototype pollution)
         if (deps['webpack-dev-server']) deps['webpack-dev-server'] = '5.2.6'; // security fix
+        if (deps['fast-uri']) deps['fast-uri'] = '3.1.5';
         if (deps['ws']) {
           if (/^[\s\^~><=]*8[.\s]/.test(deps['ws'])) {
             deps['ws'] = '8.21.0'; // security fix
@@ -121,13 +122,13 @@ module.exports = {
           const currentVersion = deps['brace-expansion'];
           let newVersion;
           if (currentVersion.startsWith('^1') || currentVersion.startsWith('1')) {
-            newVersion = '1.1.17';
+            newVersion = '1.1.18';
           } else if (currentVersion.startsWith('^2') || currentVersion.startsWith('2')) {
-            newVersion = '2.1.3';
+            newVersion = '2.1.4';
           } else if (currentVersion.startsWith('^3') || currentVersion.startsWith('3')) {
-            newVersion = '3.0.5';
+            newVersion = '3.0.6';
           } else if (currentVersion.startsWith('^5') || currentVersion.startsWith('5')) {
-            newVersion = '5.0.8';
+            newVersion = '5.0.9';
           } else {
             context.log(`Unexpected brace-expansion version: ${currentVersion}`);
             newVersion = currentVersion;
