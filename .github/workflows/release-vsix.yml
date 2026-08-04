@@ -38,7 +38,7 @@ jobs:
     name: Release VSIX
     needs: Build
     timeout-minutes: 45
-    runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
     steps:
       - name: Restore build
         uses: actions/download-artifact@v4
@@ -144,7 +144,7 @@ jobs:
   Notify:
     needs: [Release]
     if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode'}}
-    runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
