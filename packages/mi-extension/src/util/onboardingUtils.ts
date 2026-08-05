@@ -37,6 +37,7 @@ const AdmZip = require('adm-zip');
 // Put MI versions in descending order.
 // Put Java versions in ascending order for each MI version
 export const javaVersionCompatibilityMap: { [key: string]: { supportedRange: { min: string; max: string }, recommended: string[] } } = {
+    '4.7.0': { supportedRange: { min: '21', max: '25' }, recommended: ['21', '25'] },
     '4.6.0': { supportedRange: { min: '21', max: '25' }, recommended: ['21', '25'] },
     '4.5.0': { supportedRange: { min: '11', max: '21' }, recommended: ['21'] },
     '4.4.0': { supportedRange: { min: '11', max: '21' }, recommended: ['21'] },
@@ -44,9 +45,11 @@ export const javaVersionCompatibilityMap: { [key: string]: { supportedRange: { m
     '4.2.0': { supportedRange: { min: '11', max: '17' }, recommended: ['17'] },
     '4.1.0': { supportedRange: { min: '11', max: '11' }, recommended: ['11'] },
 };
-export const LATEST_MI_VERSION = "4.6.0";
+export const LATEST_MI_VERSION = "4.7.0";
 const COMPATIBLE_JDK_VERSION = "11";
 const miDownloadUrls: { [key: string]: string } = {
+    '4.7.0': 'https://mi-distribution.wso2.com/4.7.0/wso2mi-4.7.0.zip',
+    '4.7.0-EULA': 'https://mi-distribution.wso2.com/4.7.0/updated/wso2mi-4.7.0.zip',
     '4.6.0': 'https://mi-distribution.wso2.com/4.6.0/wso2mi-4.6.0.zip',
     '4.6.0-EULA': 'https://mi-distribution.wso2.com/4.6.0/updated/wso2mi-4.6.0.zip',
     '4.5.0': 'https://mi-distribution.wso2.com/4.5.0/wso2mi-4.5.0.zip',
@@ -545,6 +548,8 @@ export async function downloadMI(projectUri: string, miVersion: string, isUpdate
             miDownloadUrl = miDownloadUrls[miVersion + '-UPDATED'];
         } else if (miVersion === '4.6.0' && isWso2IntegratorRuntime() && isEulaPack()) {
             miDownloadUrl = miDownloadUrls['4.6.0-EULA'];
+        } else if (miVersion === '4.7.0' && isWso2IntegratorRuntime() && isEulaPack()) {
+            miDownloadUrl = miDownloadUrls['4.7.0-EULA'];
         } else {
             miDownloadUrl = miDownloadUrls[miVersion];
         }

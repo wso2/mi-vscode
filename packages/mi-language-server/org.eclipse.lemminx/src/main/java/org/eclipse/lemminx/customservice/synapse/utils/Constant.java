@@ -587,6 +587,7 @@ public class Constant {
     public static final String MI_440_VERSION = "4.4.0";
     public static final String MI_450_VERSION = "4.5.0";
     public static final String MI_460_VERSION = "4.6.0";
+    public static final String MI_470_VERSION = "4.7.0";
     public static final String UI_SCHEMA_NAME = "UI_SCHEMA_NAME";
     public static final String SEQUENCE_NAME = "sequenceName";
     public static final String CAN_TRY_OUT = "canTryOut";
@@ -674,6 +675,7 @@ public class Constant {
         put("4.4.0", "4.4.0");
         put("4.5.0", "4.4.0");
         put("4.6.0", "4.4.0");
+        put("4.7.0", "4.4.0");
     }};
     public static final String MCP_CONNECTION = "mcpConnection";
 
