@@ -76,6 +76,7 @@ public class InboundConnectorHolder {
     private String localInboundEndpointsListForCopilot;
 
     private Set<String> FALLBACK_TO_440 = Set.of(
+            Constant.MI_470_VERSION,
             Constant.MI_460_VERSION,
             Constant.MI_450_VERSION
     );
