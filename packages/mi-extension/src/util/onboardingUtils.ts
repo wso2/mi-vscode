@@ -803,14 +803,36 @@ export async function updatePomForClassMediator(projectUri: string): Promise<voi
     createTagIfNotFound(parsedXml, "project.dependencies");
     const runtimeVersion = await getMIVersionFromPom(projectUri);
     const synapseCoreVersion = getSynapseCoreVersionForRuntime(runtimeVersion);
-    const hasSynapseCoreDependency = parsedXml.some((node: any) =>
-        Array.isArray(node.project) && node.project.some((projectNode: any) =>
-            Array.isArray(projectNode.dependencies) && projectNode.dependencies.some((dependencyNode: any) =>
-                Array.isArray(dependencyNode.dependency) &&
-                dependencyNode.dependency.some((child: any) => child.groupId?.[0]?.["#text"] === "org.apache.synapse") &&
-                dependencyNode.dependency.some((child: any) => child.artifactId?.[0]?.["#text"] === "synapse-core"))));
-    if (hasSynapseCoreDependency) {
-        updatePomXml(parsedXml, "project.dependencies.dependency[artifactId=synapse-core].version", synapseCoreVersion);
+    let synapseCoreDependencyChildren: any[] | undefined;
+    outer:
+    for (const node of parsedXml) {
+        if (!Array.isArray(node.project)) { continue; }
+        for (const projectNode of node.project) {
+            if (!Array.isArray(projectNode.dependencies)) { continue; }
+            for (const dependencyNode of projectNode.dependencies) {
+                if (!Array.isArray(dependencyNode.dependency)) { continue; }
+                const children = dependencyNode.dependency;
+                const isSynapseCore =
+                    children.some((child: any) => child.groupId?.[0]?.["#text"] === "org.apache.synapse") &&
+                    children.some((child: any) => child.artifactId?.[0]?.["#text"] === "synapse-core");
+                if (isSynapseCore) {
+                    synapseCoreDependencyChildren = children;
+                    break outer;
+                }
+            }
+        }
+    }
+    if (synapseCoreDependencyChildren) {
+        const versionNode = synapseCoreDependencyChildren.find((child: any) => Array.isArray(child.version));
+        if (versionNode) {
+            if (versionNode.version.length > 0) {
+                versionNode.version[0]["#text"] = synapseCoreVersion;
+            } else {
+                versionNode.version.push({ "#text": synapseCoreVersion });
+            }
+        } else {
+            synapseCoreDependencyChildren.push({ version: [{ "#text": synapseCoreVersion }] });
+        }
     } else {
         const dependencyXml = {
             dependency: [

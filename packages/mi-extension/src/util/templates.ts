@@ -493,7 +493,7 @@ export const dockerBuildDockerfileContent = (modules: string[], existingContent?
   // persist existing changes made to the dockerfile by uncommenting libs copying
   const existingLibLines = new Map<string, string>();
   if (existingContent) {
-    const libLineRegex = /^#?\s*COPY libs\/([^/]+)\/ \$\{WSO2_SERVER_HOME\}\/lib\/$/;
+    const libLineRegex = /^#?\s*COPY\s+libs\/([^/]+)\/\s+\$\{WSO2_SERVER_HOME\}\/lib\/$/;
     for (const line of existingContent.split('\n')) {
       const match = line.trim().match(libLineRegex);
       if (match) {
