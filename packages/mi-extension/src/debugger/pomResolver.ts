@@ -408,6 +408,7 @@ export function updateCopyModulesInAggregatePom(pomPath: string, modules: string
 
     const dockerfilePath = path.join(path.dirname(pomPath), "deployment", "docker", "Dockerfile");
     if (fs.existsSync(dockerfilePath)) {
-        fs.writeFileSync(dockerfilePath, dockerBuildDockerfileContent(realModules));
+        const existingContent = fs.readFileSync(dockerfilePath, 'utf-8');
+        fs.writeFileSync(dockerfilePath, dockerBuildDockerfileContent(realModules, existingContent));
     }
 }
