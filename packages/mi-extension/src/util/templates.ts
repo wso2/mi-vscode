@@ -487,9 +487,24 @@ COPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/s
 
 // Aggregate Dockerfile: one commented-out COPY line per real sub-project
 // module, from libs staged per-module by updateCopyModulesInAggregatePom.
-export const dockerBuildDockerfileContent = (modules: string[]) => {
+export const dockerBuildDockerfileContent = (modules: string[], existingContent?: string) => {
   const realModules = modules.filter(m => m && m !== "docker-build");
-  const libsCopyLines = realModules.map(m => `# COPY libs/${m}/ \${WSO2_SERVER_HOME}/lib/`);
+
+  // persist existing changes made to the dockerfile by uncommenting libs copying
+  const existingLibLines = new Map<string, string>();
+  if (existingContent) {
+    const libLineRegex = /^#?\s*COPY libs\/([^/]+)\/ \$\{WSO2_SERVER_HOME\}\/lib\/$/;
+    for (const line of existingContent.split('\n')) {
+      const match = line.trim().match(libLineRegex);
+      if (match) {
+        existingLibLines.set(match[1], line);
+      }
+    }
+  }
+
+  const libsCopyLines = realModules.map(m =>
+    existingLibLines.get(m) ?? `# COPY libs/${m}/ \${WSO2_SERVER_HOME}/lib/`
+  );
 
   return [
     `ARG BASE_IMAGE`,
@@ -677,7 +692,7 @@ export async function createAggregatePomInRoot(projectUri: string, modules: stri
     `    <properties>`,
     `        <project.runtime.version>${runtimeVersion}</project.runtime.version>`,
     `        <dockerfile.base.image>wso2/wso2mi:${runtimeVersion}</dockerfile.base.image>`,
-    `        <dockerfile.name>${parent.artifactId}:${parent.version}</dockerfile.name>`,
+    `        <dockerfile.name>${parent.artifactId?.toLowerCase()}:${parent.version}</dockerfile.name>`,
     `        <keystore.type>JKS</keystore.type>`,
     `        <keystore.name>wso2carbon.jks</keystore.name>`,
     `        <keystore.password>wso2carbon</keystore.password>`,
