@@ -195,13 +195,32 @@ async function getProjectStructureData(): Promise<ProjectExplorerEntry[]> {
 }
 
 function buildDockerBuildEntry(consolidatedRoot: string): ProjectExplorerEntry | undefined {
-	const deploymentPath = path.join(consolidatedRoot, 'docker-build', 'deployment');
+	const dockerBuildRoot = path.join(consolidatedRoot, 'docker-build');
+	const deploymentPath = path.join(dockerBuildRoot, 'deployment');
 	if (!fs.existsSync(deploymentPath)) {
 		return undefined;
 	}
 
-	const entry = buildReadOnlyFolderEntry(deploymentPath, 'docker-build');
+	// show the pom.xml of the docker-build module which is outside the deployment folder
+	const pomPath = path.join(dockerBuildRoot, 'pom.xml');
+	const hasPom = fs.existsSync(pomPath);
+	const hasDeploymentEntries = readVisibleDirEntries(deploymentPath).length > 0;
+
+	const entry = new ProjectExplorerEntry(
+		'docker-build',
+		isCollapsibleState(hasDeploymentEntries || hasPom),
+		{ name: 'docker-build', path: deploymentPath, type: 'resource' },
+		'folder',
+		true
+	);
+	entry.contextValue = 'readOnlyFolder';
 	entry.tooltip = 'Deployment resources for the consolidated project\'s docker-build module. Not an editable MI project.';
+
+	if (hasPom) {
+		const children = buildReadOnlyFolderChildren(deploymentPath);
+		children.push(buildReadOnlyFileEntry(pomPath));
+		entry.children = children;
+	}
 	return entry;
 }
 
