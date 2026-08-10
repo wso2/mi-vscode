@@ -1283,11 +1283,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             }
             try {
                 InputStream inputStream = SynapseLanguageService.class.getResourceAsStream(
-                        "/org/eclipse/lemminx/connectors/mi-connector-http-0.1.14.zip");
+                        "/org/eclipse/lemminx/connectors/mi-connector-http-1.0.0.zip");
                 if (inputStream == null) {
                     throw new FileNotFoundException("HTTP connector not found.");
                 }
-                Path httpConnectorPath = Paths.get(connectorDownloadPath, "mi-connector-http-0.1.14.zip");
+                Path httpConnectorPath = Paths.get(connectorDownloadPath, "mi-connector-http-1.0.0.zip");
                 Files.copy(inputStream, httpConnectorPath, StandardCopyOption.REPLACE_EXISTING);
                 inputStream.close();
                 updateConnectors();
