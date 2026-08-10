@@ -254,7 +254,7 @@ public class PomParserTest {
         Range range = connectorDependency.getRange();
         assertEquals("org.wso2.integration.connector", connectorDependency.getGroupId());
         assertEquals("mi-connector-http", connectorDependency.getArtifact());
-        assertEquals("0.1.8", connectorDependency.getVersion());
+        assertEquals("1.0.0", connectorDependency.getVersion());
         assertEquals("zip", connectorDependency.getType());
         assertEquals(408, range.getStart().getLine());
         assertEquals(7, range.getStart().getCharacter());

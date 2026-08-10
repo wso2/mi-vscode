@@ -47,7 +47,7 @@ public class ConnectionHandlerTest {
         TestUtils.extractConnectorZips(tempPath, "/synapse/connector/zips");
 
         connectionHandler = new ConnectionHandler();
-        String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String connectorPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         ConnectorReader connectorReader = new ConnectorReader();
         httpConnector = connectorReader.readConnector(connectorPath, null);
         connectionHandler.init(ConnectorHolder.getInstance());

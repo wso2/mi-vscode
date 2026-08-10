@@ -848,14 +848,14 @@ public class LoadDependentResourcesTest {
     void testHttpConnectorInDepIsAlwaysSkippedNoConflict() throws IOException {
 
         // Even if http is registered in the holder, a dep carrying it must not be flagged
-        registerConnectorInHolder("http", "mi-connector-http-0.1.14");
+        registerConnectorInHolder("http", "mi-connector-http-1.0.0");
 
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "dep1", "com.example", "dep1", "1.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
         resourceFinder.setProjectResources(dep1.toString(),
-                buildConnectorZipResources("mi-connector-http-0.1.14"));
+                buildConnectorZipResources("mi-connector-http-1.0.0"));
 
         LoadDependentResourcesResponse result = resourceFinder.loadDependentResources(mainProjectPath);
 
@@ -908,7 +908,7 @@ public class LoadDependentResourcesTest {
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
         resourceFinder.setProjectResources(dep1.toString(),
-                buildConnectorZipResources("mi-connector-http-0.1.14", "mi-connector-salesforce-1.0.0"));
+                buildConnectorZipResources("mi-connector-http-1.0.0", "mi-connector-salesforce-1.0.0"));
 
         LoadDependentResourcesResponse result = resourceFinder.loadDependentResources(mainProjectPath);
 
@@ -1118,16 +1118,16 @@ public class LoadDependentResourcesTest {
     @Test
     void testConnectorZipInResourcesRegistryKeySkippedAndDoesNotCauseConflict() throws IOException {
 
-        // Both deps carry resources:connectors/mi-connector-http-0.1.14.zip as a registry resource key
+        // Both deps carry resources:connectors/mi-connector-http-1.0.0.zip as a registry resource key
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");
         Path dep2 = createDependentProject(depBaseDir, "bdep2", "com.example", "dep2", "2.0.0");
 
         resourceFinder.setProjectResources(mainProjectPath, new HashMap<>());
         resourceFinder.setProjectResources(dep1.toString(),
-                buildRegistryResources("registry", "resources:connectors/mi-connector-http-0.1.14.zip"));
+                buildRegistryResources("registry", "resources:connectors/mi-connector-http-1.0.0.zip"));
         resourceFinder.setProjectResources(dep2.toString(),
-                buildRegistryResources("registry", "resources:connectors/mi-connector-http-0.1.14.zip"));
+                buildRegistryResources("registry", "resources:connectors/mi-connector-http-1.0.0.zip"));
 
         LoadDependentResourcesResponse result = resourceFinder.loadDependentResources(mainProjectPath);
 
