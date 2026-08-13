@@ -69,6 +69,8 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
 
     const importWithZip = async () => {
         setIsImporting(true);
+        setIsFailedImport(false);
+        connectionStatus.current = null;
         const response = await rpcClient.getMiDiagramRpcClient().copyConnectorZip({ connectorPath: zipDir });
 
         if (!response.success) {
@@ -91,6 +93,8 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
             }
         } catch (error) {
             console.log(error);
+            await removeInvalidConnector(response.connectorPath);
+            setIsFailedImport(true);
         }
 
         setIsImporting(false);

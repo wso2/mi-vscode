@@ -171,8 +171,16 @@ public abstract class AbstractConnectorLoader {
                                     uiSchemaJson.get(Constant.ID).getAsString(), Utils.readFile(inputSchemaFile));
                         }
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.log(Level.WARNING, "Failed to extract connector zip:" + zipName, e);
+                    if (extractToFolder.exists()) {
+                        try {
+                            Utils.deleteDirectory(extractToFolder.toPath());
+                        } catch (IOException ioException) {
+                            log.log(Level.WARNING, "Failed to clean up partially extracted connector:"
+                                    + zipName, ioException);
+                        }
+                    }
                 }
             }
         }

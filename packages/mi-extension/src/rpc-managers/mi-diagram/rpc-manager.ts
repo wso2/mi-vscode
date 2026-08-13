@@ -6586,6 +6586,7 @@ ${keyValuesXML}`;
         const searchMavenArtifactIdConnector = name.startsWith('mi-connector-') ? name : `mi-connector-${name}`;
         const searchMavenArtifactIdModule = name.startsWith('mi-module-') ? name : `mi-module-${name}`;
         const artifactMatch = connectorStoreData?.find(artifact =>
+            artifact.mavenArtifactId === name ||
             artifact.mavenArtifactId === searchMavenArtifactIdConnector ||
             artifact.mavenArtifactId === searchMavenArtifactIdModule
         );

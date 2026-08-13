@@ -104,7 +104,7 @@ public class InboundConnectorHolder {
         }
         this.projectPath = projectPath;
         this.projectId = Utils.getHash(projectPath);
-        // Maintain the original runtime version of the project as the 4.5.0 version has new inbound-connectors
+        // Maintain the original runtime version of the project as the 4.5.0 version has new inbound-endpoints
         // TODO: https://github.com/wso2/mi-vscode/issues/1331
         OverviewPageDetailsResponse pomDetailsResponse = new OverviewPageDetailsResponse();
         getPomDetails(projectPath, pomDetailsResponse);
@@ -143,7 +143,7 @@ public class InboundConnectorHolder {
 
     public synchronized String getCustomInboundConnectors() {
 
-		boolean isInboundConnectorAdded = false;
+        boolean hasFailure = false;
         InputStream inputStream = JsonLoader.class
                 .getResourceAsStream("/org/eclipse/lemminx/inbound-endpoints/inbound_endpoints_"
                         + this.projectRuntimeVersion.replace(".", StringUtils.EMPTY) + Constant.JSON_FILE_EXT);
@@ -154,15 +154,15 @@ public class InboundConnectorHolder {
         for (String dirName : new String[]{Constant.INBOUND_ENDPOINTS, Constant.INBOUND_CONNECTORS_DIR}) {
             File extractFolder = new File(resourcesPath.resolve(dirName).toString());
             if (importInboundConnectorsFromDirectory(extractFolder)) {
-                isInboundConnectorAdded = true;
+                hasFailure = true;
             }
         }
-        return isInboundConnectorAdded ? "success" : "Failed to import the inbound-connector";
+        return hasFailure ? "Failed to import the inbound-endpoint" : "success";
     }
 
     private boolean importInboundConnectorsFromDirectory(File extractFolder) {
 
-        boolean isInboundConnectorAdded = false;
+        boolean hasFailure = false;
         List<File> inboundConnectorZips = getInboundConnectorZips(extractFolder);
         for (File zip : inboundConnectorZips) {
             String zipName = zip.getName().replace(Constant.DOT + "zip", StringUtils.EMPTY);
@@ -193,20 +193,24 @@ public class InboundConnectorHolder {
                         newConnector.addProperty(Constant.TYPE, Constant.INBOUND_DASH_ENDPOINT);
                         connectorArray.add(newConnector);
                     }
-                    isInboundConnectorAdded = true;
+                } else {
+                    hasFailure = true;
+                    LOGGER.log(Level.SEVERE, "Failed to import custom inbound-endpoint:" + zipName
+                            + ". Invalid or missing uischema.");
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.SEVERE, "Failed to import custom inbound-connector:" + zipName, e);
+                hasFailure = true;
+                LOGGER.log(Level.SEVERE, "Failed to import custom inbound-endpoint:" + zipName, e);
             }
             if (extractToFolder.exists() && extractToFolder.isDirectory()) {
                 try {
                     Utils.deleteDirectory(extractToFolder.toPath());
                 } catch (IOException e) {
-                    LOGGER.log(Level.SEVERE, "Failed to delete extracted inbound-connector:" + zipName, e);
+                    LOGGER.log(Level.SEVERE, "Failed to delete extracted inbound-endpoint:" + zipName, e);
                 }
             }
         }
-        return isInboundConnectorAdded;
+        return hasFailure;
     }
 
     private boolean isConnectorAlreadyListed(JsonArray connectorArray, String connectorId) {
@@ -437,7 +441,7 @@ public class InboundConnectorHolder {
         try {
             inboundConnectorMetadata = mapper.readTree(metadataJson);
         } catch (JsonProcessingException e) {
-            LOGGER.log(Level.SEVERE, "Failed to parse inbound-connector metadata JSON.", e);
+            LOGGER.log(Level.SEVERE, "Failed to parse inbound-endpoint metadata JSON.", e);
             return localInboundConnectorList;
         }
         ArrayNode connectorArray = mapper.createArrayNode();
@@ -459,7 +463,7 @@ public class InboundConnectorHolder {
             try {
                 inboundConnectorUISchema = mapper.readTree(inputStream);
             } catch (IOException e) {
-                LOGGER.log(Level.SEVERE, "Failed to read or parse the inbound-connector UI schema JSON.", e);
+                LOGGER.log(Level.SEVERE, "Failed to read or parse the inbound-endpoint UI schema JSON.", e);
                 return localInboundConnectorList;
             }
             ObjectNode inboundConnectorObject = mapper.createObjectNode();
@@ -520,7 +524,7 @@ public class InboundConnectorHolder {
         try {
             localInboundConnectorList = new ObjectMapper().writerWithDefaultPrettyPrinter().writeValueAsString(connectorArray);
         } catch (JsonProcessingException e) {
-            LOGGER.log(Level.SEVERE, "Failed to serialize inbound-connector metadata to a JSON string.", e);
+            LOGGER.log(Level.SEVERE, "Failed to serialize inbound-endpoint metadata to a JSON string.", e);
         }
         return localInboundConnectorList;
     }
