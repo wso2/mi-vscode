@@ -172,17 +172,18 @@ public class InboundConnectorHolder {
                 String schema = Utils.readFile(extractToFolder.toPath().resolve(Constant.RESOURCES)
                         .resolve(Constant.UI_SCHEMA_JSON).toFile());
                 JsonObject connectorSchema = Utils.getJsonObject(schema);
-                if (saveInboundConnector(connectorSchema.get(Constant.NAME).getAsString(), schema)) {
-                    File inputSchemaFile = extractToFolder.toPath().resolve(Constant.RESOURCES)
-                            .resolve(Constant.INPUT_SCHEMA_JSON).toFile();
-                    if (inputSchemaFile.exists()) {
-                        saveInboundConnectorInputSchema(connectorSchema.get(Constant.NAME).getAsString(),
-                                connectorSchema.has(Constant.ID) ? connectorSchema.get(Constant.ID).getAsString() : null,
-                                Utils.readFile(inputSchemaFile));
+                String connectorName = connectorSchema.get(Constant.NAME).getAsString();
+                String connectorId = connectorSchema.get(Constant.ID) != null ?
+                        connectorSchema.get(Constant.ID).getAsString() : StringUtils.EMPTY;
+                File inputSchemaFile = extractToFolder.toPath().resolve(Constant.RESOURCES)
+                        .resolve(Constant.INPUT_SCHEMA_JSON).toFile();
+                String inputSchema = inputSchemaFile.exists() ? Utils.readFile(inputSchemaFile) : null;
+
+                if (saveInboundConnector(connectorName, schema)) {
+                    if (StringUtils.isNotBlank(inputSchema)) {
+                        saveInboundConnectorInputSchema(connectorName, connectorId, inputSchema);
                     }
                     JsonArray connectorArray = this.inboundConnectorListJson.getAsJsonArray(Constant.INBOUND_CONNECTOR_DATA);
-                    String connectorId = connectorSchema.get(Constant.ID) != null ?
-                            connectorSchema.get(Constant.ID).getAsString() : StringUtils.EMPTY;
                     if (!isConnectorAlreadyListed(connectorArray, connectorId)) {
                         JsonObject newConnector = new JsonObject();
                         newConnector.addProperty(Constant.NAME, connectorSchema.get(Constant.TITLE) != null ?
@@ -206,6 +207,7 @@ public class InboundConnectorHolder {
                 try {
                     Utils.deleteDirectory(extractToFolder.toPath());
                 } catch (IOException e) {
+                    hasFailure = true;
                     LOGGER.log(Level.SEVERE, "Failed to delete extracted inbound-endpoint:" + zipName, e);
                 }
             }

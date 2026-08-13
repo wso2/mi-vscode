@@ -71,33 +71,35 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
         setIsImporting(true);
         setIsFailedImport(false);
         connectionStatus.current = null;
-        const response = await rpcClient.getMiDiagramRpcClient().copyConnectorZip({ connectorPath: zipDir });
-
-        if (!response.success) {
-            setIsImporting(false);
-            return;
-        }
-
         try {
-            const newConnector: any = await waitForEvent();
+            const response = await rpcClient.getMiDiagramRpcClient().copyConnectorZip({ connectorPath: zipDir });
 
-            if (newConnector?.isSuccess) {
-                rpcClient.getMiVisualizerRpcClient().openView({
-                    type: POPUP_EVENT_TYPE.CLOSE_VIEW,
-                    location: { view: null, recentIdentifier: "success" },
-                    isPopup: true
-                });
-            } else {
+            if (!response.success) {
+                setIsFailedImport(true);
+                return;
+            }
+
+            try {
+                const newConnector: any = await waitForEvent();
+
+                if (newConnector?.isSuccess) {
+                    rpcClient.getMiVisualizerRpcClient().openView({
+                        type: POPUP_EVENT_TYPE.CLOSE_VIEW,
+                        location: { view: null, recentIdentifier: "success" },
+                        isPopup: true
+                    });
+                } else {
+                    await removeInvalidConnector(response.connectorPath);
+                    setIsFailedImport(true);
+                }
+            } catch (error) {
+                console.log(error);
                 await removeInvalidConnector(response.connectorPath);
                 setIsFailedImport(true);
             }
-        } catch (error) {
-            console.log(error);
-            await removeInvalidConnector(response.connectorPath);
-            setIsFailedImport(true);
+        } finally {
+            setIsImporting(false);
         }
-
-        setIsImporting(false);
     };
 
     const waitForEvent = () => {
@@ -118,7 +120,11 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
     };
 
     const removeInvalidConnector = async (connectorPath: string) => {
-        await rpcClient.getMiDiagramRpcClient().removeConnector({ connectorPath: connectorPath });
+        try {
+            await rpcClient.getMiDiagramRpcClient().removeConnector({ connectorPath: connectorPath });
+        } catch (error) {
+            console.log(error);
+        }
     }
 
     const handleCancel = () => {
