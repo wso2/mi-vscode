@@ -393,7 +393,6 @@ public class DirectoryTreeBuilder {
         return name1;
     }
 
-
     private static boolean isRelevantFile(File file) {
 
         return file.isFile() && !file.isHidden() && !Constant.GITKEEP.equals(file.getName());
