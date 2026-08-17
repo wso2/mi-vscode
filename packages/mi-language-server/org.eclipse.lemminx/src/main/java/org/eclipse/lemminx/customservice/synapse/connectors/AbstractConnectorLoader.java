@@ -163,16 +163,26 @@ public abstract class AbstractConnectorLoader {
                                 .resolve(Constant.UI_SCHEMA_JSON).toFile());
                         JsonObject uiSchemaJson = Utils.getJsonObject(schema);
                         String connectorName = uiSchemaJson.get(Constant.NAME).getAsString();
-                        inboundConnectorHolder.saveInboundConnector(connectorName, schema);
                         File inputSchemaFile = extractToFolder.toPath().resolve(Constant.RESOURCES)
                                 .resolve(Constant.INPUT_SCHEMA_JSON).toFile();
-                        if (inputSchemaFile.exists() && uiSchemaJson.has(Constant.ID)) {
+                        String inputSchema = (inputSchemaFile.exists() && uiSchemaJson.has(Constant.ID)) ?
+                                Utils.readFile(inputSchemaFile) : null;
+                        inboundConnectorHolder.saveInboundConnector(connectorName, schema);
+                        if (StringUtils.isNotBlank(inputSchema)) {
                             inboundConnectorHolder.saveInboundConnectorInputSchema(connectorName,
-                                    uiSchemaJson.get(Constant.ID).getAsString(), Utils.readFile(inputSchemaFile));
+                                    uiSchemaJson.get(Constant.ID).getAsString(), inputSchema);
                         }
                     }
-                } catch (IOException e) {
+                } catch (Exception e) {
                     log.log(Level.WARNING, "Failed to extract connector zip:" + zipName, e);
+                    if (extractToFolder.exists()) {
+                        try {
+                            Utils.deleteDirectory(extractToFolder.toPath());
+                        } catch (IOException ioException) {
+                            log.log(Level.WARNING, "Failed to clean up partially extracted connector:"
+                                    + zipName, ioException);
+                        }
+                    }
                 }
             }
         }

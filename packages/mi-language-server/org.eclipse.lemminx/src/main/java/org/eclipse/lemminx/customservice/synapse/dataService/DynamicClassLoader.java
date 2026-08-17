@@ -17,14 +17,14 @@ package org.eclipse.lemminx.customservice.synapse.dataService;
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
 
 public class DynamicClassLoader {
 
     private static URLClassLoader classLoader;
     private static final Object lock = new Object();
-    private static Set<URL> currentUrls = new HashSet<>();
+    private static Map<String, URL> currentUrls = new HashMap<>();
 
     /**
      * Add DB drivers in a folder to the class loader
@@ -39,20 +39,15 @@ public class DynamicClassLoader {
                 return;
             }
 
-            Set<URL> newUrls = new HashSet<>();
+            Map<String, URL> newUrls = new HashMap<>();
             for (File jarFile : jarFiles) {
-                URL jarUrl = jarFile.toURI().toURL();
-                newUrls.add(jarUrl);
+                newUrls.put(jarFile.getCanonicalPath(), jarFile.toURI().toURL());
             }
 
-            Set<URL> urlsToAdd = new HashSet<>(newUrls);
-            urlsToAdd.removeAll(currentUrls);
-
-            if (!urlsToAdd.isEmpty()) {
-                URL[] updatedUrls = new URL[newUrls.size()];
-                newUrls.toArray(updatedUrls);
-                classLoader = new URLClassLoader(updatedUrls, Thread.currentThread().getContextClassLoader());
-                currentUrls = new HashSet<>(newUrls);
+            if (!currentUrls.keySet().equals(newUrls.keySet())) {
+                classLoader = new URLClassLoader(newUrls.values().toArray(new URL[0]),
+                        Thread.currentThread().getContextClassLoader());
+                currentUrls = newUrls;
             }
         }
     }
@@ -65,19 +60,15 @@ public class DynamicClassLoader {
      */
     public static void updateJarInClassLoader(File jarFile, boolean addJar) throws Exception {
         synchronized (lock) {
-            URL jarUrl = jarFile.toURI().toURL();
-            Set<URL> updatedUrls = new HashSet<>(currentUrls);
+            String jarKey = jarFile.getCanonicalPath();
+            Map<String, URL> updatedUrls = new HashMap<>(currentUrls);
             if (addJar) {
-                if (!currentUrls.contains(jarUrl)) {
-                    updatedUrls.add(jarUrl);
-                }
+                updatedUrls.putIfAbsent(jarKey, jarFile.toURI().toURL());
             } else {
-                if (currentUrls.contains(jarUrl)) {
-                    updatedUrls.remove(jarUrl);
-                }
+                updatedUrls.remove(jarKey);
             }
-            if (!updatedUrls.equals(currentUrls)) {
-                classLoader = new URLClassLoader(updatedUrls.toArray(new URL[0]),
+            if (!updatedUrls.keySet().equals(currentUrls.keySet())) {
+                classLoader = new URLClassLoader(updatedUrls.values().toArray(new URL[0]),
                         Thread.currentThread().getContextClassLoader());
                 currentUrls = updatedUrls;
             }

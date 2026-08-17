@@ -393,13 +393,18 @@ public class DirectoryTreeBuilder {
         return name1;
     }
 
+    private static boolean isRelevantFile(File file) {
+
+        return file.isFile() && !file.isHidden() && !Constant.GITKEEP.equals(file.getName());
+    }
+
     private static void analyzeByType(IntegrationDirectoryTree directoryTree, File folder, String type) {
 
         try {
             File[] listOfFiles = folder.listFiles();
             if (listOfFiles != null) {
                 for (File file : listOfFiles) {
-                    if (file.isFile() && !file.isHidden()) {
+                    if (isRelevantFile(file)) {
                         String name = file.getName();
                         String path = file.getAbsolutePath();
                         Node advancedComponent = createEsbComponent(type, name, path);
@@ -523,7 +528,7 @@ public class DirectoryTreeBuilder {
         File[] listOfFiles = folder.listFiles();
         if (listOfFiles != null) {
             for (File file : listOfFiles) {
-                if (file.isFile() && !file.isHidden()) {
+                if (isRelevantFile(file)) {
                     String name = file.getName();
                     String path = file.getAbsolutePath();
                     Node resource = new Node("metadata", name, path);
@@ -593,7 +598,7 @@ public class DirectoryTreeBuilder {
                     file.getAbsolutePath().endsWith(Path.of(Constant.RESOURCES, Constant.REGISTRY, Constant.ARTIFACT_XML).toString())) {
                 continue;
             }
-            if (file.isFile() && !file.isHidden()) {
+            if (isRelevantFile(file)) {
                 String name = file.getName();
                 String filePath = file.getAbsolutePath();
                 FileNode fileNodeComponent = new FileNode(name, filePath);

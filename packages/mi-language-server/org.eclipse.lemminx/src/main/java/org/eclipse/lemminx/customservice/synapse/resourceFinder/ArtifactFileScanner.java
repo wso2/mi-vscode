@@ -49,7 +49,9 @@ public class ArtifactFileScanner {
                         artifactFiles.add(file.getAbsolutePath());
                     } else {
                         String artifactFilePath = extractArtifactFile(file);
-                        artifactFiles.add(artifactFilePath);
+                        if (artifactFilePath != null) {
+                            artifactFiles.add(artifactFilePath);
+                        }
                     }
                 } else if (file.isDirectory()) {
                     traverseFiles(file.getAbsolutePath(), artifactFiles, needFilePath);
