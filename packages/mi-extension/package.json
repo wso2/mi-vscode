@@ -1160,14 +1160,14 @@
         "description": "design-view",
         "default": {
           "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-          "fontCharacter": "\\f1c7"
+          "fontCharacter": "\\f1c9"
         }
       },
       "mi-build-package": {
         "description": "build-package",
         "default": {
           "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-          "fontCharacter": "\\f19f"
+          "fontCharacter": "\\f1a0"
         }
       }
     }

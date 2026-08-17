@@ -202,7 +202,7 @@ export default function createTests() {
       const editorTab = page.page.getByRole('tab', { name: `${dmName}.ts, Editor Group` });
       await editorTab.waitFor({ state: 'attached' });
 
-      await editorTab.locator('.codicon-close').click();
+      await editorTab.locator('.codicon-close').click({ force: true });
       await editorTab.waitFor({ state: 'detached' });
 
       console.log('- Test expression bar');

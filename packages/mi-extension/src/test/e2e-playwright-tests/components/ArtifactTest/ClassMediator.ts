@@ -74,7 +74,7 @@ export class ClassMediator {
         for (const className of classNames) {
             await this.saveIfPrompted();
             try {
-                await this._page.getByRole('tab', { name: className }).getByLabel('Close').click();
+                await this._page.getByRole('tab', { name: className }).getByLabel('Close').click({ force: true });
             } catch (error) {
                 console.error(`Failed to close class mediator tab for ${className}: ${error}`);
             }
