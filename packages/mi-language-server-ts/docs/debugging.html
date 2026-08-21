@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Debugging the Language Server — WSO2 MI Language Server</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <button class="topbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6"  x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <a href="index.html" class="topbar-brand">
+      <div class="logo">MI</div>
+      <span class="name">WSO2 MI Language Server</span>
+    </a>
+    <div class="topbar-crumb">
+      <span class="sep">/</span>
+      <span class="page">Debugging the Language Server</span>
+    </div>
+  </header>
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="group-label">Getting Started</div>
+        <a href="index.html">Overview</a>
+
+        <div class="group-label">Deep Dive</div>
+        <a href="architecture.html">Architecture <span class="sub">Layers, modules, the dual engine</span></a>
+        <a href="components.html">Component Reference <span class="sub">File-by-file</span></a>
+        <a href="flows.html">Flows &amp; Sequences <span class="sub">How things happen</span></a>
+
+        <div class="group-label">Development</div>
+        <a href="debugging.html" class="active">Debugging the Language Server <span class="sub">Attach a debugger to the server</span></a>
+        <a href="debugging.html#why">Why this is needed</a>
+        <a href="debugging.html#setup">One-time setup</a>
+        <a href="debugging.html#daily">Debugging, day to day</a>
+        <a href="debugging.html#troubleshooting">Troubleshooting</a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="inner">
+        <span class="kicker">Development</span>
+        <h1>Debugging the Language Server</h1>
+        <p class="lead">This guide explains how to debug the WSO2 MI XML Language Server while it's
+          running as a subprocess spawned by the client extension.</p>
+
+        <h2 id="why">Why this is needed</h2>
+        <p>The client (<span class="file-ref">xml-language-client</span>) launches the language server
+          (<span class="file-ref">wso2-mi-language-server-ts</span>) as a separate Node.js subprocess
+          over stdio. Because it's a separate process, you can't debug it just by running the client in
+          VS Code's debugger — you need to open a Node inspector port on the server process and attach
+          to it separately.</p>
+
+        <h2 id="setup">One-time setup</h2>
+
+        <h3>1. Use a multi-root workspace</h3>
+        <p>The client and server live in separate folders/repos. Open both together using a
+          <code>.code-workspace</code> file so VS Code can resolve paths and source maps across both
+          projects.</p>
+        <p>In the parent folder containing both repos, create <code>wso2-mi.code-workspace</code>:</p>
+        <pre><code>{
+  "folders": [
+    { "name": "client", "path": "xml-language-client" },
+    { "name": "server", "path": "wso2-mi-language-server-ts" }
+  ],
+  "settings": {}
+}</code></pre>
+        <p>Open this file via <strong>File &gt; Open Workspace from File...</strong>. You should see
+          <code>client</code> and <code>server</code> as separate roots in the Explorer sidebar.</p>
+
+        <h3>2. Enable source maps in the server build</h3>
+        <p>The server is bundled with esbuild (see
+          <span class="file-ref">wso2-mi-language-server-ts/package.json</span>). By default, esbuild
+          does <strong>not</strong> emit source maps unless told to. Make sure the <code>build</code>
+          script includes <code>--sourcemap</code>:</p>
+        <pre><code>"build": "esbuild src/server.ts --bundle --platform=node --format=cjs --sourcemap --outfile=dist/server.js \"--banner:js=const _fileUrl=require('url').pathToFileURL(__filename).href;\" --define:import.meta.url=_fileUrl &amp;&amp; node -e \"const fs=require('fs'); fs.rmSync('dist/resources',{recursive:true,force:true}); fs.cpSync('resources','dist/resources',{recursive:true})\""</code></pre>
+        <p>Without <code>--sourcemap</code>, breakpoints will still "hit" but execution will show in the
+          compiled <code>dist/server.js</code> instead of the original <code>.ts</code> source.</p>
+        <p>After any change to this script, rebuild:</p>
+        <pre><code>cd wso2-mi-language-server-ts
+npm run bundle</code></pre>
+        <p>Confirm <code>dist/server.js.map</code> exists alongside <code>dist/server.js</code>.</p>
+
+        <h3>3. Add a debug variant to ServerOptions (client side)</h3>
+        <p>In <span class="file-ref">xml-language-client/src/extension.ts</span>, the
+          <code>ServerOptions</code> object needs a <code>debug</code> variant (separate from
+          <code>run</code>) that opens a Node inspector port:</p>
+        <pre><code>const serverModule = path.join(
+  context.extensionPath,
+  '..',
+  'wso2-mi-language-server-ts',
+  'dist',
+  'server.js'
+)
+
+const serverOptions: ServerOptions = {
+  run: {
+    command: process.execPath,
+    args: [serverModule, '--stdio'],
+    transport: TransportKind.stdio
+  },
+  debug: {
+    command: process.execPath,
+    args: ['--nolazy', '--inspect=6009', serverModule, '--stdio'],
+    transport: TransportKind.stdio
+  }
+}</code></pre>
+        <p>Notes:</p>
+        <ul>
+          <li><code>--inspect=6009</code> opens an inspector port on 6009 without pausing execution. If
+            you need to catch issues that happen very early (e.g. during server startup, before you'd
+            have time to attach), temporarily use <code>--inspect-brk=6009</code> instead — this pauses
+            the process immediately until a debugger attaches. Remember to switch it back to
+            <code>--inspect</code> afterward, otherwise you'll need to manually click "Continue" past the
+            pause point on every debug run.</li>
+          <li>The <code>debug</code> config is only used when the client extension itself is launched in
+            debug mode (see below) — <code>run</code> is what's used in normal/production use.</li>
+          <li>Double-check <code>serverModule</code>'s path matches your actual server folder name. A
+            stale folder name here causes a <code>MODULE_NOT_FOUND</code> error with no useful indication
+            of <em>why</em> the server keeps crashing/restarting.</li>
+        </ul>
+
+        <h3>4. Add launch.json</h3>
+        <p>In <span class="file-ref">xml-language-client/.vscode/launch.json</span>:</p>
+        <pre><code>{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder:client}"
+      ],
+      "outFiles": [
+        "${workspaceFolder:client}/dist/**/*.js"
+      ]
+    },
+    {
+      "name": "Attach to Server",
+      "type": "node",
+      "request": "attach",
+      "port": 6009,
+      "restart": true,
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder:server}/dist/**/*.js"
+      ],
+      "skipFiles": [
+        "&lt;node_internals&gt;/**"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch + Attach Server",
+      "configurations": [
+        "Launch Extension",
+        "Attach to Server"
+      ]
+    }
+  ]
+}</code></pre>
+        <p>Key details:</p>
+        <ul>
+          <li><code>${workspaceFolder:client}</code> / <code>${workspaceFolder:server}</code> are
+            required (not plain <code>${workspaceFolder}</code>) because this is a multi-root workspace —
+            VS Code needs to know which root you mean.</li>
+          <li><code>outFiles</code> for "Attach to Server" must point at the <strong>server's</strong>
+            dist folder, with source maps enabled, or breakpoints will bind to the bundled JS instead of
+            your TypeScript source.</li>
+          <li><code>skipFiles: ["&lt;node_internals&gt;/**"]</code> prevents the debugger from stepping
+            into Node's internal modules (e.g. <code>promises.js</code>) when stepping through code.</li>
+        </ul>
+
+        <h2 id="daily">Debugging, day to day</h2>
+        <ol>
+          <li>Make sure the server is built with the latest changes:
+            <pre><code>cd wso2-mi-language-server-ts
+npm run bundle</code></pre>
+          </li>
+          <li>Open the workspace file (<code>wso2-mi.code-workspace</code>) if it isn't already open.</li>
+          <li>Set breakpoints in <span class="file-ref">wso2-mi-language-server-ts/src/*.ts</span> —
+            prefer breakpoints inside handlers (e.g. <code>onInitialize</code>, <code>onCompletion</code>,
+            <code>onHover</code>) over top-level/module-load code, since those run reliably every time the
+            relevant LSP request fires.</li>
+          <li>In the Debug panel, select <strong>"Launch + Attach Server (client)"</strong> from the
+            dropdown.</li>
+          <li>Press F5. This launches the Extension Development Host and attaches the Node debugger to
+            port 6009 automatically.</li>
+          <li>In the Extension Development Host window, open an <code>.xml</code> file (or whatever
+            triggers the language server) and perform the action tied to your breakpoint (hover,
+            autocomplete, etc.).</li>
+          <li>Execution should pause at your breakpoint, in the original <code>.ts</code> source.</li>
+        </ol>
+
+        <h2 id="troubleshooting">Troubleshooting</h2>
+
+        <p><strong>Breakpoint never hits, execution runs straight through:</strong></p>
+        <ul>
+          <li>Confirm the server was rebuilt after your latest source changes
+            (<code>npm run bundle</code>).</li>
+          <li>Confirm <code>dist/server.js.map</code> exists and isn't stale.</li>
+          <li>Confirm the breakpoint is on a line that actually executes for the action you're
+            triggering — module-load-only code only runs once, at server startup.</li>
+        </ul>
+
+        <p><strong>Breakpoint hits but shows the compiled <code>dist/server.js</code> instead of the
+          <code>.ts</code> source:</strong></p>
+        <ul>
+          <li>Source maps aren't enabled in the build, or <code>outFiles</code> in
+            <code>launch.json</code> doesn't match the actual dist folder. See step 2 above.</li>
+        </ul>
+
+        <p><strong>Debugger pauses in <code>node_modules</code> or Node internal files like
+          <code>promises.js</code>:</strong></p>
+        <ul>
+          <li>If you're using <code>--inspect-brk</code>, this is expected on the very first pause — just
+            press Continue (F5) once to proceed to your actual breakpoint.</li>
+          <li>If it happens elsewhere, confirm <code>skipFiles</code> is set in the "Attach to Server"
+            config.</li>
+        </ul>
+
+        <p><strong><code>MODULE_NOT_FOUND</code> errors in the Debug Console, server keeps restarting and
+          then gives up ("crashed 5 times in the last 3 minutes"):</strong></p>
+        <ul>
+          <li>The path in <code>serverModule</code> (in <code>extension.ts</code>) doesn't match the
+            actual server folder/file on disk. Verify with:
+            <pre><code>ls ../wso2-mi-language-server-ts/dist/server.js</code></pre>
+            from inside the client folder, and make sure <code>extension.ts</code> was rebuilt
+            (<code>npm run build</code>) after fixing the path — VS Code runs the
+            <strong>compiled</strong> <code>dist/extension.js</code>, not the TypeScript source
+            directly.</li>
+        </ul>
+
+        <div class="footer-nav">
+          <a class="prev" href="flows.html">
+            <span class="dir">← Prev</span>
+            <span class="lbl">Flows &amp; Sequences</span>
+          </a>
+          <a class="next" href="index.html">
+            <span class="dir">Back to →</span>
+            <span class="lbl">Overview</span>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="docs.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true, theme: 'dark',
+      themeVariables: { primaryColor: '#1c2128', primaryBorderColor: '#ff7300', primaryTextColor: '#f0f6fc', lineColor: '#8b949e', fontSize: '14px' },
+      flowchart: { curve: 'basis', htmlLabels: true }
+    });
+  </script>
+</body>
+</html>
