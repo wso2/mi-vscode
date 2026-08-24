@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button, FormActions, Typography } from '@wso2/ui-toolkit';
 import { VSCodeProgressRing } from '@vscode/webview-ui-toolkit/react';
 import styled from '@emotion/styled';
@@ -45,6 +45,29 @@ export function DownloadPage(props: DownloadPageProps) {
     const { rpcClient } = useVisualizerContext();
     const [isDownloading, setIsDownloading] = React.useState(false);
     const [isFailedDownload, setIsFailedDownload] = React.useState(false);
+    // remove the connector dependency when the side panel is closed as the download failed
+    const failedDependencyRef = React.useRef<{ artifact: string; version: string } | null>(null);
+
+    const removeFailedDependency = async (artifact: string, version: string) => {
+        const projectDetails = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+        const connectorDependencies = projectDetails.dependencies.connectorDependencies;
+        for (const d of connectorDependencies) {
+            if (d.artifact === artifact && d.version === version) {
+                await rpcClient.getMiVisualizerRpcClient().updatePomValues({
+                    pomValues: [{ range: d.range, value: '' }]
+                });
+            }
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (failedDependencyRef.current) {
+                const { artifact, version } = failedDependencyRef.current;
+                removeFailedDependency(artifact, version);
+            }
+        };
+    }, []);
 
     const handleDependencyResponse = async (response: boolean) => {
         if (response) {
@@ -78,10 +101,12 @@ export function DownloadPage(props: DownloadPageProps) {
             await rpcClient.getMiDiagramRpcClient().rangeFormat({ uri: pomPath });
 
             if (response === "Success" || !response.includes(module.mavenArtifactId)) {
+                failedDependencyRef.current = null;
                 onDownloadSuccess(props.module.connectorName);
                 setIsDownloading(false);
                 sidepanelGoBack(sidePanelContext, sidePanelContext.pageStack.length - 1);
             } else {
+                failedDependencyRef.current = { artifact: module.mavenArtifactId, version: selectedVersion };
                 setIsFailedDownload(true);
                 setIsDownloading(false);
             }
@@ -98,13 +123,25 @@ export function DownloadPage(props: DownloadPageProps) {
         const response = await rpcClient.getMiVisualizerRpcClient().updateConnectorDependencies();
 
         if (response === "Success" || !response.includes(module.mavenArtifactId)) {
+            failedDependencyRef.current = null;
             onDownloadSuccess(props.module.connectorName);
             setIsDownloading(false);
             sidepanelGoBack(sidePanelContext, sidePanelContext.pageStack.length - 1);
         } else {
+            failedDependencyRef.current = { artifact: module.mavenArtifactId, version: selectedVersion };
             setIsFailedDownload(true);
             setIsDownloading(false);
         }
+    }
+
+    const cancelFailedDownload = async () => {
+        setIsDownloading(true);
+        // remove the connector dependency as the download failed
+        await removeFailedDependency(module.mavenArtifactId, selectedVersion);
+        failedDependencyRef.current = null;
+        setIsDownloading(false);
+        setIsFailedDownload(false);
+        sidepanelGoBack(sidePanelContext);
     }
 
     return (
@@ -128,7 +165,7 @@ export function DownloadPage(props: DownloadPageProps) {
                             </Button>
                             <Button
                                 appearance="secondary"
-                                onClick={() => handleDependencyResponse(false)}
+                                onClick={() => cancelFailedDownload()}
                             >
                                 Cancel
                             </Button>
