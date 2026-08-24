@@ -723,14 +723,14 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
 
     async showNotification(params: NotificationRequest): Promise<NotificationResponse> {
         return new Promise(async (resolve) => {
-            const { message, options, type = "info" } = params;
+            const { message, options, type = "info", modal = false } = params;
             let selection: string | undefined;
             if (type === "info") {
-                selection = await window.showInformationMessage(message, ...options ?? []);
+                selection = await window.showInformationMessage(message, { modal }, ...options ?? []);
             } else if (type === "warning") {
-                selection = await window.showWarningMessage(message, ...options ?? []);
+                selection = await window.showWarningMessage(message, { modal }, ...options ?? []);
             } else {
-                selection = await window.showErrorMessage(message, ...options ?? []);
+                selection = await window.showErrorMessage(message, { modal }, ...options ?? []);
             }
 
             resolve({ selection });

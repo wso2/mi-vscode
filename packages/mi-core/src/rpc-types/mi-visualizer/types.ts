@@ -380,6 +380,7 @@ export interface NotificationRequest {
     message: string;
     options?: string[];
     type?: NotificationType;
+    modal?: boolean;
 }
 
 export interface RuntimeServiceDetails {
