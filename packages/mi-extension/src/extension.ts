@@ -72,7 +72,11 @@ export async function activate(context: vscode.ExtensionContext) {
 						 oldProjects?.[0]?.uri?.fsPath || 
 						 path.join(os.tmpdir(), uuidv4());
 	
-	if (!oldProjects.length) {
+	if (newProjects.length) {
+		for (const project of newProjects) {
+			getStateMachine(project.uri.fsPath);
+		}
+	} else if (!oldProjects.length) {
 		getStateMachine(firstProject);
 	}
 	workspace.onDidChangeWorkspaceFolders(async (event) => {
@@ -104,16 +108,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	activateVisualizer(context, firstProject);
 	activateAiPanel(context);
 
-	workspace.workspaceFolders?.forEach(folder => {
-		context.subscriptions.push(...enableLS());
-	});
+	// enableLS() is workspace-wide (one shared language client), not per-folder,
+	// so it's registered once regardless of how many MI folders are open.
+	context.subscriptions.push(...enableLS());
 }
 
 export async function deactivate(): Promise<void> {
-	const clients = await MILanguageClient.getAllInstances();
-	clients.forEach(async client => {
-		await client?.stop();
-	});
+	await MILanguageClient.stopSharedInstance();
 
 	// close all webviews
 	const allWebviews = Array.from(webviews.values());

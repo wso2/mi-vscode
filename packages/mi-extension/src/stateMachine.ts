@@ -831,6 +831,11 @@ function updateProjectExplorer(location: VisualizerLocation | undefined) {
     }
 }
 
+// KNOWN LIMITATION (pre-existing, not introduced by the shared-language-client migration):
+// the 'projectType'/'displayOverview' keys below are written to the single, window-global
+// `workspaceState`, so in a multi-root workspace the last-detected project's values win for
+// every project. Scoping them per project (e.g. keyed by projectUri) is a follow-up, not a
+// blocker for the shared LS client work.
 async function checkIfMiProject(projectUri: string, view: MACHINE_VIEW = MACHINE_VIEW.Overview) {
     console.log(`Detecting project in ${projectUri} - ${new Date().toLocaleTimeString()}`);
 

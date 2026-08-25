@@ -156,7 +156,9 @@ async function getProjectStructureData(): Promise<ProjectExplorerEntry[]> {
 				if (projectTree) {
 					data.push(projectTree);
 				}
-			} catch { }
+			} catch (err) {
+				console.error(`Failed to load project explorer data for ${rootPath}:`, err);
+			}
 		};
 		vscode.commands.executeCommand('setContext', 'projectOpened', true);
 		if (data.length > 0) {

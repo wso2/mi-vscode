@@ -24,6 +24,7 @@ import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMElement;
 import org.eclipse.lemminx.dom.DOMNode;
+import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
 import java.util.List;
 
@@ -47,8 +48,9 @@ public abstract class AIConnectorFactory extends ConnectorFactory {
 
         DOMNode connectionsElement = Utils.getChildNodeByName(element, Constant.CONNECTIONS);
         if (connectionsElement != null) {
-            Connections connections = ConnectionFinder.findConnections(getProjectPath(), AI,
-                    getConnectorHolder(), false).getLeft();
+            Either<Connections, ?> connectionsResult = ConnectionFinder.findConnections(getProjectPath(), AI,
+                    getConnectorHolder(), false);
+            Connections connections = connectionsResult != null ? connectionsResult.getLeft() : null;
 
             List<DOMNode> connectionElements = connectionsElement.getChildren();
             for (DOMNode connectionElement : connectionElements) {

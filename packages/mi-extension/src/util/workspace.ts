@@ -21,7 +21,6 @@ import * as fs from "fs";
 import { COMMANDS } from "../constants";
 import path from "path";
 import { MILanguageClient } from "../lang-client/activator";
-import { webviews } from "../visualizer/webview";
 
 export async function replaceFullContentToFile(documentUri: string, content: string) {
     // Create the file if not present
@@ -143,6 +142,11 @@ export async function saveIdpSchemaToFile(folderPath: string, fileName: string, 
 export function enableLS(): Disposable[] {
     const disposables: Disposable[] = [];
 
+    // Lazily seeds/starts the single shared language client the first time a
+    // project's document becomes active. There is no matching per-project stop
+    // on document close: one shared server backs every MI project, so closing
+    // the last open document in one project must not tear it down for the rest
+    // (it is only stopped on extension deactivate).
     const disposable1 = window.onDidChangeActiveTextEditor(async (event) => {
         if (!event) {
             return;
@@ -158,24 +162,7 @@ export function enableLS(): Disposable[] {
             await MILanguageClient.getInstance(projectUri);
         }
     });
-
-    const disposable2 = workspace.onDidCloseTextDocument(async (document) => {
-        const projectUri = workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
-        if (!projectUri) {
-            return;
-        }
-        const hasActiveWebview = webviews.has(projectUri);
-
-        if (hasActiveWebview) {
-            return;
-        }
-        const hasActiveDocument = hasOpenedDocumentInProject(projectUri);
-
-        if (!hasActiveDocument) {
-            await MILanguageClient.stopInstance(projectUri);
-        }
-    });
-    disposables.push(disposable1, disposable2);
+    disposables.push(disposable1);
     return disposables;
 }
 
