@@ -36,6 +36,7 @@ import { ChildProcess } from 'child_process';
 import treeKill = require('tree-kill');
 import { serverLog, showServerOutputChannel } from '../util/serverLogger';
 import { getJavaHomeFromConfig, getServerPathFromConfig } from '../util/onboardingUtils';
+import { escapeShellArg } from '../util/shell';
 import * as crypto from 'crypto';
 import { Uri, workspace } from "vscode";
 import { MILanguageClient } from '../lang-client/activator';
@@ -458,7 +459,17 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
                 }
             }
         }
-        const runCommand = await getRunCommand(serverPath, isDebug);
+        let runCommand: string | undefined;
+        try {
+            runCommand = await getRunCommand(serverPath, isDebug);
+        } catch (error) {
+            // A path that can't be quoted for the shell (see escapeShellArg) fails here rather than
+            // being handed over half-parsed and leaving the launch to time out on the command port.
+            const message = `Server startup failed: ${error instanceof Error ? error.message : error}`;
+            serverLog(message);
+            reject(message);
+            return;
+        }
         if (runCommand === undefined) {
             reject('Error getting run command');
         } else {
@@ -470,7 +481,17 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
                 ...definedEnvVariables
             };
 
-            serverProcess = child_process.spawn(`${runCommand}`, vmArgs, { shell: true, env: envVariables });
+            let escapedVmArgs: string[];
+            try {
+                escapedVmArgs = vmArgs.map(escapeShellArg);
+            } catch (error) {
+                const message = `Server startup failed: ${error instanceof Error ? error.message : error}`;
+                serverLog(message);
+                reject(message);
+                return;
+            }
+
+            serverProcess = child_process.spawn(`${runCommand}`, escapedVmArgs, { shell: true, env: envVariables });
             showServerOutputChannel();
 
             if (serverProcess.stdout) {
