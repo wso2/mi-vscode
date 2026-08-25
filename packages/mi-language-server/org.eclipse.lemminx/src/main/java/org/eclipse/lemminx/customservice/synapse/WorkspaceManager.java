@@ -20,6 +20,7 @@ package org.eclipse.lemminx.customservice.synapse;
 
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -192,12 +193,81 @@ public class WorkspaceManager {
         if (path == null) {
             return null;
         }
-        try {
-            return Paths.get(Utils.getAbsolutePath(path)).toAbsolutePath().normalize().toString();
-        } catch (Exception e) {
-            log.log(Level.WARNING, "Failed to normalize project path for comparison: " + path, e);
-            return path;
+        Path normalized = toComparablePath(path);
+        return normalized != null ? normalized.toString() : path;
+    }
+
+    /**
+     * Converts a filesystem path <em>or</em> a {@code file://} URI to an absolute, normalized
+     * {@link Path} for comparison against another such value.
+     *
+     * <p>Comparing as {@link Path}s rather than as URI strings is deliberate. There is no single
+     * canonical {@code file://} spelling of a Windows path: VS Code sends the drive-letter colon
+     * percent-encoded ({@code file:///c%3A/Users/...}), while {@code Path.toUri()} does not
+     * ({@code file:///c:/Users/...}). Two spellings of the same folder must never read as two
+     * different projects, so anything that needs to know "does this file live in that project" has
+     * to normalize away the URI layer first — see {@link #getProjectForFile(String)}.
+     *
+     * @return the normalized absolute path, or {@code null} if {@code pathOrUri} is {@code null} or
+     *         cannot be parsed as a path
+     */
+    private static Path toComparablePath(String pathOrUri) {
+
+        if (pathOrUri == null) {
+            return null;
         }
+        try {
+            return Paths.get(Utils.getAbsolutePath(pathOrUri)).toAbsolutePath().normalize();
+        } catch (Exception e) {
+            log.log(Level.WARNING, "Failed to normalize path for comparison: " + pathOrUri, e);
+            return null;
+        }
+    }
+
+    /**
+     * Resolves the {@link ProjectContext} that owns a file, given its <em>filesystem path</em> (a
+     * {@code file://} URI is also accepted), using a longest-prefix match over project roots.
+     *
+     * <p>Use this — not {@link #getProjectForDocument(String)} — for any request field that carries a
+     * path rather than a document URI. {@code getProjectForDocument} compares raw URI strings against
+     * the registry keys, which are the workspace-folder URIs exactly as the client sent them; a path
+     * converted to a URI locally will not necessarily produce the same spelling (on Windows it does
+     * not: {@code c%3A} vs. {@code c:}), and the lookup then misses for every document in every
+     * project. This method compares normalized {@link Path}s instead, so no URI encoding is involved.
+     *
+     * <p>Matching is done on whole path elements, so a root of {@code .../Order} does not claim a file
+     * under {@code .../Order2}, and the <em>longest</em> matching root wins so that a project nested
+     * inside another resolves to the inner one.
+     *
+     * @param filePath the file's absolute filesystem path, or its {@code file://} URI
+     * @return the owning {@link ProjectContext}, or {@code null} if no registered project contains it
+     */
+    public ProjectContext getProjectForFile(String filePath) {
+
+        Path file = toComparablePath(filePath);
+        if (file == null) {
+            log.log(Level.WARNING, "getProjectForFile called with an unusable path \u2014 returning null: "
+                    + filePath);
+            return null;
+        }
+
+        ProjectContext bestMatch = null;
+        int longestPrefixLength = -1;
+
+        for (ProjectContext context : projects.values()) {
+            Path root = toComparablePath(context.getProjectUri());
+            // Path.startsWith compares whole name elements, and does so case-insensitively on
+            // Windows — the same tolerance isSameProjectPath already relies on.
+            if (root != null && file.startsWith(root) && root.getNameCount() > longestPrefixLength) {
+                longestPrefixLength = root.getNameCount();
+                bestMatch = context;
+            }
+        }
+
+        if (bestMatch == null) {
+            log.log(Level.WARNING, "getProjectForFile: no registered project contains file: " + file);
+        }
+        return bestMatch;
     }
 
     /**

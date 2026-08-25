@@ -1609,13 +1609,19 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             collectResourceNames(allResources, artifactNames, templatePaths, nameToFiles);
 
             // Dependent-project artifacts are loaded per-project into that document's ProjectContext;
-            // resolve it from the document's own URI instead of reading a single global default, so
-            // documents in different open projects see their own project's dependencies.
+            // resolve it from the document's own URI so documents in different open projects see their
+            // own project's dependencies.
+            //
+            // TODO(unrouted-request): when the document belongs to no registered project there is no
+            // correct set of dependent artifacts to use. It used to be seeded from the default project,
+            // which validated such a document against the *first* project's .car dependencies —
+            // resolving references that should not resolve and inventing duplicate-name clashes.
+            // Contributing nothing is the honest answer: unresolved references stay unresolved.
             ProjectContext projectContext =
                     SynapseLanguageService.resolveProjectContext(document.getDocumentURI());
             Map<String, ResourceResponse> dependentResources = projectContext != null
                     ? projectContext.getResourceFinder().getDependentResourcesMap()
-                    : SynapseLanguageService.getLoadedDependentResources();
+                    : java.util.Collections.emptyMap();
             collectResourceNames(dependentResources, artifactNames, templatePaths, nameToFiles);
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to build artifact name index for cross-reference validation", e);

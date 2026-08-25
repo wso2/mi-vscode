@@ -110,7 +110,6 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	private TelemetryManager telemetryManager;
 	private final SynapseLanguageService synapseLanguageService;
 	private final WorkspaceManager workspaceManager = new WorkspaceManager();
-	private ProjectContext defaultProjectContext;
 	private Map<String, Path> workspaceSchemas = new HashMap<>();
 	private Object lastKnownInitOptions = null;
 	public XMLLanguageServer() {
@@ -213,29 +212,25 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	/**
 	 * Builds and registers a {@link ProjectContext} in the {@link WorkspaceManager} for every
 	 * workspace folder that is an MI project. Falls back to {@code params.getRootPath()} for
-	 * older, single-root-only clients that don't send {@code workspaceFolders}. The first
-	 * successfully-built context becomes the {@link #getDefaultProjectContext() default context} that
-	 * {@code SynapseLanguageService} falls back to for RPCs that carry no resolvable document URI —
-	 * mirroring the previous single-project behavior for single-root clients.
+	 * older, single-root-only clients that don't send {@code workspaceFolders}.
+	 *
+	 * <p>No project is singled out as a default. Requests that cannot be attributed to a registered
+	 * project are answered with an empty result rather than by an arbitrary one — see the
+	 * {@code SynapseLanguageService} class javadoc for why.
 	 */
 	private void registerWorkspaceProjects(InitializeParams params) {
 		String miServerPath = synapseLanguageService.getMiServerPath();
 		List<WorkspaceFolder> folders = params.getWorkspaceFolders();
-		ProjectContext first = null;
 		if (folders != null && !folders.isEmpty()) {
 			for (WorkspaceFolder folder : folders) {
-				ProjectContext context = addProjectContext(folder.getUri(), Utils.getAbsolutePath(folder.getUri()),
+				addProjectContext(folder.getUri(), Utils.getAbsolutePath(folder.getUri()),
 						miServerPath, workspaceSchemas.get(folder.getUri()));
-				if (first == null) {
-					first = context;
-				}
 			}
 		} else if (params.getRootPath() != null) {
 			String rootPath = params.getRootPath();
 			String rootUri = toRegistryUri(rootPath);
-			first = addProjectContext(rootUri, rootPath, miServerPath, workspaceSchemas.get(rootUri));
+			addProjectContext(rootUri, rootPath, miServerPath, workspaceSchemas.get(rootUri));
 		}
-		this.defaultProjectContext = first;
 	}
 
 	/**
@@ -272,15 +267,6 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 
 	public WorkspaceManager getWorkspaceManager() {
 		return workspaceManager;
-	}
-
-	/**
-	 * Returns the {@link ProjectContext} that {@code SynapseLanguageService} falls back to for RPCs
-	 * whose parameters carry no document/folder URI to resolve a context from. This is the first
-	 * project registered at {@code initialize} time (the sole project, for single-root clients).
-	 */
-	public ProjectContext getDefaultProjectContext() {
-		return defaultProjectContext;
 	}
 
 	/**

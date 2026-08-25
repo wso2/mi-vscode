@@ -141,7 +141,13 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 				if (context != null) {
 					context.updateInboundConnectors();
 				} else {
-					((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateInboundConnectors();
+					// TODO(unrouted-request): a watched .zip that belongs to no registered MI project.
+					// This previously reloaded the *default* project's inbound connectors, refreshing a
+					// project with nothing to do with the changed file. Ignoring it is correct for the
+					// known cause (a zip in a non-MI workspace folder); if a zip inside a real MI
+					// project ever lands here, that project failed to register — which this log surfaces.
+					log.warning("Watched inbound connector zip belongs to no registered project, ignoring: "
+							+ change.getUri());
 				}
 			} else if (change.getUri().contains(Constant.CONNECTORS) && change.getUri().contains(".zip")) {
 				ProjectContext context = xmlLanguageServer
@@ -149,7 +155,9 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 				if (context != null) {
 					context.updateConnectors();
 				} else {
-					((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateConnectors();
+					// TODO(unrouted-request): see the inbound branch above — same reasoning.
+					log.warning("Watched connector zip belongs to no registered project, ignoring: "
+							+ change.getUri());
 				}
 			} else {
 				// LSP URIs use '/', but normalize defensively so a backslash path also matches on Windows.
