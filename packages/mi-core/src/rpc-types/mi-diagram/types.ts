@@ -1771,6 +1771,7 @@ export interface SaveInboundEPUischemaRequest {
 export interface GetInboundEPUischemaRequest {
     documentPath?: string;
     connectorName?: string;
+    projectUri?: string;
 }
 
 export interface GetInboundEPUischemaResponse {
@@ -2435,6 +2436,7 @@ export interface DriverMavenCoordinatesRequest {
     filePath: string;
     connectorName: string;
     connectionType: string;
+    projectUri?: string;
 }
 
 export interface DriverMavenCoordinatesResponse {

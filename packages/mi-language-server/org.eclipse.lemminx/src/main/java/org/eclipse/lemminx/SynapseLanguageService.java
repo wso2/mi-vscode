@@ -387,6 +387,23 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
+     * The {@link #resolveByPath} counterpart of {@link #resolveByUriOrProjectUri}: prefers a
+     * filesystem path field when the request carries one, and falls back to an explicit project root.
+     *
+     * <p>Use this for requests whose path field is <em>legitimately optional</em> — a path that is
+     * blank by design, not by omission. Routing such a request on the path alone resolves it to no
+     * project exactly in the case it was meant to serve.
+     *
+     * @return the resolved project, or {@code null} if neither field identifies one
+     */
+    private ProjectContext resolveByPathOrProjectUri(String filePath, String projectUri) {
+        if (StringUtils.isNotBlank(filePath)) {
+            return resolveByPath(filePath);
+        }
+        return resolveByProjectUri(projectUri);
+    }
+
+    /**
      * Resolves the single, process-global {@link TryOutManager} for {@code ctx}, (re)binding it to
      * {@code ctx}'s project when it currently points elsewhere.
      *
@@ -562,12 +579,29 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         });
     }
 
+    /**
+     * Lists the artifacts of one project — its own plus those its {@code .car} dependencies
+     * contribute — for the key dropdowns in the property panels.
+     *
+     * <p>Routing must land on the requesting project's {@link ProjectContext}, because the dependent
+     * artifacts live in that context's {@code ResourceFinder} and nowhere else. Both the explicit
+     * {@code projectUri} and the originating document are honoured so a client that supplies either
+     * one is routed correctly; only a request carrying neither falls back to {@link #defaultContext}.
+     *
+     * <p>{@code customProjectUri} is the debug-flow override: the debugger asks for a project that
+     * may not be open in the workspace at all, so it names the directory to scan directly. It is a
+     * project root path, hence {@link #resolveByProjectUri} rather than {@link #resolveByUri}.
+     *
+     * <p>Except for that override and the legacy {@code projectPath} field, the scanned directory is
+     * taken from the resolved context, so the directory walked and the dependency map merged into the
+     * result always belong to the same project.
+     */
     @Override
     public CompletableFuture<ResourceResponse> availableResources(ResourceParam param) {
 
         ProjectContext ctx = StringUtils.isNotBlank(param.customProjectUri)
-                ? resolveByUri(param.customProjectUri)
-                : resolveByProjectUri(param.projectUri);
+                ? resolveByProjectUri(param.customProjectUri)
+                : resolveByUriOrProjectUri(param.getDocumentUri(), param.projectUri);
         String effectivePath = StringUtils.isNotBlank(param.projectPath) ? param.projectPath
                 : StringUtils.isNotBlank(param.customProjectUri) ? param.customProjectUri
                 : ctx != null ? ctx.getProjectUri() : null;
@@ -946,7 +980,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<InboundConnectorResponse> getInboundConnectorSchema(InboundConnectorParam param) {
 
-        ProjectContext ctx = resolveByUri(param.documentPath);
+        // documentPath is a filesystem path — the handler below does new File(param.documentPath) —
+        // but it is only sent when an *existing* inbound endpoint is being edited. Creating a new
+        // event integration sends connectorId alone, so routing on documentPath alone resolved every
+        // "pick a connector" click to no project: the handler returned null and the form silently
+        // stayed on the connector list. Fall back to the project the caller named.
+        ProjectContext ctx = resolveByPathOrProjectUri(param.documentPath, param.projectUri);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return null;
@@ -1444,7 +1483,14 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DriverMavenCoordinatesResponse> getDriverMavenCoordinates(
             DriverMavenCoordinatesRequest request){
-        ProjectContext ctx = resolveByUri(request.getFilePath());
+        // filePath is the JDBC driver's path on disk, taken from a connection parameter — and it is
+        // blank whenever the driver has not been downloaded yet, which is the main reason to ask for
+        // the coordinates at all (ConnectorDownloadManager then reads them from the connector's
+        // descriptor.yml instead). Routing on it alone therefore resolved the first-use case, where a
+        // connection carries neither a driverPath nor stored coordinates, to no project: the handler
+        // returned null and the caller's whole connection-validation step failed, leaving the DB
+        // operation form's table and query fields empty. Fall back to the project the caller named.
+        ProjectContext ctx = resolveByPathOrProjectUri(request.getFilePath(), request.getProjectUri());
         return CompletableFuture.supplyAsync(() -> ctx != null ? ConnectorDownloadManager.getDriverMavenCoordinates(
                 request.getFilePath(),
                 request.getConnectorName(),

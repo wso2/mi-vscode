@@ -4396,7 +4396,14 @@ ${endpointAttributes}
                 registryResources: responses.flatMap(r => r?.registryResources ?? [])
             };
         } else {
-            return (await MILanguageClient.getInstance(this.projectUri)).getAvailableResources(params);
+            // Webview callers (e.g. the Keylookup dropdowns) don't know their project, so stamp this
+            // manager's project on the request. Without it the language server has no project to route
+            // to and answers from the default (first) workspace folder, which in a multi-root
+            // workspace omits this project's .car dependency artifacts.
+            return (await MILanguageClient.getInstance(this.projectUri)).getAvailableResources({
+                ...params,
+                projectUri: params.projectUri ?? this.projectUri
+            });
         }
     }
 
@@ -4874,7 +4881,8 @@ ${endpointAttributes}
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.getInboundEPUischema({
                 connectorName: params.connectorName,
-                documentPath: params.documentPath
+                documentPath: params.documentPath,
+                projectUri: this.projectUri
             });
             resolve(res);
         });
@@ -6647,7 +6655,9 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
 
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getDriverMavenCoordinates(params);
+            // params.filePath is blank until the driver has been downloaded, so the server cannot
+            // route this request by it — name the project explicitly, as the other driver RPCs do.
+            const res = await langClient.getDriverMavenCoordinates({ ...params, projectUri: this.projectUri });
             resolve(res);
 
         });

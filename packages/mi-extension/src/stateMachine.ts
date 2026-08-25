@@ -561,8 +561,10 @@ const stateMachine = createMachine<MachineContext>({
                                     // we need to enrich Task with the sequence model
                                     const task: Task = node.task as Task;
                                     viewLocation.view = MACHINE_VIEW.TaskView;
-                                    const sequenceName = task.property.find((p) => { return p.name === 'sequenceName' })?.value
-                                    const sequencePath = await langClient.getSequencePath(sequenceName ? sequenceName : "");
+                                    const sequenceName = task.property?.find((p) => { return p.name === 'sequenceName' })?.value
+                                    // Resolve against the project that owns this task - the shared
+                                    // language client is bound to whichever project spawned the JVM.
+                                    const sequencePath = await langClient.getSequencePath(sequenceName ? sequenceName : "", context.projectUri);
                                     if (sequencePath) {
                                         const sequence = await langClient.getSyntaxTree({ documentIdentifier: { uri: sequencePath } });
                                         task.sequence = sequence.syntaxTree.sequence;
@@ -584,7 +586,9 @@ const stateMachine = createMachine<MachineContext>({
                                     const inboundEndpoint: InboundEndpoint = node.inboundEndpoint as InboundEndpoint;
                                     viewLocation.view = MACHINE_VIEW.InboundEPView;
                                     const epSequenceName = inboundEndpoint.sequence;
-                                    const sequenceURI = await langClient.getSequencePath(epSequenceName ? epSequenceName : "");
+                                    // Resolve against the project that owns this inbound endpoint - the
+                                    // shared language client is bound to whichever project spawned the JVM.
+                                    const sequenceURI = await langClient.getSequencePath(epSequenceName ? epSequenceName : "", context.projectUri);
                                     if (sequenceURI) {
                                         const sequence = await langClient.getSyntaxTree({ documentIdentifier: { uri: sequenceURI } });
                                         inboundEndpoint.sequenceModel = sequence.syntaxTree.sequence;
