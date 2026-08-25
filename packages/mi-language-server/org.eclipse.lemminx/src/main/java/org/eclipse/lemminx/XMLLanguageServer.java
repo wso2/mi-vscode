@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -44,6 +45,9 @@ import org.eclipse.lemminx.customservice.ISynapseLanguageService;
 import org.eclipse.lemminx.customservice.SynapseLanguageClientAPI;
 import org.eclipse.lemminx.customservice.XMLLanguageClientAPI;
 import org.eclipse.lemminx.customservice.XMLLanguageServerAPI;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
 import org.eclipse.lemminx.extensions.contentmodel.settings.ContentModelSettings;
@@ -81,6 +85,7 @@ import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.SetTraceParams;
 import org.eclipse.lsp4j.TextDocumentPositionParams;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.eclipse.lsp4j.jsonrpc.services.JsonDelegate;
 import org.eclipse.lsp4j.services.LanguageClient;
 import org.eclipse.lsp4j.services.TextDocumentService;
@@ -104,6 +109,8 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	private XMLCapabilityManager capabilityManager;
 	private TelemetryManager telemetryManager;
 	private final SynapseLanguageService synapseLanguageService;
+	private final WorkspaceManager workspaceManager = new WorkspaceManager();
+	private ProjectContext defaultProjectContext;
 	private Map<String, Path> workspaceSchemas = new HashMap<>();
 	private Object lastKnownInitOptions = null;
 	public XMLLanguageServer() {
@@ -136,14 +143,16 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 			if (!useAssociationSettings) {
 				Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
 				LOGGER.info("Synapse schema path set to: " + synapseSchemaPath);
-				if (synapseSchemaPath != null) {
-					synapseLanguageService.setSynapseXSDPath(synapseSchemaPath);
+				if (synapseSchemaPath != null && params.getRootPath() != null) {
+					// Catalog mode is single-root only; key it the same way the rootPath fallback
+					// in registerWorkspaceProjects() looks it up, so ProjectContext writes its
+					// generated connectors.xsd into this SAME directory instead of a fresh copy.
+					workspaceSchemas.put(toRegistryUri(params.getRootPath()), synapseSchemaPath);
 				}
 			} else {
 				workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
 				if (!workspaceSchemas.isEmpty()) {
 					LOGGER.info("Loaded " + workspaceSchemas.size() + " workspace schemas");
-					synapseLanguageService.setSynapseXSDPath(workspaceSchemas.values().iterator().next());
 				}
 			}
 		} catch (IOException | URISyntaxException e) {
@@ -182,8 +191,120 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		ServerCapabilities nonDynamicServerCapabilities = ServerCapabilitiesInitializer.getNonDynamicServerCapabilities(
 				capabilityManager.getClientCapabilities(), xmlTextDocumentService.isIncrementalSupport());
 
-		synapseLanguageService.init(params.getRootPath(), xmlSettings,languageClient);
+		synapseLanguageService.applySettings(xmlSettings);
+		registerWorkspaceProjects(params);
+		synapseLanguageService.init(params.getRootPath(), xmlSettings, languageClient);
 		return CompletableFuture.completedFuture(new InitializeResult(nonDynamicServerCapabilities));
+	}
+
+	/**
+	 * Normalizes a plain filesystem path (e.g. the deprecated {@code InitializeParams.rootPath}) into
+	 * the same {@code file:///...} URI shape LSP folder/document URIs use, with no trailing slash — so
+	 * it can be used as a {@link WorkspaceManager} registry key and matched against real document URIs.
+	 */
+	private static String toRegistryUri(String path) {
+		String uri = Path.of(path).toUri().toString();
+		if (uri.endsWith("/")) {
+			uri = uri.substring(0, uri.length() - 1);
+		}
+		return uri;
+	}
+
+	/**
+	 * Builds and registers a {@link ProjectContext} in the {@link WorkspaceManager} for every
+	 * workspace folder that is an MI project. Falls back to {@code params.getRootPath()} for
+	 * older, single-root-only clients that don't send {@code workspaceFolders}. The first
+	 * successfully-built context becomes the {@link #getDefaultProjectContext() default context} that
+	 * {@code SynapseLanguageService} falls back to for RPCs that carry no resolvable document URI —
+	 * mirroring the previous single-project behavior for single-root clients.
+	 */
+	private void registerWorkspaceProjects(InitializeParams params) {
+		String miServerPath = synapseLanguageService.getMiServerPath();
+		List<WorkspaceFolder> folders = params.getWorkspaceFolders();
+		ProjectContext first = null;
+		if (folders != null && !folders.isEmpty()) {
+			for (WorkspaceFolder folder : folders) {
+				ProjectContext context = addProjectContext(folder.getUri(), Utils.getAbsolutePath(folder.getUri()),
+						miServerPath, workspaceSchemas.get(folder.getUri()));
+				if (first == null) {
+					first = context;
+				}
+			}
+		} else if (params.getRootPath() != null) {
+			String rootPath = params.getRootPath();
+			String rootUri = toRegistryUri(rootPath);
+			first = addProjectContext(rootUri, rootPath, miServerPath, workspaceSchemas.get(rootUri));
+		}
+		this.defaultProjectContext = first;
+	}
+
+	/**
+	 * Creates and registers a single {@link ProjectContext}, skipping folders that aren't MI
+	 * projects (no {@code pom.xml}/{@code src}).
+	 *
+	 * @param registryUri    the URI to key this project by in {@link WorkspaceManager} (matches the
+	 *                       format of document URIs, for longest-prefix resolution)
+	 * @param projectPath    the absolute filesystem path of the project root
+	 * @param miServerPath   the local MI server installation path
+	 * @param synapseXsdPath the schema directory already registered for this project's document
+	 *                       associations (may be {@code null}, in which case the context extracts its
+	 *                       own copy)
+	 * @return the created {@link ProjectContext}, or {@code null} if {@code projectPath} isn't an MI
+	 *         project or initialization failed
+	 */
+	private ProjectContext addProjectContext(String registryUri, String projectPath, String miServerPath,
+			Path synapseXsdPath) {
+		if (!Utils.isValidProject(projectPath)) {
+			return null;
+		}
+		try {
+			boolean isLegacyProject = Utils.isLegacyProject(projectPath);
+			String projectServerVersion = Utils.getServerVersion(projectPath, Constant.DEFAULT_MI_VERSION);
+			ProjectContext context = new ProjectContext(projectPath, isLegacyProject, projectServerVersion);
+			context.initProject(miServerPath, languageClient, synapseXsdPath);
+			workspaceManager.addProject(registryUri, context);
+			return context;
+		} catch (Exception e) {
+			LOGGER.log(Level.SEVERE, "Failed to initialize ProjectContext for: " + projectPath, e);
+			return null;
+		}
+	}
+
+	public WorkspaceManager getWorkspaceManager() {
+		return workspaceManager;
+	}
+
+	/**
+	 * Returns the {@link ProjectContext} that {@code SynapseLanguageService} falls back to for RPCs
+	 * whose parameters carry no document/folder URI to resolve a context from. This is the first
+	 * project registered at {@code initialize} time (the sole project, for single-root clients).
+	 */
+	public ProjectContext getDefaultProjectContext() {
+		return defaultProjectContext;
+	}
+
+	/**
+	 * Builds and registers a {@link ProjectContext} for a workspace folder added after
+	 * {@code initialize} (e.g. via {@code workspace/didChangeWorkspaceFolders}). No-op if
+	 * {@code projectPath} isn't an MI project.
+	 *
+	 * @param registryUri    the folder URI to key this project by in {@link WorkspaceManager}
+	 * @param projectPath    the absolute filesystem path of the project root
+	 * @param synapseXsdPath the schema directory already registered for this folder's document
+	 *                       associations (may be {@code null})
+	 */
+	public void addWorkspaceProjectContext(String registryUri, String projectPath, Path synapseXsdPath) {
+		addProjectContext(registryUri, projectPath, synapseLanguageService.getMiServerPath(), synapseXsdPath);
+	}
+
+	/**
+	 * Removes the {@link ProjectContext} registered for a workspace folder removed via
+	 * {@code workspace/didChangeWorkspaceFolders}. No-op if none is registered for that URI.
+	 *
+	 * @param registryUri the folder URI the context was registered under
+	 */
+	public void removeWorkspaceProjectContext(String registryUri) {
+		workspaceManager.removeProject(registryUri);
 	}
 
 	/*

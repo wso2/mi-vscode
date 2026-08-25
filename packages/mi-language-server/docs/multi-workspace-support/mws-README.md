@@ -82,7 +82,8 @@ Transition legacy singletons (e.g., `ConnectorHolder`, `SynapseLanguageService`,
 resolved per project context instead of a global state.
 
 * Introduce `ProjectContext` and `WorkspaceManager` classes to manage memory scoped to individual projects.
-    *   *Reference Files:* `multi-workspace-support/resources/ProjectContext.java`, `multi-workspace-support/resources/WorkspaceManager.java`
+    *   *Reference Files:* `org.eclipse.lemminx/src/main/java/org/eclipse/lemminx/customservice/synapse/ProjectContext.java`,
+        `org.eclipse.lemminx/src/main/java/org/eclipse/lemminx/customservice/synapse/WorkspaceManager.java`
 
 * Isolate Language Server features (Auto-Complete, Go-To-Definition) per workspace.
 

@@ -12,6 +12,7 @@
  */
 package org.eclipse.lemminx;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,7 +23,9 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.eclipse.lemminx.commons.WorkspaceFolders;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
+import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.extensions.synapse.SynapseDiagnosticsParticipant;
 import org.eclipse.lemminx.services.extensions.commands.IXMLCommandService;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
@@ -30,6 +33,7 @@ import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.DidChangeWorkspaceFoldersParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.FileEvent;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.eclipse.lsp4j.jsonrpc.CompletableFutures;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
@@ -92,20 +96,26 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 
 		boolean hasSchemaChanges = false;
 		if (params.getEvent().getRemoved() != null) {
-			for (org.eclipse.lsp4j.WorkspaceFolder folder : params.getEvent().getRemoved()) {
+			for (WorkspaceFolder folder : params.getEvent().getRemoved()) {
 				if (log.isLoggable(Level.FINE)) {
 					log.fine("Removing workspace folder: " + folder.getUri());
 				}
 				xmlLanguageServer.removeWorkspaceSchema(folder.getUri());
+				xmlLanguageServer.removeWorkspaceProjectContext(folder.getUri());
 				hasSchemaChanges = true;
 			}
 		}
 		if (params.getEvent().getAdded() != null) {
-			for (org.eclipse.lsp4j.WorkspaceFolder folder : params.getEvent().getAdded()) {
+			for (WorkspaceFolder folder : params.getEvent().getAdded()) {
 				try {
-					java.nio.file.Path schemaDir = org.eclipse.lemminx.customservice.synapse.utils.Utils.copyXSDFiles(folder.getUri());
+					// copyXSDFiles() reads the project's pom.xml to pick the MI-version schema set, so it
+					// needs the filesystem path — handing it the file:// URI makes the pom lookup fail and
+					// silently falls back to DEFAULT_MI_VERSION's XSDs (the initialize path passes a path too).
+					String projectPath = Utils.getAbsolutePath(folder.getUri());
+					Path schemaDir = Utils.copyXSDFiles(projectPath);
 					xmlLanguageServer.addWorkspaceSchema(folder.getUri(), schemaDir);
 					hasSchemaChanges = true;
+					xmlLanguageServer.addWorkspaceProjectContext(folder.getUri(), projectPath, schemaDir);
 				} catch (Exception e) {
 					log.log(Level.SEVERE, "Failed to copy XSD files for workspace folder: " + folder.getUri() + ". Error: " + e.getMessage());
 				}
@@ -124,9 +134,21 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 		for (FileEvent change : changes) {
 			if ((change.getUri().contains(Constant.INBOUND_ENDPOINTS)
 					|| change.getUri().contains(Constant.INBOUND_CONNECTORS_DIR)) && change.getUri().contains(".zip")) {
-				((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateInboundConnectors();
+				ProjectContext context = xmlLanguageServer
+						.getWorkspaceManager().getProjectForDocument(change.getUri());
+				if (context != null) {
+					context.updateInboundConnectors();
+				} else {
+					((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateInboundConnectors();
+				}
 			} else if (change.getUri().contains(Constant.CONNECTORS) && change.getUri().contains(".zip")) {
-				((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateConnectors();
+				ProjectContext context = xmlLanguageServer
+						.getWorkspaceManager().getProjectForDocument(change.getUri());
+				if (context != null) {
+					context.updateConnectors();
+				} else {
+					((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateConnectors();
+				}
 			} else {
 				// LSP URIs use '/', but normalize defensively so a backslash path also matches on Windows.
 				if (change.getUri().replace('\\', '/').contains("src/main/wso2mi")) {

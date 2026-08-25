@@ -24,15 +24,23 @@ import org.eclipse.lemminx.customservice.synapse.connectors.ConnectionHandler;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.connectors.NewProjectConnectorLoader;
 import org.eclipse.lemminx.customservice.synapse.connectors.OldProjectConnectorLoader;
+import org.eclipse.lemminx.customservice.synapse.connectors.SchemaGenerate;
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionHelperProvider;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.MediatorHandler;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.AbstractResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.ResourceFinderFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.MediatorFactoryFinder;
+import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -229,6 +237,24 @@ public class ProjectContext {
      * @throws Exception if any step in the initialization pipeline fails
      */
     public void initProject(String miServerPath, SynapseLanguageClientAPI languageClient) throws Exception {
+        initProject(miServerPath, languageClient, null);
+    }
+
+    /**
+     * Same as {@link #initProject(String, SynapseLanguageClientAPI)}, but lets the caller supply the
+     * schema directory this project's documents were already registered against (e.g. via LemMinX file
+     * associations or the XML catalog), so this context's generated {@code connectors.xsd} lands in the
+     * SAME directory the validation engine actually reads — not an independently re-extracted copy.
+     *
+     * @param miServerPath   absolute path to the local MI server installation
+     * @param languageClient the language-client proxy for sending notifications back to the IDE
+     * @param synapseXsdPath the schema directory already resolved for this project's document
+     *                       associations, or {@code null} to let this context extract its own (e.g. for
+     *                       callers that never registered one, such as tests)
+     * @throws Exception if any step in the initialization pipeline fails
+     */
+    public void initProject(String miServerPath, SynapseLanguageClientAPI languageClient, Path synapseXsdPath)
+            throws Exception {
 
         log.log(Level.INFO, "Initializing ProjectContext for: " + projectUri);
 
@@ -266,10 +292,17 @@ public class ProjectContext {
         // 7. Build the per-context mediator factory finder.
         this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
 
-        // 8. Resolve the synapse XSD path for this project's MI version.
-        this.synapseXsdPath = Utils.copyXSDFiles(projectUri);
+        // 8. Resolve the synapse XSD path for this project's MI version — reuse the caller-supplied
+        // directory when given, so generated schemas land where the validation engine already looks.
+        this.synapseXsdPath = synapseXsdPath != null ? synapseXsdPath : Utils.copyXSDFiles(projectUri);
 
         this.initialized = true;
+
+        // 9. Load this project's connectors now that the loader and XSD path are ready, and pack the
+        // bundled HTTP connector in if this project's MI version needs it.
+        updateConnectors();
+        packHttpConnector();
+
         log.log(Level.INFO, "ProjectContext initialized successfully for: " + projectUri);
     }
 
@@ -418,6 +451,81 @@ public class ProjectContext {
     public MediatorFactoryFinder getMediatorFactory() {
         checkInitialized();
         return mediatorFactory;
+    }
+
+    // -------------------------------------------------------------------------
+    // Connector refresh — invoked when this project's connector/inbound .zip
+    // files change on disk.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Reloads this project's outbound connectors from disk, refreshes its mediator
+     * descriptor list, and regenerates {@code connectors.xsd} into this project's own
+     * {@link #synapseXsdPath}. Scoped entirely to this context's {@link #connectorHolder},
+     * so it never affects any other open project.
+     *
+     * @throws IllegalStateException if {@link #initProject} has not been called
+     */
+    public void updateConnectors() {
+        checkInitialized();
+        connectorLoader.loadConnector();
+        if (mediatorHandler.isInitialized()) {
+            mediatorHandler.reloadMediatorList(projectServerVersion);
+        }
+        String connectorPath = synapseXsdPath.resolve("mediators").resolve("connectors.xsd").toString();
+        SchemaGenerate.generate(connectorHolder, connectorPath);
+    }
+
+    /**
+     * Reloads this project's inbound connectors from disk.
+     *
+     * @throws IllegalStateException if {@link #initProject} has not been called
+     */
+    public void updateInboundConnectors() {
+        checkInitialized();
+        inboundConnectorHolder.getCustomInboundConnectors();
+    }
+
+    /**
+     * Packs the bundled HTTP connector into this project's connector download directory, if this
+     * project's MI version needs it and it isn't already there. Mirrors the previous single-project
+     * bootstrap so every registered project (not just the first one) gets the built-in HTTP connector.
+     */
+    private void packHttpConnector() {
+
+        if (Utils.compareVersions(projectServerVersion, Constant.MI_440_VERSION) < 0
+                || !Utils.hasDependency(projectUri, Constant.HTTP_CONNECTOR_ARTIFACT_ID)) {
+            return;
+        }
+        String projectId = new File(projectUri).getName() + "_" + Utils.getHash(projectUri);
+        String connectorDownloadPath = Path.of(System.getProperty(Constant.USER_HOME), Constant.WSO2_MI,
+                Constant.CONNECTORS, projectId, Constant.DOWNLOADED).toString();
+        File connectorDownloadFolder = new File(connectorDownloadPath);
+        if (!connectorDownloadFolder.exists()) {
+            boolean isDirectoryCreationSuccessful = connectorDownloadFolder.mkdirs();
+            if (!isDirectoryCreationSuccessful) {
+                log.log(Level.SEVERE, "Error occurred while creating directory: " + connectorDownloadFolder);
+            }
+        } else {
+            File[] matchingFiles = connectorDownloadFolder.listFiles((dir, name) ->
+                    name.startsWith("mi-connector-http") && name.endsWith(".zip"));
+            if (matchingFiles != null && matchingFiles.length > 0) {
+                return;
+            }
+        }
+        try {
+            InputStream inputStream = ProjectContext.class.getResourceAsStream(
+                    "/org/eclipse/lemminx/connectors/mi-connector-http-0.1.14.zip");
+            if (inputStream == null) {
+                throw new FileNotFoundException("HTTP connector not found.");
+            }
+            Path httpConnectorPath = Paths.get(connectorDownloadPath, "mi-connector-http-0.1.14.zip");
+            Files.copy(inputStream, httpConnectorPath, StandardCopyOption.REPLACE_EXISTING);
+            inputStream.close();
+            updateConnectors();
+        } catch (Exception e) {
+            log.log(Level.SEVERE, "Error while packing the HTTP connector to the project. ", e);
+        }
     }
 
     // -------------------------------------------------------------------------

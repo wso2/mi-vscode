@@ -14,6 +14,8 @@
 
 package org.eclipse.lemminx.customservice.synapse.syntaxTree.utils;
 
+import org.eclipse.lemminx.SynapseLanguageService;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.AbstractFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.endpoint.EndpointFactory;
@@ -41,21 +43,37 @@ import java.util.Optional;
 
 public class SyntaxTreeUtils {
 
-    // Reassigned by SynapseLanguageService/ProjectContext on (re)initialization, rather than being a
-    // one-shot singleton, so a second project's MI version/connectors don't get stuck with the first's.
-    private static MediatorFactoryFinder mediatorFactory;
+    // Test-injection seam only (see setMediatorFactory) - production resolves the finder per-project
+    // from the node's owning document via getMediatorFactory(DOMNode), so no project's data is ever
+    // stuck here.
+    private static MediatorFactoryFinder testMediatorFactory;
+
+    // Immutable, project-invariant fallback (null MI version, empty connector set) for callers with
+    // no resolvable document URI (e.g. tests that exercise this class directly without a running server).
+    private static final MediatorFactoryFinder DEFAULT_MEDIATOR_FACTORY =
+            new MediatorFactoryFinder(null, null, new ConnectorHolder());
 
     public static void setMediatorFactory(MediatorFactoryFinder finder) {
 
-        mediatorFactory = finder;
+        testMediatorFactory = finder;
     }
 
-    private static MediatorFactoryFinder getMediatorFactory() {
+    /**
+     * Resolves the {@link MediatorFactoryFinder} scoped to the project that owns {@code node}'s
+     * document, so its MI version and connector set match that project rather than a shared/incorrect
+     * one.
+     */
+    private static MediatorFactoryFinder getMediatorFactory(DOMNode node) {
 
-        if (mediatorFactory == null) {
-            mediatorFactory = new MediatorFactoryFinder(null, null, new ConnectorHolder());
+        String documentUri = null;
+        if (node != null && node.getOwnerDocument() != null) {
+            documentUri = node.getOwnerDocument().getDocumentURI();
         }
-        return mediatorFactory;
+        ProjectContext ctx = SynapseLanguageService.resolveProjectContext(documentUri);
+        if (ctx != null) {
+            return ctx.getMediatorFactory();
+        }
+        return testMediatorFactory != null ? testMediatorFactory : DEFAULT_MEDIATOR_FACTORY;
     }
 
     public static Sequence createSequence(DOMNode node) {
@@ -79,7 +97,7 @@ public class SyntaxTreeUtils {
 
     public static Mediator createMediator(DOMNode node) {
 
-        Mediator mediators = getMediatorFactory().getMediator(node);
+        Mediator mediators = getMediatorFactory(node).getMediator(node);
         return mediators;
     }
 

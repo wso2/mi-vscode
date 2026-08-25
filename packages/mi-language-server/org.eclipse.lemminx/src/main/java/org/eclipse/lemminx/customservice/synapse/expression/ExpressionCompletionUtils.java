@@ -76,21 +76,32 @@ public class ExpressionCompletionUtils {
     private static final Map<String, Functions> FUNCTIONS = new HashMap<>();
     private static final List<List<String>> OPERATOR_COMPLETIONS = new ArrayList<>();
 
-    // Reassigned by SynapseLanguageService/ProjectContext on (re)initialization, rather than being a
-    // one-shot singleton, so a second project's MI version/connectors don't get stuck with the first's.
-    private static MediatorFactoryFinder mediatorFactory;
+    // Test-injection seam only (see setMediatorFactory) - production resolves the finder per-project
+    // from the document URI via getMediatorFactory(String), so no project's data is ever stuck here.
+    private static MediatorFactoryFinder testMediatorFactory;
+
+    // Immutable, project-invariant fallback (null MI version, empty connector set) for callers with
+    // no resolvable document URI (e.g. tests that exercise this class directly without a running server).
+    private static final MediatorFactoryFinder DEFAULT_MEDIATOR_FACTORY =
+            new MediatorFactoryFinder(null, null, new ConnectorHolder());
 
     public static void setMediatorFactory(MediatorFactoryFinder finder) {
 
-        mediatorFactory = finder;
+        testMediatorFactory = finder;
     }
 
-    private static MediatorFactoryFinder getMediatorFactory() {
+    /**
+     * Resolves the {@link MediatorFactoryFinder} scoped to the project that owns {@code documentUri},
+     * so its MI version and connector set match that project rather than a shared/incorrect one.
+     */
+    private static MediatorFactoryFinder getMediatorFactory(String documentUri) {
 
-        if (mediatorFactory == null) {
-            mediatorFactory = new MediatorFactoryFinder(null, null, new ConnectorHolder());
+        org.eclipse.lemminx.customservice.synapse.ProjectContext ctx =
+                org.eclipse.lemminx.SynapseLanguageService.resolveProjectContext(documentUri);
+        if (ctx != null) {
+            return ctx.getMediatorFactory();
         }
-        return mediatorFactory;
+        return testMediatorFactory != null ? testMediatorFactory : DEFAULT_MEDIATOR_FACTORY;
     }
 
     static {
@@ -465,7 +476,7 @@ public class ExpressionCompletionUtils {
         }
         int offset = document.offsetAt(position);
         DOMNode node = document.findNodeAt(offset);
-        Mediator mediator = getMediatorFactory().getMediator(node);
+        Mediator mediator = getMediatorFactory(document.getDocumentURI()).getMediator(node);
         if (mediator != null && !(mediator instanceof InvalidMediator)) {
             return position;
         }
