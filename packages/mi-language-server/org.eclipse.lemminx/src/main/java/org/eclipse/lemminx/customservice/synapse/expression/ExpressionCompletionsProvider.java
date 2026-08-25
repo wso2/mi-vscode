@@ -18,6 +18,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionContext;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionRequest;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionResponse;
@@ -59,7 +60,6 @@ public class ExpressionCompletionsProvider {
             Pattern.quote("file:" + File.separator + File.separator) + "(.+?)" +
                     Pattern.quote(Path.of("src", "main", "wso2mi").toString()) + ".*");
     private static final String EXPRESSION_REGEX = "\\$\\{([^}]*)}?$";
-    private static String projectPath;
 
     private ExpressionCompletionsProvider() {
 
@@ -123,7 +123,10 @@ public class ExpressionCompletionsProvider {
             return null;
         }
         String projectPath = getProjectPath(request.getXMLDocument().getDocumentURI());
-        ServerLessTryoutHandler serverLessTryoutHandler = new ServerLessTryoutHandler(projectPath);
+        // TODO(multi-project): resolve this project's real ConnectorHolder once WorkspaceManager can
+        // map a document URI to its owning ProjectContext (Phase 3). Until then, connector response/
+        // target-variable schema enrichment is unavailable from this static completion path.
+        ServerLessTryoutHandler serverLessTryoutHandler = new ServerLessTryoutHandler(projectPath, new ConnectorHolder());
 
         String documentUri = Utils.getAbsolutePath(request.getXMLDocument().getDocumentURI());
         String payload = ExpressionCompletionUtils.getInputPayload(projectPath, documentUri, request.getPosition());
@@ -152,15 +155,11 @@ public class ExpressionCompletionsProvider {
 
     private static String getProjectPath(String documentURI) {
 
-        if (StringUtils.isNotEmpty(projectPath)) {
-            return projectPath;
-        }
         Matcher matcher = PROJECT_PATH_REGEX.matcher(documentURI);
         if (!matcher.matches()) {
             return null;
         }
-        projectPath = matcher.group(1);
-        return projectPath;
+        return matcher.group(1);
     }
 
     private static void fillAttributeValueWithExpression(String valuePrefix, ICompletionRequest request,

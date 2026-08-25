@@ -39,6 +39,7 @@ public class ConnectionHandlerTest {
 
     ConnectionHandler connectionHandler;
     private Connector httpConnector;
+    private ConnectorHolder connectorHolder;
 
     @BeforeAll
     public void setUp() throws Exception {
@@ -50,18 +51,15 @@ public class ConnectionHandlerTest {
         String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
         ConnectorReader connectorReader = new ConnectorReader();
         httpConnector = connectorReader.readConnector(connectorPath, null);
-        connectionHandler.init(ConnectorHolder.getInstance());
+        connectorHolder = new ConnectorHolder();
+        connectionHandler.init(connectorHolder);
     }
 
     @BeforeEach
     public void resetHolder() {
 
-        // ConnectorHolder is a singleton with a static connectors list that other test
-        // classes (ConnectorLoaderTest, ConnectorInfoEndpointTest) may have cleared or
-        // mutated. Re-populate before each test to make this class order-independent.
-        ConnectorHolder holder = ConnectorHolder.getInstance();
-        holder.clearConnectors();
-        holder.addConnector(httpConnector);
+        connectorHolder.clearConnectors();
+        connectorHolder.addConnector(httpConnector);
     }
 
     @Test

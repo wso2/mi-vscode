@@ -64,6 +64,7 @@ import org.eclipse.lemminx.customservice.synapse.expression.ExpressionSignatureP
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionValidator;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionParam;
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionCompletionsProvider;
+import org.eclipse.lemminx.customservice.synapse.expression.ExpressionCompletionUtils;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionValidationResponse;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.HelperPanelData;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorResponse;
@@ -140,6 +141,7 @@ import org.eclipse.lemminx.customservice.synapse.schemagen.util.SchemaGenRequest
 import org.eclipse.lemminx.customservice.synapse.schemagen.util.SchemaGenResponse;
 import org.eclipse.lemminx.customservice.synapse.schemagen.util.SchemaGeneratorHelper;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.utils.SyntaxTreeUtils;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeResponse;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.MediatorFactoryFinder;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.ArtifactTypeResponse;
@@ -239,7 +241,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         this.xmlTextDocumentService = xmlTextDocumentService;
         this.xmlLanguageServer = xmlLanguageServer;
         uriResolverExtensionManager = xmlLanguageServer.getXMLLanguageService().getResolverExtensionManager();
-        this.connectorHolder = ConnectorHolder.getInstance();
+        this.connectorHolder = new ConnectorHolder();
         this.inboundConnectorHolder = new InboundConnectorHolder();
         mediatorHandler = new MediatorHandler();
         connectionHandler = new ConnectionHandler();
@@ -262,15 +264,19 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                 initializeConnectorLoader();
                 mediatorHandler.init(projectUri, projectServerVersion, connectorHolder);
                 connectionHandler.init(connectorHolder);
-                MediatorFactoryFinder.init(projectServerVersion, projectUri, connectorHolder);
+                MediatorFactoryFinder mediatorFactory =
+                        new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
+                SyntaxTreeUtils.setMediatorFactory(mediatorFactory);
+                ExpressionCompletionUtils.setMediatorFactory(mediatorFactory);
                 DynamicClassLoader.updateClassLoader(Path.of(projectUri, "deployment", "libs").toFile());
-                this.tryOutManager = new TryOutManager(projectUri, miServerPath, connectorHolder, languageClient);
+                this.tryOutManager = new TryOutManager(projectUri, miServerPath, projectServerVersion, connectorHolder,
+                        languageClient);
                 packHttpConnector();
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Error while updating class loader for DB drivers.", e);
             }
-            this.expressionHelperProvider = new ExpressionHelperProvider(projectUri);
-            resourceFinder = ResourceFinderFactory.getResourceFinder(isLegacyProject);
+            this.expressionHelperProvider = new ExpressionHelperProvider(projectUri, connectorHolder);
+            resourceFinder = ResourceFinderFactory.getResourceFinder(isLegacyProject, connectorHolder);
             resourceFinder.loadDependentResources(projectUri);
             setLoadedResourceFinder(resourceFinder);
         } else {
@@ -930,7 +936,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<String> updateConnectorDependencies() {
-        String statusMessage = DependencyDownloadManager.downloadDependencies(projectUri);
+        String statusMessage = DependencyDownloadManager.downloadDependencies(projectUri, connectorHolder);
         updateConnectors();
         return CompletableFuture.supplyAsync(() -> statusMessage);
     }
@@ -955,7 +961,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             ConnectorDependencyRequest request) {
 
         return CompletableFuture.supplyAsync(() ->
-                ConnectorConfigService.buildDependencyResponse(projectUri, request.connectorArtifactId));
+                ConnectorConfigService.buildDependencyResponse(projectUri, request.connectorArtifactId, connectorHolder));
     }
 
     @Override
@@ -964,7 +970,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                ConnectorConfigService.updateDependencyOverride(projectUri, request);
+                ConnectorConfigService.updateDependencyOverride(projectUri, request, connectorHolder);
                 return true;
             } catch (IllegalArgumentException e) {
                 log.log(Level.WARNING, "Invalid request to updateConnectorDependencyOverride: " + e.getMessage());
@@ -999,7 +1005,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
-                ConnectorConfigService.updateConnectorFlags(projectUri, request);
+                ConnectorConfigService.updateConnectorFlags(projectUri, request, connectorHolder);
                 return true;
             } catch (IllegalArgumentException e) {
                 log.log(Level.WARNING, "Invalid request to updateConnectorFlags: " + e.getMessage());
@@ -1091,7 +1097,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> ConnectorDownloadManager.downloadDriverForConnector(
                 projectUri,
                 request.getConnectorName(),
-                request.getConnectionType()
+                request.getConnectionType(),
+                connectorHolder
                 ));
     }
 
@@ -1101,7 +1108,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> ConnectorDownloadManager.getDriverMavenCoordinates(
                 request.getFilePath(),
                 request.getConnectorName(),
-                request.getConnectionType()
+                request.getConnectionType(),
+                connectorHolder
         ));
     }
 

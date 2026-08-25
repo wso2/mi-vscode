@@ -16,6 +16,7 @@ package org.eclipse.lemminx.extensions.synapse;
 
 import org.eclipse.lemminx.SynapseLanguageService;
 import org.eclipse.lemminx.commons.TextDocument;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.NewProjectResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
@@ -1693,6 +1694,7 @@ public class SynapseDiagnosticsParticipantTest {
      */
     private void loadDependentResourcesForProject(Path projectPath) {
         NewProjectResourceFinder finder = new NewProjectResourceFinder();
+        finder.setConnectorHolder(new ConnectorHolder());
         finder.loadDependentResources(projectPath.toString());
         SynapseLanguageService.setLoadedResourceFinder(finder);
     }

@@ -35,12 +35,23 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+/**
+ * Builds the legacy (state-machine-based) project directory tree for a single workspace
+ * folder. Instances are created per invocation (see {@link #buildDirectoryTree}) so that
+ * {@link #projectPath} is scoped to that one call and cannot leak between concurrent
+ * requests for different projects in a multi-root workspace.
+ */
 public class LegacyDirectoryTreeBuilder {
 
     private static final Logger LOGGER = Logger.getLogger(LegacyDirectoryTreeBuilder.class.getName());
-    private static String projectPath;
+    private String projectPath;
 
     public static DirectoryMapResponse buildDirectoryTree(WorkspaceFolder workspaceFolder) {
+
+        return new LegacyDirectoryTreeBuilder().build(workspaceFolder);
+    }
+
+    private DirectoryMapResponse build(WorkspaceFolder workspaceFolder) {
 
         String rootPath = workspaceFolder.getUri();
         DirectoryMap directoryMap = new DirectoryMap();
@@ -53,7 +64,7 @@ public class LegacyDirectoryTreeBuilder {
         return directoryMapResponse;
     }
 
-    private static void analyze(DirectoryMap directoryMap) {
+    private void analyze(DirectoryMap directoryMap) {
 
         File folder = new File(projectPath);
         File[] listOfFiles = folder.listFiles(File::isDirectory);
@@ -64,7 +75,7 @@ public class LegacyDirectoryTreeBuilder {
         }
     }
 
-    private static ProjectType analyzeByProjectType(File subProject, DirectoryMap directoryMap) {
+    private ProjectType analyzeByProjectType(File subProject, DirectoryMap directoryMap) {
 
         String projectFilePath = subProject.getAbsolutePath() + File.separator + Constant.DOT_PROJECT;
         File projectFile = new File(projectFilePath);
@@ -134,7 +145,7 @@ public class LegacyDirectoryTreeBuilder {
         return null;
     }
 
-    private static void analyzeEsbConfigs(String configPath, ESBNode esbNode) {
+    private void analyzeEsbConfigs(String configPath, ESBNode esbNode) {
 
         File folder = new File(configPath);
         File[] listOfFiles = folder.listFiles(File::isDirectory);
@@ -152,7 +163,7 @@ public class LegacyDirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeByType(ESBNode esbNode, File folder, String type) {
+    private void analyzeByType(ESBNode esbNode, File folder, String type) {
 
         try {
             File[] listOfFiles = folder.listFiles();
@@ -171,7 +182,7 @@ public class LegacyDirectoryTreeBuilder {
         }
     }
 
-    private static Node createEsbComponent(String type, String name, String path) {
+    private Node createEsbComponent(String type, String name, String path) {
 
         Node component = new Node(type, name, path);
         if (Constant.API.equalsIgnoreCase(type) || Constant.SEQUENCES.equalsIgnoreCase(type) ||
@@ -216,7 +227,7 @@ public class LegacyDirectoryTreeBuilder {
         }
     }
 
-    private static void traverseAndFind(DOMElement rootElement, AdvancedNode advancedNode) {
+    private void traverseAndFind(DOMElement rootElement, AdvancedNode advancedNode) {
 
         rootElement.getChildren().forEach(child -> {
             if (Constant.ENDPOINT.equalsIgnoreCase(child.getNodeName())) {

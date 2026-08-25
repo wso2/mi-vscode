@@ -20,6 +20,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.customservice.synapse.AbstractMediatorVisitor;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionConstants;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutInfo;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
@@ -49,19 +50,20 @@ public class Utils {
 
     private static final Logger LOGGER = Logger.getLogger(Utils.class.getName());
 
-    public static void visitSequence(String projectPath, Sequence seq, MediatorTryoutInfo info, Position position) {
+    public static void visitSequence(String projectPath, Sequence seq, MediatorTryoutInfo info, Position position,
+                                     ConnectorHolder connectorHolder) {
 
-        visitSequence(projectPath, seq, info, position, false);
+        visitSequence(projectPath, seq, info, position, false, connectorHolder);
     }
 
     public static void visitSequence(String projectPath, Sequence seq, MediatorTryoutInfo info, Position position,
-                                     boolean isSplitAndAggregate) {
+                                     boolean isSplitAndAggregate, ConnectorHolder connectorHolder) {
 
         if (seq != null && needToVisit(seq, position)) {
             boolean isSplit = splitPayloadIfRequired(info, isSplitAndAggregate);
             List<Mediator> mediatorList = seq.getMediatorList();
             if (mediatorList != null) {
-                visitMediators(projectPath, mediatorList, info, position);
+                visitMediators(projectPath, mediatorList, info, position, connectorHolder);
             }
             if (isAggregateNeeded(isSplit, seq, position)) {
                 aggregatePayload(info);
@@ -126,19 +128,19 @@ public class Utils {
     }
 
     public static void visitMediators(String projectPath, List<Mediator> mediatorList, MediatorTryoutInfo info,
-                                      Position position) {
+                                      Position position, ConnectorHolder connectorHolder) {
 
-        visitMediators(projectPath, mediatorList, info, position, true);
+        visitMediators(projectPath, mediatorList, info, position, true, connectorHolder);
     }
 
     public static void visitMediators(String projectPath, List<Mediator> mediatorList, MediatorTryoutInfo info,
-                                      Position position, boolean needRangeCheck) {
+                                      Position position, boolean needRangeCheck, ConnectorHolder connectorHolder) {
 
         if (mediatorList == null || mediatorList.isEmpty() || !needToVisit(mediatorList.get(0), position)) {
             return;
         }
         info.replaceInputWithOutput();
-        MediatorSchemaVisitor mediatorVisitor = new MediatorSchemaVisitor(projectPath, info, position);
+        MediatorSchemaVisitor mediatorVisitor = new MediatorSchemaVisitor(projectPath, info, position, connectorHolder);
         for (Mediator mediator : mediatorList) {
             visitMediator(mediator, mediatorVisitor);
             if (needRangeCheck && checkNodeInRange(mediator, position)) {
@@ -237,7 +239,8 @@ public class Utils {
         }
     }
 
-    public static void visitNamedSequence(String projectPath, String key, MediatorTryoutInfo info, Position position) {
+    public static void visitNamedSequence(String projectPath, String key, MediatorTryoutInfo info, Position position,
+                                          ConnectorHolder connectorHolder) {
 
         try {
             String sequencePath = getArtifactPath(key, projectPath, "sequences");
@@ -247,7 +250,7 @@ public class Utils {
                 NamedSequence sequence =
                         (NamedSequence) SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
                 if (sequence != null) {
-                    visitMediators(projectPath, sequence.getMediatorList(), info, position, false);
+                    visitMediators(projectPath, sequence.getMediatorList(), info, position, false, connectorHolder);
                 }
             }
         } catch (IOException e) {
@@ -265,7 +268,7 @@ public class Utils {
     }
 
     public static void visitSequenceTemplate(String projectPath, String target, MediatorTryoutInfo info,
-                                             Position position) {
+                                             Position position, ConnectorHolder connectorHolder) {
 
         try {
             String sequencePath = getArtifactPath(target, projectPath, "templates");
@@ -275,7 +278,7 @@ public class Utils {
                 NamedSequence sequence =
                         ((Template) SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement())).getSequence();
                 if (sequence != null) {
-                    visitMediators(projectPath, sequence.getMediatorList(), info, position, false);
+                    visitMediators(projectPath, sequence.getMediatorList(), info, position, false, connectorHolder);
                 }
             }
         } catch (IOException e) {
@@ -401,7 +404,8 @@ public class Utils {
      * @throws IOException if an error occurs while visiting the sequence
      */
     public static void visitSequenceByKey(String key, String projectPath, MediatorTryoutInfo info,
-                                          MediatorTryoutRequest request) throws IOException {
+                                          MediatorTryoutRequest request, ConnectorHolder connectorHolder)
+            throws IOException {
 
         String seqPath = ConfigFinder.findEsbComponentPath(key, Constant.SEQUENCES, projectPath);
         if (seqPath != null) {
@@ -411,7 +415,7 @@ public class Utils {
                 return;
             }
             NamedSequence sequenceNode = (NamedSequence) SyntaxTreeGenerator.buildTree(document.getDocumentElement());
-            SequenceVisitor sequenceVisitor = new SequenceVisitor(projectPath);
+            SequenceVisitor sequenceVisitor = new SequenceVisitor(projectPath, connectorHolder);
             sequenceVisitor.visit(sequenceNode, info, request);
         }
     }

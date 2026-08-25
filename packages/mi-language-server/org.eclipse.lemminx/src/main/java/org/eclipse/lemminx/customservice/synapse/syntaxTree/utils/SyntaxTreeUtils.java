@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.syntaxTree.utils;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.AbstractFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.endpoint.EndpointFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.MediatorFactoryFinder;
@@ -40,7 +41,22 @@ import java.util.Optional;
 
 public class SyntaxTreeUtils {
 
-    private static MediatorFactoryFinder mediatorFactory = MediatorFactoryFinder.getInstance();
+    // Reassigned by SynapseLanguageService/ProjectContext on (re)initialization, rather than being a
+    // one-shot singleton, so a second project's MI version/connectors don't get stuck with the first's.
+    private static MediatorFactoryFinder mediatorFactory;
+
+    public static void setMediatorFactory(MediatorFactoryFinder finder) {
+
+        mediatorFactory = finder;
+    }
+
+    private static MediatorFactoryFinder getMediatorFactory() {
+
+        if (mediatorFactory == null) {
+            mediatorFactory = new MediatorFactoryFinder(null, null, new ConnectorHolder());
+        }
+        return mediatorFactory;
+    }
 
     public static Sequence createSequence(DOMNode node) {
 
@@ -63,7 +79,7 @@ public class SyntaxTreeUtils {
 
     public static Mediator createMediator(DOMNode node) {
 
-        Mediator mediators = mediatorFactory.getMediator(node);
+        Mediator mediators = getMediatorFactory().getMediator(node);
         return mediators;
     }
 

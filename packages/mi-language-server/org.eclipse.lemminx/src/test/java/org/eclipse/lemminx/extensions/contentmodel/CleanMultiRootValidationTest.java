@@ -153,8 +153,7 @@ public class CleanMultiRootValidationTest {
 				"Should report an error for unknown 'salesforce.create' mediator before connector is added");
 
 		// 3. Simulate downloading a Salesforce connector
-		ConnectorHolder holder = ConnectorHolder.getInstance();
-		holder.clearConnectors();
+		ConnectorHolder holder = new ConnectorHolder();
 		holder.addConnector(createFakeSalesforceConnector());
 
 		// 4. Generate the connector schema inside the workspace schema directory

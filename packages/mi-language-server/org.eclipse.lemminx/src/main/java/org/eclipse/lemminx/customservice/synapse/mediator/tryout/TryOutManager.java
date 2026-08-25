@@ -30,12 +30,12 @@ public class TryOutManager {
     private final ServerLessTryoutHandler serverLessTryoutHandler;
     private final ConnectionTester connectionTester;
 
-    public TryOutManager(String projectRoot, String miServerPath, ConnectorHolder connectorHolder,
+    public TryOutManager(String projectRoot, String miServerPath, String miVersion, ConnectorHolder connectorHolder,
                          SynapseLanguageClientAPI languageClient) {
 
         tryOutHandler = new TryOutHandler(projectRoot, miServerPath, languageClient);
-        isolatedTryOutHandler = new IsolatedTryOutHandler(tryOutHandler, projectRoot);
-        serverLessTryoutHandler = new ServerLessTryoutHandler(projectRoot);
+        isolatedTryOutHandler = new IsolatedTryOutHandler(tryOutHandler, projectRoot, miVersion, connectorHolder);
+        serverLessTryoutHandler = new ServerLessTryoutHandler(projectRoot, connectorHolder);
         connectionTester = new ConnectionTester(projectRoot, tryOutHandler, connectorHolder);
     }
 

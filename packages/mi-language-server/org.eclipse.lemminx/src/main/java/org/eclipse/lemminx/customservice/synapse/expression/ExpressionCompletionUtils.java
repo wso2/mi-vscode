@@ -19,6 +19,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionParam;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.FunctionCompletionItem;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.Functions;
@@ -74,6 +75,23 @@ public class ExpressionCompletionUtils {
     private static final String FUNCTIONS_JSON_PATH = "org/eclipse/lemminx/expression/functions.json";
     private static final Map<String, Functions> FUNCTIONS = new HashMap<>();
     private static final List<List<String>> OPERATOR_COMPLETIONS = new ArrayList<>();
+
+    // Reassigned by SynapseLanguageService/ProjectContext on (re)initialization, rather than being a
+    // one-shot singleton, so a second project's MI version/connectors don't get stuck with the first's.
+    private static MediatorFactoryFinder mediatorFactory;
+
+    public static void setMediatorFactory(MediatorFactoryFinder finder) {
+
+        mediatorFactory = finder;
+    }
+
+    private static MediatorFactoryFinder getMediatorFactory() {
+
+        if (mediatorFactory == null) {
+            mediatorFactory = new MediatorFactoryFinder(null, null, new ConnectorHolder());
+        }
+        return mediatorFactory;
+    }
 
     static {
         try {
@@ -447,7 +465,7 @@ public class ExpressionCompletionUtils {
         }
         int offset = document.offsetAt(position);
         DOMNode node = document.findNodeAt(offset);
-        Mediator mediator = MediatorFactoryFinder.getInstance().getMediator(node);
+        Mediator mediator = getMediatorFactory().getMediator(node);
         if (mediator != null && !(mediator instanceof InvalidMediator)) {
             return position;
         }

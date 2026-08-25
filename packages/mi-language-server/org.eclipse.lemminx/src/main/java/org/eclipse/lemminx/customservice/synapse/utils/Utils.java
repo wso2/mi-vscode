@@ -126,7 +126,6 @@ import javax.xml.transform.stream.StreamResult;
 public class Utils {
 
     private static final Logger logger = Logger.getLogger(Utils.class.getName());
-    private static FileSystem fileSystem;
     private static final MustacheFactory mustacheFactory = new SynapseMustacheFactory();
 
     /**
@@ -889,13 +888,14 @@ public class Utils {
         Map<String, JsonObject> jsonMap = new HashMap<>();
         try {
             URI resourceURI = Utils.class.getClassLoader().getResource(resourceFolderName).toURI();
-            fileSystem = FileSystems.newFileSystem(resourceURI, Map.of());
-            Path resourcePath = fileSystem.getPath(resourceFolderName);
-            Stream<Path> paths = Files.walk(resourcePath, 1);
-            paths.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".json"))
-                    .forEach(path -> processJsonFile(path, jsonMap));
-            fileSystem.close();
+            try (FileSystem fs = FileSystems.newFileSystem(resourceURI, Map.of())) {
+                Path resourcePath = fs.getPath(resourceFolderName);
+                try (Stream<Path> paths = Files.walk(resourcePath, 1)) {
+                    paths.filter(Files::isRegularFile)
+                            .filter(path -> path.toString().endsWith(".json"))
+                            .forEach(path -> processJsonFile(path, jsonMap));
+                }
+            }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to mediator UI schemas from resources.", e);;
         }
@@ -1119,13 +1119,14 @@ public class Utils {
         Map<String, Mustache> templateMap = new HashMap<>();
         try {
             URI resourceURI = Utils.class.getClassLoader().getResource(resourceFolderName).toURI();
-            fileSystem = FileSystems.newFileSystem(resourceURI, Map.of());
-            Path templatesPath = fileSystem.getPath(resourceFolderName);
-            Stream<Path> paths = Files.walk(templatesPath, 1);
-            paths.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".mustache"))
-                    .forEach(path -> loadTemplate(path, resourceFolderName, templateMap));
-            fileSystem.close();
+            try (FileSystem fs = FileSystems.newFileSystem(resourceURI, Map.of())) {
+                Path templatesPath = fs.getPath(resourceFolderName);
+                try (Stream<Path> paths = Files.walk(templatesPath, 1)) {
+                    paths.filter(Files::isRegularFile)
+                            .filter(path -> path.toString().endsWith(".mustache"))
+                            .forEach(path -> loadTemplate(path, resourceFolderName, templateMap));
+                }
+            }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to load mustache templates from resources.", e);;
         }

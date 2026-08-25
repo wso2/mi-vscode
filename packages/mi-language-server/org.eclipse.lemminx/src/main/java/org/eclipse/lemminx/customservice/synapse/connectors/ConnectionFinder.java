@@ -57,7 +57,8 @@ public class ConnectionFinder {
                                                                                 boolean isLegacyProject) {
 
         if (uri != null) {
-            AbstractResourceFinder resourceFinder = ResourceFinderFactory.getResourceFinder(isLegacyProject);
+            AbstractResourceFinder resourceFinder =
+                    ResourceFinderFactory.getResourceFinder(isLegacyProject, connectorHolder);
             ResourceResponse response = resourceFinder.getAvailableResources(uri, Either.forLeft(Constant.LOCAL_ENTRY));
             if (response != null) {
                 List<Resource> resources = response.getResources();

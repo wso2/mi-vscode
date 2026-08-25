@@ -16,7 +16,6 @@ package org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.a
 
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectionFinder;
-import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connection;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connections;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.ConnectorFactory;
@@ -49,7 +48,7 @@ public abstract class AIConnectorFactory extends ConnectorFactory {
         DOMNode connectionsElement = Utils.getChildNodeByName(element, Constant.CONNECTIONS);
         if (connectionsElement != null) {
             Connections connections = ConnectionFinder.findConnections(getProjectPath(), AI,
-                    ConnectorHolder.getInstance(), false).getLeft();
+                    getConnectorHolder(), false).getLeft();
 
             List<DOMNode> connectionElements = connectionsElement.getChildren();
             for (DOMNode connectionElement : connectionElements) {
