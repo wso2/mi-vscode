@@ -23,6 +23,7 @@ public class QueryGenRequestParams {
     String tableData;
     String datasourceName;
     String driverPath;
+    String projectUri;
 
     public void setClassName(String className) {
         this.className = className;
@@ -66,5 +67,13 @@ public class QueryGenRequestParams {
 
     public String getDriverPath() {
         return driverPath;
+    }
+
+    public String getProjectUri() {
+        return projectUri;
+    }
+
+    public void setProjectUri(String projectUri) {
+        this.projectUri = projectUri;
     }
 }

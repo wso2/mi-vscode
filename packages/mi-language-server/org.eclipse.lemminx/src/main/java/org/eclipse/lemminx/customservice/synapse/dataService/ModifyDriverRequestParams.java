@@ -19,4 +19,5 @@ public class ModifyDriverRequestParams {
     public String addDriverPath;
     public String removeDriverPath;
     public String className;
+    public String projectUri;
 }

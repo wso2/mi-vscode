@@ -301,9 +301,10 @@ export class ExtendedLanguageClient extends LanguageClient {
         if (req.documentIdentifier) {
             uri = Uri.file(req.documentIdentifier).toString();
         }
-        return this.sendRequest("synapse/availableResources", { 
-            documentIdentifier: { uri: uri }, resourceType: req.resourceType, 
-            ...(req.isDebugFlow && { customProjectUri: req.documentIdentifier }) 
+        return this.sendRequest("synapse/availableResources", {
+            documentIdentifier: { uri: uri }, resourceType: req.resourceType,
+            projectUri: req.projectUri,
+            ...(req.isDebugFlow && { customProjectUri: req.documentIdentifier })
         });
     }
 

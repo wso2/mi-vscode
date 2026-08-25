@@ -1679,6 +1679,7 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
             const sequenceList = await langClient.getAvailableResources({
                 documentIdentifier: this.projectUri,
                 resourceType: "sequence",
+                projectUri: this.projectUri,
             });
 
             const endpoints: string[] = [];
@@ -6050,7 +6051,7 @@ ${keyValuesXML}`;
 
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const response = await langClient?.testDbConnection(req);
+            const response = await langClient?.testDbConnection({ ...req, projectUri: this.projectUri });
             resolve({ success: response ? response.success : false });
         });
     }
@@ -6124,7 +6125,7 @@ ${keyValuesXML}`;
     async addDBDriver(params: AddDriverRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.addDBDriver(params);
+            const res = await langClient.addDBDriver({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6132,7 +6133,7 @@ ${keyValuesXML}`;
     async removeDBDriver(params: AddDriverRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.removeDBDriver(params);
+            const res = await langClient.removeDBDriver({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6140,7 +6141,7 @@ ${keyValuesXML}`;
     async modifyDBDriver(params: AddDriverRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.modifyDBDriver(params);
+            const res = await langClient.modifyDBDriver({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6149,7 +6150,7 @@ ${keyValuesXML}`;
         const { documentUri, position, ...genQueryParams } = params;
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const xml = await langClient.generateQueries(genQueryParams);
+            const xml = await langClient.generateQueries({ ...genQueryParams, projectUri: this.projectUri });
 
             if (!xml) {
                 log('Failed to generate DSS Queries.');
@@ -6176,7 +6177,7 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.fetchTables({
-                ...params, tableData: "", datasourceName: ""
+                ...params, tableData: "", datasourceName: "", projectUri: this.projectUri
             });
             resolve(res);
         });
@@ -6279,7 +6280,7 @@ ${keyValuesXML}`;
     async testConnectorConnection(params: TestConnectorConnectionRequest): Promise<TestConnectorConnectionResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.testConnectorConnection(params);
+            const res = await langClient.testConnectorConnection({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6598,7 +6599,8 @@ ${keyValuesXML}`;
                     operationName: params.operationName,
                     fieldName: params.fieldName,
                     selectedValue: params.selectedValue,
-                    connection: params.connection
+                    connection: params.connection,
+                    projectUri: this.projectUri
                 });
 
                 if (!response || !response.columns || !response.columns.length) {
@@ -6618,7 +6620,7 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.getStoredProcedures({
-                ...params, tableData: "", datasourceName: ""
+                ...params, tableData: "", datasourceName: "", projectUri: this.projectUri
             });
             resolve(res);
         });
@@ -6636,7 +6638,7 @@ ${keyValuesXML}`;
 
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const response = await langClient?.loadDriverAndTestConnection(req);
+            const response = await langClient?.loadDriverAndTestConnection({ ...req, projectUri: this.projectUri });
             resolve({ success: response ? response.success : false });
         });
     }
@@ -6727,7 +6729,7 @@ ${keyValuesXML}`;
     async getInputOutputMappings(params: GenerateMappingsParamsRequest): Promise<string[]> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getInputOutputMappings(params);
+            const res = await langClient.getInputOutputMappings({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }

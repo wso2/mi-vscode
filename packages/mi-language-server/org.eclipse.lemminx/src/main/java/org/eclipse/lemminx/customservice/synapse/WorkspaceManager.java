@@ -153,17 +153,34 @@ public class WorkspaceManager {
         if (projectPath == null) {
             return null;
         }
-        String normalizedTarget = normalizePath(projectPath);
-        if (normalizedTarget == null) {
-            return null;
-        }
         for (ProjectContext context : projects.values()) {
-            String normalizedCandidate = normalizePath(context.getProjectUri());
-            if (normalizedTarget.equalsIgnoreCase(normalizedCandidate)) {
+            if (isSameProjectPath(projectPath, context.getProjectUri())) {
                 return context;
             }
         }
         return null;
+    }
+
+    /**
+     * Whether two project roots denote the same project, tolerating the format differences that
+     * legitimately occur between a value the client sent and one this process stored: {@code file://}
+     * URI vs. OS path, {@code ..}/redundant separators, and drive-letter/path case on Windows.
+     *
+     * <p>Use this for any project-root equality test. A raw {@link String#equals} will report two
+     * spellings of the same folder as different projects, which typically surfaces as a request being
+     * silently declined rather than as an error.
+     *
+     * @return {@code true} if both resolve to the same normalized path; {@code false} if either is
+     *         {@code null}
+     */
+    public static boolean isSameProjectPath(String pathA, String pathB) {
+
+        if (pathA == null || pathB == null) {
+            return false;
+        }
+        String normalizedA = normalizePath(pathA);
+        String normalizedB = normalizePath(pathB);
+        return normalizedA != null && normalizedA.equalsIgnoreCase(normalizedB);
     }
 
     /**

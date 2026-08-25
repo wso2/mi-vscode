@@ -280,6 +280,21 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         }
     }
 
+    /**
+     * Completes initialisation once {@code XMLLanguageServer} has registered every workspace project.
+     *
+     * <p>This no longer captures a default project, and no longer pre-binds anything to one:
+     * <ul>
+     *   <li>the shared {@link TryOutManager} is created lazily, per request, by
+     *       {@link #bindTryOutManager(ProjectContext, String)}, which binds it to whichever project
+     *       actually asked;</li>
+     *   <li>each project's DB-driver classloader is seeded from its own {@code deployment/libs} by
+     *       {@link ProjectContext#initProject}, so every registered project gets one — not just the
+     *       first, which is all this method could ever have done.</li>
+     * </ul>
+     *
+     * @param projectUri the client's {@code rootPath}; retained for logging only
+     */
     public void init(String projectUri, Object settings, SynapseLanguageClientAPI languageClient) {
 
         this.languageClient = languageClient;
@@ -295,7 +310,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         }
         this.defaultContext = context;
         try {
-            DynamicClassLoader.updateClassLoader(Path.of(projectUri, "deployment", "libs").toFile());
+            DynamicClassLoader.updateClassLoader(projectUri, Path.of(projectUri, "deployment", "libs").toFile());
             this.tryOutManager = new TryOutManager(projectUri, miServerPath, context.getProjectServerVersion(),
                     context.getConnectorHolder(), languageClient);
         } catch (Exception e) {
@@ -372,8 +387,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Resolves the single, process-global {@link TryOutManager} for {@code ctx}, (re)binding it — and
-     * the shared DB-driver classloader — to {@code ctx}'s project when it currently points elsewhere.
+     * Resolves the single, process-global {@link TryOutManager} for {@code ctx}, (re)binding it to
+     * {@code ctx}'s project when it currently points elsewhere.
      *
      * <p>The underlying MI server process is a single-port, single-instance resource (see the multi
      * project execution plan's Phase 4), so binding a second project means taking that resource over:
@@ -409,11 +424,6 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                         tryOutManager.getProjectUri(), ctx.getProjectUri()));
                 tryOutManager.shutdown();
             }
-            try {
-                DynamicClassLoader.updateClassLoader(Path.of(ctx.getProjectUri(), "deployment", "libs").toFile());
-            } catch (Exception e) {
-                log.log(Level.SEVERE, "Error while updating class loader for DB drivers.", e);
-            }
             String effectiveServerPath = StringUtils.isNotBlank(requestServerPath) ? requestServerPath : miServerPath;
             tryOutManager = new TryOutManager(ctx.getProjectUri(), effectiveServerPath, ctx.getProjectServerVersion(),
                     ctx.getConnectorHolder(), languageClient);
@@ -445,22 +455,31 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DBConnectionTestResponse> testDBConnection(DBConnectionTestParams dbConnectionTestParams) {
 
+        ProjectContext ctx = resolveByProjectUri(dbConnectionTestParams.projectUri);
+        if (ctx == null) {
+            return CompletableFuture.completedFuture(new DBConnectionTestResponse(false));
+        }
         DBConnectionTester dbConnectionTester = new DBConnectionTester();
         boolean connectionStatus = dbConnectionTester.testDBConnection(dbConnectionTestParams.dbType,
                     dbConnectionTestParams.username, dbConnectionTestParams.password,
                     dbConnectionTestParams.host, dbConnectionTestParams.port, dbConnectionTestParams.dbName,
-                    dbConnectionTestParams.url, dbConnectionTestParams.className);
+                    dbConnectionTestParams.url, dbConnectionTestParams.className,
+                    ctx.getProjectUri());
         DBConnectionTestResponse response = new DBConnectionTestResponse(connectionStatus);
         return CompletableFuture.supplyAsync(() -> response);
     }
 
     @Override
     public CompletableFuture<DBConnectionTestResponse> loadDriverAndTestConnection(DBConnectionTestParams request){
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        if (ctx == null) {
+            return CompletableFuture.completedFuture(new DBConnectionTestResponse(false));
+        }
         DBConnectionTester dbConnectionTester = new DBConnectionTester();
         boolean connectionStatus = dbConnectionTester.testDBConnection(request.dbType,
                 request.username, request.password,
                 request.host, request.port, request.dbName,
-                request.url, request.className, request.driverPath);
+                request.url, request.className, request.driverPath, ctx.getProjectUri());
         DBConnectionTestResponse response = new DBConnectionTestResponse(connectionStatus);
         return CompletableFuture.supplyAsync(() -> response);
     }
@@ -547,7 +566,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<ResourceResponse> availableResources(ResourceParam param) {
 
         ProjectContext ctx = StringUtils.isNotBlank(param.customProjectUri)
-                ? resolveByUri(param.customProjectUri) : defaultContext;
+                ? resolveByUri(param.customProjectUri)
+                : resolveByProjectUri(param.projectUri);
         String effectivePath = StringUtils.isNotBlank(param.projectPath) ? param.projectPath
                 : StringUtils.isNotBlank(param.customProjectUri) ? param.customProjectUri
                 : ctx != null ? ctx.getProjectUri() : null;
@@ -985,22 +1005,40 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> response);
     }
 
+    // The DB-driver group below mutates a project's driver classpath, so the project it names must be
+    // resolved before it is used, never passed through raw: DynamicClassLoader keys its registry by
+    // whatever string it is handed, so an unresolvable projectUri would silently create and mutate a
+    // phantom entry instead of failing. Resolving first turns that into an honest false.
     @Override
     public CompletableFuture<Boolean> addDBDriver(ModifyDriverRequestParams requestParams) {
-        boolean isSuccess = QueryGenerator.addDriverToClassPath(requestParams.addDriverPath, requestParams.className);
+        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        if (ctx == null) {
+            return CompletableFuture.completedFuture(Boolean.FALSE);
+        }
+        boolean isSuccess = QueryGenerator.addDriverToClassPath(requestParams.addDriverPath, requestParams.className,
+                ctx.getProjectUri());
         return CompletableFuture.supplyAsync(() -> isSuccess);
     }
 
     @Override
     public CompletableFuture<Boolean> removeDBDriver(ModifyDriverRequestParams requestParams) {
-        boolean response = QueryGenerator.removeDriverFromClassPath(requestParams.removeDriverPath);
+        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        if (ctx == null) {
+            return CompletableFuture.completedFuture(Boolean.FALSE);
+        }
+        boolean response = QueryGenerator.removeDriverFromClassPath(requestParams.removeDriverPath,
+                ctx.getProjectUri());
         return CompletableFuture.supplyAsync(() -> response);
     }
 
     @Override
     public CompletableFuture<Boolean> modifyDBDriver(ModifyDriverRequestParams requestParams) {
+        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        if (ctx == null) {
+            return CompletableFuture.completedFuture(Boolean.FALSE);
+        }
         boolean response = QueryGenerator.modifyDriverInClassPath(requestParams.addDriverPath,
-                requestParams.removeDriverPath, requestParams.className);
+                requestParams.removeDriverPath, requestParams.className, ctx.getProjectUri());
         return CompletableFuture.supplyAsync(() -> response);
     }
 
@@ -1087,6 +1125,13 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         // Only tear down the shared TryOutManager if it's still bound to the requesting project (or the
         // request carries no project, for older clients) - otherwise an unrelated project's shutdown call
         // (e.g. before its own build/run) would kill another project's active try-out session.
+        //
+        // The ownership check compares project roots through WorkspaceManager.isSameProjectPath rather
+        // than String.equals: the client sends WorkspaceFolder.uri.fsPath while the manager holds the
+        // context's own projectUri, and a difference in format or drive-letter case between two spellings
+        // of the same folder would otherwise read as "a different project" — declining the shutdown and
+        // leaking the MI server process. It deliberately does not require the project to still be
+        // registered, so a folder removed from the workspace can still shut its own try-out down.
         return CompletableFuture.supplyAsync(() -> {
             // Same lock as bindTryOutManager: without it this can shut down a manager another project
             // has just bound, or read a half-published one.
@@ -1096,7 +1141,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                 }
                 String requestProjectUri = request != null ? request.getProjectUri() : null;
                 if (StringUtils.isNotBlank(requestProjectUri)
-                        && !requestProjectUri.equals(tryOutManager.getProjectUri())) {
+                        && !WorkspaceManager.isSameProjectPath(requestProjectUri, tryOutManager.getProjectUri())) {
                     return false;
                 }
                 return tryOutManager.shutdown();
@@ -1119,11 +1164,14 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<TestConnectionResponse> testConnectorConnection(TestConnectionRequest request) {
 
-        // TestConnectionRequest carries no document/project path, so this always targets whichever
-        // project the shared TryOutManager is currently bound to (see bindTryOutManager).
-        return CompletableFuture.supplyAsync(() -> tryOutManager != null
-                ? tryOutManager.testConnectorConnection(request)
-                : new TestConnectionResponse("Project is not initialized"));
+        ProjectContext ctx = resolveByProjectUri(request.getProjectUri());
+        return CompletableFuture.supplyAsync(() -> {
+            TryOutManager manager = bindTryOutManager(ctx, null);
+            if (manager == null) {
+                return new TestConnectionResponse(tryOutUnavailableMessage());
+            }
+            return manager.testConnectorConnection(request);
+        });
     }
 
     @Override
@@ -1541,15 +1589,6 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getInboundConnectorHolder().getCustomInboundConnectors() : null);
-    }
-
-    public String getProjectUri() {
-        return defaultContext != null ? defaultContext.getProjectUri() : null;
-    }
-
-    public ConnectorHolder getConnectorHolder() {
-
-        return defaultContext != null ? defaultContext.getConnectorHolder() : null;
     }
 
     public String getExtensionPath() {

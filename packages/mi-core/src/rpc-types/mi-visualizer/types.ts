@@ -492,15 +492,6 @@ export interface ProjectConfig {
     value: boolean;
 }
 
-export interface UpdateAiDependenciesRequest {
-    dependencies: DependencyDetails[];
-    operation: "add" | "remove";
-}
-
-export interface UpdateAiDependenciesResponse {
-    textEdits: TextEdit[];
-}
-
 export interface ReloadDependenciesRequest {
     newDependencies?: DependencyDetails[];
     isProjectDependenciesUpdated?: boolean;

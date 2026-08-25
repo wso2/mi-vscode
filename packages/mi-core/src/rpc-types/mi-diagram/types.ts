@@ -1452,6 +1452,7 @@ export interface GetAvailableResourcesRequest {
     documentIdentifier: string | undefined;
     resourceType: ResourceType | MultipleResourceType[];
     isDebugFlow?: boolean;
+    projectUri?: string;
 }
 
 export interface GetAvailableResourcesResponse {
@@ -1963,6 +1964,7 @@ export interface TestDbConnectionRequest {
     dbName: string;
     url: string;
     className: string;
+    projectUri?: string;
 }
 
 export interface TestDbConnectionResponse {
@@ -1979,6 +1981,7 @@ export interface AddDriverRequest {
     addDriverPath: string;
     removeDriverPath: string;
     className: string;
+    projectUri?: string;
 }
 
 export interface RemoveDBDriverResponse {
@@ -2004,6 +2007,7 @@ export interface DSSQueryGenRequest {
     url: string;
     tableData: string;
     datasourceName: string;
+    projectUri?: string;
 }
 
 export interface ExtendedDSSQueryGenRequest extends DSSQueryGenRequest {
@@ -2021,6 +2025,7 @@ export interface DSSFetchTablesRequest {
     password: string;
     url: string;
     driverPath: string;
+    projectUri?: string;
 }
 
 export interface DSSFetchTablesResponse {
@@ -2280,6 +2285,7 @@ export interface TestConnectorConnectionRequest {
     connectorName: string;
     connectionType: string;
     parameters: any;
+    projectUri?: string;
 }
 export interface TestConnectorConnectionResponse {
     isConnectionTested: boolean;
@@ -2384,6 +2390,7 @@ export interface GenerateMappingsParamsRequest {
     username?: string;
     password?: string;
     type: 'input' | 'output'
+    projectUri?: string;
 }
 export interface DynamicField {
     type: string;
@@ -2404,6 +2411,7 @@ export interface GetDynamicFieldsRequest {
     fieldName: string;
     selectedValue: string;
     connection: ConnectorConnection;
+    projectUri?: string;
 }
 
 export interface GetDynamicFieldsResponse {
@@ -2446,6 +2454,7 @@ export interface LoadDriverAndTestConnectionRequest {
     url: string;
     className: string;
     driverPath: string;
+    projectUri?: string;
 }
 
 export interface ProjectCreationStatusResponse {

@@ -22,4 +22,5 @@ public class MappingsGenRequestParams {
     public String password;
     public String url;
     public String type;
+    public String projectUri;
 }

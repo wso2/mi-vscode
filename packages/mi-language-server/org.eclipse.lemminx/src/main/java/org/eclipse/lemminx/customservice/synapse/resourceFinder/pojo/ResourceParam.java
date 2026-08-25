@@ -24,4 +24,5 @@ public class ResourceParam {
     public Either<String, List<RequestedResource>> resourceType;
     public String projectPath = StringUtils.EMPTY;
 	public String customProjectUri;
+	public String projectUri;
 }
