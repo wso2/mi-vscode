@@ -382,6 +382,7 @@ import { getAPIMetadata } from "../../util/template-engine/mustach-templates/API
 import { WICommandIds, ICreateNewIntegrationCmdParams } from "@wso2/wso2-platform-core";
 import { MiVisualizerRpcManager } from "../mi-visualizer/rpc-manager";
 import { DebuggerConfig } from "../../debugger/config";
+import { SELECTED_SERVER_PATH } from "../../debugger/constants";
 import { getKubernetesConfiguration, getKubernetesDataConfiguration } from "../../util/template-engine/mustach-templates/KubernetesConfiguration";
 import { parseStringPromise, Builder } from "xml2js";
 import { MILanguageClient } from "../../lang-client/activator";
@@ -598,12 +599,29 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
         return null;
     }
 
+    // The single shared LS process launches the *initiating* project's MI runtime for a try-out
+    // session, so it needs that project's own configured server path on every try-out request.
+    private getConfiguredServerPath(): string {
+        const config = workspace.getConfiguration('MI', Uri.file(this.projectUri));
+        return config.get<string>(SELECTED_SERVER_PATH) || "";
+    }
+
+    // Errors are turned into an error response rather than left to reject. A try-out request that
+    // rejects here would never reach the panel: the webview awaits this call to clear its "Running..."
+    // state, so an unanswered request leaves the Run button spinning with no way back short of
+    // reopening the panel.
     async tryOutMediator(params: MediatorTryOutRequest): Promise<MediatorTryOutResponse> {
-        return new Promise(async (resolve) => {
+        try {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.tryOutMediator(params);
-            resolve(res);
-        });
+            return await langClient.tryOutMediator({
+                ...params,
+                projectUri: this.projectUri,
+                serverPath: this.getConfiguredServerPath()
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { error: message } as MediatorTryOutResponse;
+        }
     }
 
     async shutDownTryoutServer(): Promise<boolean> {
@@ -628,7 +646,11 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
             const payload = fs.readFileSync(payloadPath, "utf8");
             params.inputPayload = payload
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getMediatorInputOutputSchema(params);
+            const res = await langClient.getMediatorInputOutputSchema({
+                ...params,
+                projectUri: this.projectUri,
+                serverPath: this.getConfiguredServerPath()
+            });
             resolve(res);
         });
     }

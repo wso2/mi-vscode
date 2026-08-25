@@ -2074,6 +2074,10 @@ export interface MediatorTryOutRequest {
         text: string;
         range: Range;
     }[]
+    projectUri?: string;
+    // The initiating project's configured MI server path, so the single shared server
+    // binds the try-out session to the runtime the caller's project expects.
+    serverPath?: string;
 }
 
 export interface Param {
