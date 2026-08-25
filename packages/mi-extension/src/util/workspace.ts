@@ -74,7 +74,7 @@ export async function askForProject(): Promise<string> {
     for (const wrkspace of workspace.workspaceFolders!) {
         const lsClient = await MILanguageClient.getInstance(wrkspace.uri.fsPath);
         if (lsClient) {
-            const projectDetails = await lsClient.getProjectDetails();
+            const projectDetails = await lsClient.getProjectDetails(wrkspace.uri.fsPath);
             if (projectDetails?.primaryDetails?.projectName?.value) {
                 if (projects.has(projectDetails.primaryDetails.projectName.value)) {
                     projects.set(wrkspace.uri.fsPath, wrkspace.uri.fsPath);

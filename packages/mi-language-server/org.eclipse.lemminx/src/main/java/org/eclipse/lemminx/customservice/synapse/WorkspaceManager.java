@@ -18,6 +18,9 @@
 
 package org.eclipse.lemminx.customservice.synapse;
 
+import org.eclipse.lemminx.customservice.synapse.utils.Utils;
+
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -129,6 +132,55 @@ public class WorkspaceManager {
     public ProjectContext getProject(String projectUri) {
 
         return projects.get(projectUri);
+    }
+
+    /**
+     * Resolves a {@link ProjectContext} by matching {@code projectPath} against each registered
+     * context's own {@link ProjectContext#getProjectUri()} (an absolute filesystem path), rather
+     * than the {@code file://} URI this registry is keyed by internally.
+     *
+     * <p>RPCs that carry a bare {@code projectUri} field (as opposed to a document URI) receive it
+     * from the VS Code extension as {@code WorkspaceFolder.uri.fsPath} — an OS filesystem path, not
+     * a URI — which will never match a key in {@link #projects}. Callers resolving from that field
+     * must use this method instead of {@link #getProject(String)}.
+     *
+     * @param projectPath the project root as an absolute filesystem path (or a {@code file://} URI,
+     *                     which is normalized the same way)
+     * @return the matching {@link ProjectContext}, or {@code null} if none matches
+     */
+    public ProjectContext getProjectByPath(String projectPath) {
+
+        if (projectPath == null) {
+            return null;
+        }
+        String normalizedTarget = normalizePath(projectPath);
+        if (normalizedTarget == null) {
+            return null;
+        }
+        for (ProjectContext context : projects.values()) {
+            String normalizedCandidate = normalizePath(context.getProjectUri());
+            if (normalizedTarget.equalsIgnoreCase(normalizedCandidate)) {
+                return context;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Normalizes a project root — whether given as an absolute filesystem path or a {@code file://}
+     * URI — to an absolute, normalized path string suitable for cross-format comparison.
+     */
+    private static String normalizePath(String path) {
+
+        if (path == null) {
+            return null;
+        }
+        try {
+            return Paths.get(Utils.getAbsolutePath(path)).toAbsolutePath().normalize().toString();
+        } catch (Exception e) {
+            log.log(Level.WARNING, "Failed to normalize project path for comparison: " + path, e);
+            return path;
+        }
     }
 
     /**

@@ -19,4 +19,5 @@ import java.util.List;
 public class UpdatePropertyRequest {
 
     public List<PropertyDetails> properties;
+    public String projectUri;
 }

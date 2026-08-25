@@ -24,4 +24,5 @@ public class ConnectorInfoRequest {
     public String groupId;
     public String artifactId;
     public String version;
+    public String projectUri;
 }

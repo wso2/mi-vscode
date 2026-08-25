@@ -18,4 +18,5 @@ import java.util.List;
 public class UpdateDependencyRequest {
 
     public List<DependencyDetails> dependencies;
+    public String projectUri;
 }

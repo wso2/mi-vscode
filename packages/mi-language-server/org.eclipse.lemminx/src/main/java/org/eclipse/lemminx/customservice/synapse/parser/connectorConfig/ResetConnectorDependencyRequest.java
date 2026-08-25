@@ -35,4 +35,6 @@ public class ResetConnectorDependencyRequest {
      */
     public String groupId;
     public String artifactId;
+
+    public String projectUri;
 }

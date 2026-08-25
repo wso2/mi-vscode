@@ -210,13 +210,13 @@ public abstract class AbstractConnectorLoader {
 
     protected void notifyAddConnector(String connector, boolean isSuccessful, String message) {
 
-        ConnectorStatusNotification status = new ConnectorStatusNotification(connector, isSuccessful, message);
+        ConnectorStatusNotification status = new ConnectorStatusNotification(connector, isSuccessful, message, projectUri);
         languageClient.addConnectorStatus(status);
     }
 
     protected void notifyRemoveConnector(String connector, boolean isSuccessful, String message) {
 
-        ConnectorStatusNotification status = new ConnectorStatusNotification(connector, isSuccessful, message);
+        ConnectorStatusNotification status = new ConnectorStatusNotification(connector, isSuccessful, message, projectUri);
         languageClient.removeConnectorStatus(status);
     }
 

@@ -17,4 +17,5 @@ package org.eclipse.lemminx.customservice.synapse.dataService;
 public class CheckDBDriverRequestParams {
 
     public String className;
+    public String projectUri;
 }

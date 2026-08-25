@@ -561,7 +561,7 @@ export async function executeTasks(projectUri: string, serverPath: string, isDeb
     const maxTimeout = (Number.isFinite(Number(configuredTimeout)) && Number(configuredTimeout) > 0) ? Number(configuredTimeout) * 1000 : 120000;
     return new Promise<void>(async (resolve, reject) => {
         const langClient = await MILanguageClient.getInstance(projectUri);
-        const isTerminated = await langClient.shutdownTryoutServer();
+        const isTerminated = await langClient.shutdownTryoutServer(projectUri);
         if (!isTerminated) {
             reject('Failed to terminate the tryout server. Kill the server manually and try again.');
         }

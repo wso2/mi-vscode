@@ -271,7 +271,7 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
 export async function createTests(uri: Uri) {
     const projectRoot = getProjectRoot(uri);
     const langClient = await MILanguageClient.getInstance(projectRoot!);
-    const projectDetails = await langClient.getProjectDetails();
+    const projectDetails = await langClient.getProjectDetails(projectRoot!);
     const projectName = projectDetails?.primaryDetails?.projectName?.value ?? getProjectName(uri);
 
     if (!testController || !projectRoot || !projectName) {

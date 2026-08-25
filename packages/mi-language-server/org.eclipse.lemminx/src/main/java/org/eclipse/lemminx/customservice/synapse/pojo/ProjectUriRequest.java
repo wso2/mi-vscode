@@ -11,11 +11,15 @@
  * Contributors:
  *     WSO2 LLC - support for WSO2 Micro Integrator Configuration
  */
-package org.eclipse.lemminx.customservice.synapse.parser;
 
-import java.util.List;
+package org.eclipse.lemminx.customservice.synapse.pojo;
 
-public class UpdateConfigRequest {
-    public List<ConfigDetails> configs;
+/**
+ * Minimal request carrying only the project root URI, for {@code synapse/*} RPCs that have no
+ * document URI to resolve a project from. Optional and backward-compatible: a null/blank/unmatched
+ * {@code projectUri} falls back to the facade's {@code defaultContext}.
+ */
+public class ProjectUriRequest {
+
     public String projectUri;
 }

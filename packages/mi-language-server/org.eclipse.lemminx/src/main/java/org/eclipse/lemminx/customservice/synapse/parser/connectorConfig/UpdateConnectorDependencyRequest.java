@@ -40,4 +40,6 @@ public class UpdateConnectorDependencyRequest {
 
     /** Absolute path to a local JAR. When set, Maven download is skipped. */
     public String localPath;
+
+    public String projectUri;
 }

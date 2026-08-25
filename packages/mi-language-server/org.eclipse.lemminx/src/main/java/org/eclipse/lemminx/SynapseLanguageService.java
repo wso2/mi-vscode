@@ -22,6 +22,7 @@ import org.eclipse.lemminx.customservice.SynapseLanguageClientAPI;
 import org.eclipse.lemminx.customservice.synapse.CodeDiagnosticRequest;
 import org.eclipse.lemminx.customservice.synapse.ProjectContext;
 import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+import org.eclipse.lemminx.customservice.synapse.pojo.ProjectUriRequest;
 import org.eclipse.lemminx.customservice.synapse.api.generator.pojo.IsEqualSwaggersParam;
 import org.eclipse.lemminx.customservice.synapse.api.generator.pojo.GenerateAPIResponse;
 import org.eclipse.lemminx.customservice.synapse.api.generator.pojo.GenerateSwaggerParam;
@@ -342,6 +343,35 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
+     * Resolves a {@link ProjectContext} from an explicit project root (e.g. the {@code projectUri}
+     * field on RPCs that carry no document to resolve a project from). The VS Code extension sends
+     * this field as {@code WorkspaceFolder.uri.fsPath} — an absolute filesystem path, not the
+     * {@code file://} URI {@link WorkspaceManager} registers projects under — so this resolves via
+     * {@link WorkspaceManager#getProjectByPath(String)}, which matches on each context's own
+     * {@link ProjectContext#getProjectUri()} instead of the registry key.
+     */
+    private ProjectContext resolveByProjectUri(String projectUri) {
+        if (StringUtils.isNotBlank(projectUri) && xmlLanguageServer != null) {
+            ProjectContext context = xmlLanguageServer.getWorkspaceManager().getProjectByPath(projectUri);
+            if (context != null) {
+                return context;
+            }
+        }
+        return defaultContext;
+    }
+
+    /**
+     * Resolves a {@link ProjectContext} preferring an explicit document URI/path when present, falling
+     * back to an explicit project root URI, and finally to {@link #defaultContext}.
+     */
+    private ProjectContext resolveByUriOrProjectUri(String documentUri, String projectUri) {
+        if (StringUtils.isNotBlank(documentUri)) {
+            return resolveByUri(documentUri);
+        }
+        return resolveByProjectUri(projectUri);
+    }
+
+    /**
      * Resolves the single, process-global {@link TryOutManager} for {@code ctx}, (re)binding it — and
      * the shared DB-driver classloader — to {@code ctx}'s project when it currently points elsewhere.
      *
@@ -551,7 +581,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             if (StringUtils.isAnyBlank(request.groupId, request.artifactId, request.version)) {
                 return Either.forRight("groupId, artifactId, and version are required");
             }
-            ProjectContext ctx = defaultContext;
+            ProjectContext ctx = resolveByProjectUri(request.projectUri);
             if (ctx == null) {
                 return Either.forRight("Project is not initialized");
             }
@@ -590,7 +620,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<Either<InboundEndpointInfo, String>> getInboundInfo(InboundInfoRequest request) {
 
         return CompletableFuture.supplyAsync(() -> {
-            ProjectContext ctx = defaultContext;
+            ProjectContext ctx = resolveByProjectUri(request.projectUri);
             InboundConnectorHolder inboundConnectorHolder = ctx != null ? ctx.getInboundConnectorHolder() : null;
             // Bundled lookup first — no download needed.
             if (StringUtils.isNotBlank(request.id)) {
@@ -761,21 +791,23 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<List<String>> getResourceFiles() {
+    public CompletableFuture<List<String>> getResourceFiles(ProjectUriRequest request) {
 
-        List<String> resourceFiles = defaultContext != null
-                ? ResourceFileScanner.scanResourceFiles(defaultContext.getProjectUri()) : Collections.emptyList();
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        List<String> resourceFiles = ctx != null
+                ? ResourceFileScanner.scanResourceFiles(ctx.getProjectUri()) : Collections.emptyList();
         return CompletableFuture.supplyAsync(() -> resourceFiles);
     }
 
     @Override
-    public CompletableFuture<List<ConfigurableEntry>> getConfigurableEntries() {
+    public CompletableFuture<List<ConfigurableEntry>> getConfigurableEntries(ProjectUriRequest request) {
 
-        if (defaultContext == null) {
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        if (ctx == null) {
             return CompletableFuture.supplyAsync(ArrayList::new);
         }
         try {
-            List<ConfigurableEntry> configurableEntries = ConfigParser.scanConfigurableEntries(defaultContext.getProjectUri());
+            List<ConfigurableEntry> configurableEntries = ConfigParser.scanConfigurableEntries(ctx.getProjectUri());
             return CompletableFuture.supplyAsync(() -> configurableEntries);
         } catch (IOException e) {
             log.log(Level.SEVERE, "Error while scanning configurable entries.", e);
@@ -886,7 +918,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> saveInboundConnectorSchema(InboundConnectorParam param) {
 
-        ProjectContext ctx = resolveByUri(param.documentPath);
+        ProjectContext ctx = resolveByUriOrProjectUri(param.documentPath, param.projectUri);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 && ctx.getInboundConnectorHolder().saveInboundConnector(param.connectorName, param.uiSchema));
     }
@@ -908,16 +940,17 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<JsonObject> getLocalInboundConnectors() {
+    public CompletableFuture<JsonObject> getLocalInboundConnectors(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
-                ? defaultContext.getInboundConnectorHolder().getLocalInboundConnectorList() : new JsonObject());
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null
+                ? ctx.getInboundConnectorHolder().getLocalInboundConnectorList() : new JsonObject());
     }
 
     @Override
     public CompletableFuture<JsonObject> getConnectionUISchema(ConnectionUIParam param) {
 
-        ProjectContext ctx = resolveByUri(param.getDocumentUri());
+        ProjectContext ctx = resolveByUriOrProjectUri(param.getDocumentUri(), param.getProjectUri());
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getConnectionHandler().getConnectionUISchema(param) : new JsonObject());
     }
@@ -937,16 +970,18 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<OverviewModel> getOverviewModel() {
-        OverviewModel overviewModel = defaultContext != null
-                ? OverviewModelGenerator.getOverviewModel(defaultContext.getProjectUri()) : null;
+    public CompletableFuture<OverviewModel> getOverviewModel(ProjectUriRequest request) {
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        OverviewModel overviewModel = ctx != null
+                ? OverviewModelGenerator.getOverviewModel(ctx.getProjectUri()) : null;
         return CompletableFuture.supplyAsync(() -> overviewModel);
     }
 
     @Override
     public CompletableFuture<CheckDBDriverResponseParams> checkDBDriver(CheckDBDriverRequestParams requestParams) {
+        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
         CheckDBDriverResponseParams response = QueryGenerator.isDriverAvailableInClassPath(requestParams.className,
-                defaultContext != null ? defaultContext.getProjectUri() : null);
+                ctx != null ? ctx.getProjectUri() : null);
         return CompletableFuture.supplyAsync(() -> response);
     }
 
@@ -1092,9 +1127,10 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<OverviewPageDetailsResponse> getOverviewPageDetails() {
-        OverviewPageDetailsResponse response = defaultContext != null
-                ? OverviewPage.getDetails(defaultContext.getProjectUri()) : null;
+    public CompletableFuture<OverviewPageDetailsResponse> getOverviewPageDetails(ProjectUriRequest request) {
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        OverviewPageDetailsResponse response = ctx != null
+                ? OverviewPage.getDetails(ctx.getProjectUri()) : null;
         return CompletableFuture.supplyAsync(() -> response);
     }
 
@@ -1112,15 +1148,17 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<UpdateResponse> updateProperty(UpdatePropertyRequest request) {
-        UpdateResponse response = defaultContext != null
-                ? PomParser.updateProperty(defaultContext.getProjectUri(), request) : new UpdateResponse();
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        UpdateResponse response = ctx != null
+                ? PomParser.updateProperty(ctx.getProjectUri(), request) : new UpdateResponse();
         return CompletableFuture.supplyAsync(() -> response);
     }
 
     @Override
     public CompletableFuture<UpdateResponse> updateDependency(UpdateDependencyRequest request) {
-        UpdateResponse response = defaultContext != null
-                ? PomParser.updateDependency(defaultContext.getProjectUri(), request) : new UpdateResponse();
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        UpdateResponse response = ctx != null
+                ? PomParser.updateDependency(ctx.getProjectUri(), request) : new UpdateResponse();
         return CompletableFuture.supplyAsync(() -> response);
     }
 
@@ -1134,47 +1172,52 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<UpdateResponse> updateConfigFile(UpdateConfigRequest request) {
-        UpdateResponse response = defaultContext != null
-                ? ConfigParser.updateConfigFile(defaultContext.getProjectUri(), request) : new UpdateResponse();
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        UpdateResponse response = ctx != null
+                ? ConfigParser.updateConfigFile(ctx.getProjectUri(), request) : new UpdateResponse();
         return CompletableFuture.supplyAsync(() -> response);
     }
 
     @Override
-    public CompletableFuture<String> updateConnectorDependencies() {
-        if (defaultContext == null) {
+    public CompletableFuture<String> updateConnectorDependencies(ProjectUriRequest request) {
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        if (ctx == null) {
             return CompletableFuture.supplyAsync(() -> "Project is not initialized");
         }
-        String statusMessage = DependencyDownloadManager.downloadDependencies(defaultContext.getProjectUri(),
-                defaultContext.getConnectorHolder());
-        defaultContext.updateConnectors();
+        String statusMessage = DependencyDownloadManager.downloadDependencies(ctx.getProjectUri(),
+                ctx.getConnectorHolder());
+        ctx.updateConnectors();
         return CompletableFuture.supplyAsync(() -> statusMessage);
     }
 
     @Override
-    public CompletableFuture<String> refetchIntegrationProjectDependencies() {
+    public CompletableFuture<String> refetchIntegrationProjectDependencies(ProjectUriRequest request) {
 
-        if (defaultContext == null) {
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        if (ctx == null) {
             return CompletableFuture.supplyAsync(() -> "Project is not initialized");
         }
-        String projectUri = defaultContext.getProjectUri();
+        String projectUri = ctx.getProjectUri();
         log.info("Refetching integration project dependencies for project: " + projectUri);
         return CompletableFuture.supplyAsync(() -> DependencyDownloadManager.refetchIntegrationProjectDependencies(projectUri));
     }
 
     @Override
-    public CompletableFuture<DependencyStatusResponse> getDependencyStatusList() {
+    public CompletableFuture<DependencyStatusResponse> getDependencyStatusList(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
-                ? DependencyDownloadManager.getDependencyStatusList(defaultContext.getProjectUri()) : null);
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null
+                ? DependencyDownloadManager.getDependencyStatusList(ctx.getProjectUri()) : null);
     }
 
     @Override
     public CompletableFuture<ConnectorDependencyResponse> getConnectorDependencies(
             ConnectorDependencyRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
-                ? ConnectorConfigService.buildDependencyResponse(defaultContext.getProjectUri(),
-                        request.connectorArtifactId, defaultContext.getConnectorHolder())
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        return CompletableFuture.supplyAsync(() -> ctx != null
+                ? ConnectorConfigService.buildDependencyResponse(ctx.getProjectUri(),
+                        request.connectorArtifactId, ctx.getConnectorHolder())
                 : null);
     }
 
@@ -1182,13 +1225,14 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<Boolean> updateConnectorDependencyOverride(
             UpdateConnectorDependencyRequest request) {
 
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
         return CompletableFuture.supplyAsync(() -> {
-            if (defaultContext == null) {
+            if (ctx == null) {
                 return false;
             }
             try {
-                ConnectorConfigService.updateDependencyOverride(defaultContext.getProjectUri(), request,
-                        defaultContext.getConnectorHolder());
+                ConnectorConfigService.updateDependencyOverride(ctx.getProjectUri(), request,
+                        ctx.getConnectorHolder());
                 return true;
             } catch (IllegalArgumentException e) {
                 log.log(Level.WARNING, "Invalid request to updateConnectorDependencyOverride: " + e.getMessage());
@@ -1204,12 +1248,13 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<Boolean> resetConnectorDependencyOverrides(
             ResetConnectorDependencyRequest request) {
 
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
         return CompletableFuture.supplyAsync(() -> {
-            if (defaultContext == null) {
+            if (ctx == null) {
                 return false;
             }
             try {
-                ConnectorConfigService.resetDependencyOverrides(defaultContext.getProjectUri(), request);
+                ConnectorConfigService.resetDependencyOverrides(ctx.getProjectUri(), request);
                 return true;
             } catch (IllegalArgumentException e) {
                 log.log(Level.WARNING, "Invalid request to resetConnectorDependencyOverrides: " + e.getMessage());
@@ -1224,13 +1269,14 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> updateConnectorFlags(UpdateConnectorFlagsRequest request) {
 
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
         return CompletableFuture.supplyAsync(() -> {
-            if (defaultContext == null) {
+            if (ctx == null) {
                 return false;
             }
             try {
-                ConnectorConfigService.updateConnectorFlags(defaultContext.getProjectUri(), request,
-                        defaultContext.getConnectorHolder());
+                ConnectorConfigService.updateConnectorFlags(ctx.getProjectUri(), request,
+                        ctx.getConnectorHolder());
                 return true;
             } catch (IllegalArgumentException e) {
                 log.log(Level.WARNING, "Invalid request to updateConnectorFlags: " + e.getMessage());
@@ -1245,12 +1291,13 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> updateGlobalConnectorFlags(UpdateGlobalConnectorFlagsRequest request) {
 
+        ProjectContext ctx = resolveByProjectUri(request.projectUri);
         return CompletableFuture.supplyAsync(() -> {
-            if (defaultContext == null) {
+            if (ctx == null) {
                 return false;
             }
             try {
-                ConnectorConfigService.updateGlobalConnectorFlags(defaultContext.getProjectUri(), request);
+                ConnectorConfigService.updateGlobalConnectorFlags(ctx.getProjectUri(), request);
                 return true;
             } catch (IllegalArgumentException e) {
                 log.log(Level.WARNING, "Invalid request to updateGlobalConnectorFlags: " + e.getMessage());
@@ -1265,23 +1312,25 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public void initConnectorConfig(ConnectorDependencyRequest request) {
 
-        if (defaultContext != null) {
-            ConnectorConfigService.initIfAbsent(defaultContext.getProjectUri());
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        if (ctx != null) {
+            ConnectorConfigService.initIfAbsent(ctx.getProjectUri());
         }
     }
 
     @Override
-    public CompletableFuture<LoadDependentResourcesResponse> loadDependentResources() {
+    public CompletableFuture<LoadDependentResourcesResponse> loadDependentResources(ProjectUriRequest request) {
 
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
         return CompletableFuture.supplyAsync(() -> {
-            if (defaultContext == null) {
+            if (ctx == null) {
                 return new LoadDependentResourcesResponse(LoadDependentResourcesResponse.STATUS_ERROR,
                         "Project is not initialized");
             }
-            String projectUri = defaultContext.getProjectUri();
+            String projectUri = ctx.getProjectUri();
             log.info("Loading dependent resources for project: " + projectUri);
-            LoadDependentResourcesResponse result = defaultContext.getResourceFinder().loadDependentResources(projectUri);
-            defaultContext.updateConnectors();
+            LoadDependentResourcesResponse result = ctx.getResourceFinder().loadDependentResources(projectUri);
+            ctx.updateConnectors();
             log.info("Dependent resources loaded successfully for project: " + projectUri);
             return result;
         });
@@ -1291,9 +1340,10 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<ConnectorGeneratorResponse> generateConnector(ConnectorGenerateRequest connectorGenReq) {
         String filePath = null;
         try {
-            if (defaultContext != null) {
-                String projectUri = defaultContext.getProjectUri();
-                String projectServerVersion = defaultContext.getProjectServerVersion();
+            ProjectContext ctx = resolveByProjectUri(connectorGenReq.projectUri);
+            if (ctx != null) {
+                String projectUri = ctx.getProjectUri();
+                String projectServerVersion = ctx.getProjectServerVersion();
                 if (connectorGenReq.openAPIPath.endsWith(".proto")) {
                     filePath = GRPCConnectorGenerator.generateConnector(connectorGenReq.openAPIPath,
                             connectorGenReq.connectorProjectPath, projectServerVersion, projectUri);
@@ -1333,12 +1383,13 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<String> downloadDriverForConnector(DriverDownloadRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
+        ProjectContext ctx = resolveByProjectUri(request.getProjectUri());
+        return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ConnectorDownloadManager.downloadDriverForConnector(
-                        defaultContext.getProjectUri(),
+                        ctx.getProjectUri(),
                         request.getConnectorName(),
                         request.getConnectionType(),
-                        defaultContext.getConnectorHolder())
+                        ctx.getConnectorHolder())
                 : null);
     }
 
@@ -1357,36 +1408,41 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DeployPluginDetails> updateMavenDeployPlugin(DeployPluginDetails pluginDetails) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null ? PomParser.addCarDeployPluginToPom(
-                new File(defaultContext.getProjectUri() + File.separator + Constants.POM_FILE), pluginDetails) : null);
+        ProjectContext ctx = resolveByProjectUri(pluginDetails.getProjectUri());
+        return CompletableFuture.supplyAsync(() -> ctx != null ? PomParser.addCarDeployPluginToPom(
+                new File(ctx.getProjectUri() + File.separator + Constants.POM_FILE), pluginDetails) : null);
     }
 
     @Override
-    public CompletableFuture<DeployPluginDetails> getMavenDeployPluginDetails() {
+    public CompletableFuture<DeployPluginDetails> getMavenDeployPluginDetails(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null ? PomParser.extractCarDeployPluginFields(
-                new File(defaultContext.getProjectUri() + File.separator + Constants.POM_FILE)) : null);
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null ? PomParser.extractCarDeployPluginFields(
+                new File(ctx.getProjectUri() + File.separator + Constants.POM_FILE)) : null);
     }
 
     @Override
-    public CompletableFuture<TextEdit> removeMavenDeployPlugin() {
+    public CompletableFuture<TextEdit> removeMavenDeployPlugin(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null ? PomParser.removeDeployPlugin(
-                new File(defaultContext.getProjectUri() + File.separator + Constants.POM_FILE)) : null);
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null ? PomParser.removeDeployPlugin(
+                new File(ctx.getProjectUri() + File.separator + Constants.POM_FILE)) : null);
     }
 
     @Override
-    public CompletableFuture<List<ConfigDetails>> getConfigurableList() {
+    public CompletableFuture<List<ConfigDetails>> getConfigurableList(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
-                ? ConfigParser.getConfigDetails(defaultContext.getProjectUri()) : Collections.emptyList());
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null
+                ? ConfigParser.getConfigDetails(ctx.getProjectUri()) : Collections.emptyList());
     }
 
     @Override
-    public CompletableFuture<String> getLocalInboundEndpointsListForCopilot() {
+    public CompletableFuture<String> getLocalInboundEndpointsListForCopilot(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
-                ? defaultContext.getInboundConnectorHolder().getLocalInboundEndpointsListForCopilot() : null);
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null
+                ? ctx.getInboundConnectorHolder().getLocalInboundEndpointsListForCopilot() : null);
     }
 
     @Override
@@ -1434,10 +1490,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             if (request.dependencies == null || request.dependencies.isEmpty()) {
                 return Either.forRight("At least one dependency is required");
             }
-            if (defaultContext == null) {
+            ProjectContext ctx = resolveByProjectUri(request.projectUri);
+            if (ctx == null) {
                 return Either.forRight("Project is not initialized");
             }
-            String projectUri = defaultContext.getProjectUri();
+            String projectUri = ctx.getProjectUri();
 
             List<Connector> resolvedConnectors = new ArrayList<>();
             List<String> errors = new ArrayList<>();
@@ -1479,10 +1536,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<String> fetchInboundConnectors() {
+    public CompletableFuture<String> fetchInboundConnectors(ProjectUriRequest request) {
 
-        return CompletableFuture.supplyAsync(() -> defaultContext != null
-                ? defaultContext.getInboundConnectorHolder().getCustomInboundConnectors() : null);
+        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        return CompletableFuture.supplyAsync(() -> ctx != null
+                ? ctx.getInboundConnectorHolder().getCustomInboundConnectors() : null);
     }
 
     public String getProjectUri() {

@@ -24,4 +24,6 @@ public class UpdateGlobalConnectorFlagsRequest {
 
     /** When non-null, sets whether all connector ZIPs are excluded from the CAR globally. */
     public Boolean omitAllConnectors;
+
+    public String projectUri;
 }
