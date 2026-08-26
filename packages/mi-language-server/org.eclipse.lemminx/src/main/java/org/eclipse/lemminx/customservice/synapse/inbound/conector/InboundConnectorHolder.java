@@ -48,6 +48,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +71,7 @@ public class InboundConnectorHolder {
     private final HashMap<String, String> inboundConnectors;
     // <Connector ID, input schema path> map
     private final HashMap<String, String> inboundConnectorInputSchemas;
+    private final Map<String, ManagedInboundConnector> managedInboundConnectorsByZip = new HashMap<>();
     private Map<String, JsonObject> localInboundConnectors;
     private JsonObject inboundConnectorListJson;
     private String projectRuntimeVersion;
@@ -120,7 +122,11 @@ public class InboundConnectorHolder {
                                     : this.projectRuntimeVersion;
         this.localInboundConnectors = Utils.getUISchemaMap("org/eclipse/lemminx/inbound-endpoints/"
                 + referenceRuntime.replace(".", StringUtils.EMPTY));
-        getCustomInboundConnectors();
+        String customConnectorsStatus = getCustomInboundConnectors(null);
+        if (!Constant.SUCCESS.equals(customConnectorsStatus)) {
+            LOGGER.log(Level.WARNING, "Initializing with an empty custom inbound-endpoint list because "
+                    + "loading failed: " + customConnectorsStatus);
+        }
         loadInboundConnectors();
         this.localInboundEndpointsListForCopilot = generateInboundConnectorArray();
         instance = this;
@@ -141,33 +147,103 @@ public class InboundConnectorHolder {
         }
     }
 
-    public synchronized String getCustomInboundConnectors() {
+    /**
+     * Rebuild the custom inbound-endpoint list from disk. When {@code targetZipName} is given, the
+     * returned status reflects only that zip's import outcome, so a pre-existing unrelated bad zip in
+     * the directory cannot cause a failure. Pass {@code null} to get the aggregate result across all
+     * zips in the directory.
+     *
+     * @param targetZipName file name of the specific zip to be imported or {@code null} for a full rescan
+     */
+    public synchronized String getCustomInboundConnectors(String targetZipName) {
 
-        boolean hasFailure = false;
-        InputStream inputStream = JsonLoader.class
+        try (InputStream inputStream = JsonLoader.class
                 .getResourceAsStream("/org/eclipse/lemminx/inbound-endpoints/inbound_endpoints_"
-                        + this.projectRuntimeVersion.replace(".", StringUtils.EMPTY) + Constant.JSON_FILE_EXT);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
-        this.inboundConnectorListJson = JsonParser.parseReader(reader).getAsJsonObject();
+                        + this.projectRuntimeVersion.replace(".", StringUtils.EMPTY) + Constant.JSON_FILE_EXT)) {
+            if (inputStream == null) {
+                LOGGER.log(Level.SEVERE, "No bundled inbound-endpoint definitions found for runtime version "
+                        + this.projectRuntimeVersion);
+                return useFallbackInboundConnectorList();
+            }
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+                this.inboundConnectorListJson = JsonParser.parseReader(reader).getAsJsonObject();
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Failed to read inbound-endpoint definitions for runtime version "
+                    + this.projectRuntimeVersion, e);
+            return useFallbackInboundConnectorList();
+        }
         Path resourcesPath = Path.of(this.projectPath, Constant.SRC, Constant.MAIN, Constant.WSO2MI,
                 Constant.RESOURCES);
-        for (String dirName : new String[]{Constant.INBOUND_ENDPOINTS, Constant.INBOUND_CONNECTORS_DIR}) {
+        Set<String> removedZipNames = new HashSet<>(managedInboundConnectorsByZip.keySet());
+        Set<String> currentZipNames = new HashSet<>();
+        Map<String, Boolean> importResults = new HashMap<>();
+        // process inbound-endpoints last so that, on a same-name collision the latest change will take precedence
+        for (String dirName : new String[]{Constant.INBOUND_CONNECTORS_DIR, Constant.INBOUND_ENDPOINTS}) {
             File extractFolder = new File(resourcesPath.resolve(dirName).toString());
-            if (importInboundConnectorsFromDirectory(extractFolder)) {
-                hasFailure = true;
+            importResults.putAll(importInboundConnectorsFromDirectory(extractFolder, currentZipNames));
+        }
+        removedZipNames.removeAll(currentZipNames);
+        for (String removedZipName : removedZipNames) {
+            ManagedInboundConnector removed = managedInboundConnectorsByZip.remove(removedZipName);
+            if (removed != null) {
+                removeCachedInboundConnector(removed.connectorName, removed.connectorId);
             }
         }
-        return hasFailure ? "Failed to import the inbound-endpoint" : "success";
+        if (StringUtils.isNotBlank(targetZipName)) {
+            return Boolean.TRUE.equals(importResults.get(targetZipName)) ? Constant.SUCCESS :
+                    "Failed to import the inbound-endpoint";
+        }
+        return importResults.containsValue(Boolean.FALSE) ? "Failed to import the inbound-endpoint" : Constant.SUCCESS;
     }
 
-    private boolean importInboundConnectorsFromDirectory(File extractFolder) {
+    private String useFallbackInboundConnectorList() {
 
-        boolean hasFailure = false;
+        JsonObject fallbackList = new JsonObject();
+        fallbackList.add(Constant.INBOUND_CONNECTOR_DATA, new JsonArray());
+        this.inboundConnectorListJson = fallbackList;
+        return "Failed to import custom inbound-endpoints";
+    }
+
+    private void removeCachedInboundConnector(String connectorName, String connectorId) {
+
+        connectorIdMap.remove(connectorName);
+        boolean idHasNoOtherReference = StringUtils.isNotBlank(connectorId) && !connectorIdMap.containsValue(connectorId);
+        if (idHasNoOtherReference) {
+            inboundConnectors.remove(connectorId);
+        }
+        File schemaFile = Path.of(tempFolderPath, connectorName + ".json").toFile();
+        if (schemaFile.exists()) {
+            schemaFile.delete();
+        }
+        clearInputSchema(idHasNoOtherReference ? connectorId : null, connectorName);
+    }
+
+    private void clearInputSchema(String connectorId, String connectorName) {
+
+        if (connectorId != null) {
+            inboundConnectorInputSchemas.remove(connectorId);
+        }
+        File inputSchemaFile = Path.of(tempFolderPath, connectorName + INPUT_SCHEMA_FILE_SUFFIX).toFile();
+        if (inputSchemaFile.exists()) {
+            inputSchemaFile.delete();
+        }
+    }
+
+    private Map<String, Boolean> importInboundConnectorsFromDirectory(File extractFolder,
+                                                                       Set<String> currentZipNames) {
+
+        Map<String, Boolean> importResults = new HashMap<>();
         List<File> inboundConnectorZips = getInboundConnectorZips(extractFolder);
         for (File zip : inboundConnectorZips) {
-            String zipName = zip.getName().replace(Constant.DOT + "zip", StringUtils.EMPTY);
+            String zipFileName = zip.getName();
+            String zipName = zipFileName.replace(Constant.DOT + "zip", StringUtils.EMPTY);
             File extractToFolder = new File(extractFolder.getAbsolutePath() + File.separator + zipName);
+            boolean success = true;
             try {
+                if (extractToFolder.exists() && extractToFolder.isDirectory()) {
+                    Utils.deleteDirectory(extractToFolder.toPath());
+                }
                 Utils.extractZip(zip, extractToFolder);
                 String schema = Utils.readFile(extractToFolder.toPath().resolve(Constant.RESOURCES)
                         .resolve(Constant.UI_SCHEMA_JSON).toFile());
@@ -180,8 +256,13 @@ public class InboundConnectorHolder {
                 String inputSchema = inputSchemaFile.exists() ? Utils.readFile(inputSchemaFile) : null;
 
                 if (saveInboundConnector(connectorName, schema)) {
+                    currentZipNames.add(zipFileName);
+                    managedInboundConnectorsByZip.put(zipFileName,
+                            new ManagedInboundConnector(connectorName, connectorId));
                     if (StringUtils.isNotBlank(inputSchema)) {
                         saveInboundConnectorInputSchema(connectorName, connectorId, inputSchema);
+                    } else {
+                        clearInputSchema(connectorId, connectorName);
                     }
                     JsonArray connectorArray = this.inboundConnectorListJson.getAsJsonArray(Constant.INBOUND_CONNECTOR_DATA);
                     if (!isConnectorAlreadyListed(connectorArray, connectorId)) {
@@ -195,24 +276,24 @@ public class InboundConnectorHolder {
                         connectorArray.add(newConnector);
                     }
                 } else {
-                    hasFailure = true;
+                    success = false;
                     LOGGER.log(Level.SEVERE, "Failed to import custom inbound-endpoint:" + zipName
                             + ". Invalid or missing uischema.");
                 }
             } catch (Exception e) {
-                hasFailure = true;
+                success = false;
                 LOGGER.log(Level.SEVERE, "Failed to import custom inbound-endpoint:" + zipName, e);
             }
             if (extractToFolder.exists() && extractToFolder.isDirectory()) {
                 try {
                     Utils.deleteDirectory(extractToFolder.toPath());
                 } catch (IOException e) {
-                    hasFailure = true;
                     LOGGER.log(Level.SEVERE, "Failed to delete extracted inbound-endpoint:" + zipName, e);
                 }
             }
+            importResults.put(zipFileName, success);
         }
-        return hasFailure;
+        return importResults;
     }
 
     private boolean isConnectorAlreadyListed(JsonArray connectorArray, String connectorId) {
