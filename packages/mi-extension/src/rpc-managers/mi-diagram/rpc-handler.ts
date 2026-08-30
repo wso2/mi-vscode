@@ -99,10 +99,12 @@ import {
     SaveInboundEPUischemaRequest,
     ShowErrorMessageRequest,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     TestDbConnectionRequest,
     UndoRedoParams,
     UpdateAPIFromSwaggerRequest,
     UpdateAddressEndpointRequest,
+    UpdateResourceQueryParamsRequest,
     UpdateConnectorRequest,
     UpdateDefaultEndpointRequest,
     UpdateFailoverEPRequest,
@@ -164,6 +166,7 @@ import {
     editAPI,
     editOpenAPISpec,
     executeCommand,
+    exportConsolidatedProject,
     exportProject,
     fetchDSSTables,
     generateDSSQueries,
@@ -211,6 +214,7 @@ import {
     getMessageStore,
     getMetadataOfRegistryResource,
     getOpenAPISpec,
+    getDataServiceOpenAPISpec,
     getProjectRoot,
     getProjectUuid,
     getRecipientEndpoint,
@@ -253,6 +257,7 @@ import {
     undo,
     updateAPIFromSwagger,
     updateAddressEndpoint,
+    updateResourceQueryParams,
     updateConnectors,
     updateDefaultEndpoint,
     updateFailoverEndpoint,
@@ -286,6 +291,8 @@ import {
     getConnectionSchema,
     CopyConnectorZipRequest,
     copyConnectorZip,
+    ExtractMavenCoordinatesRequest,
+    extractMavenCoordinates,
     ApplyEditsRequest,
     askOpenAPIDirPath,
     RemoveConnectorRequest,
@@ -469,6 +476,7 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onRequest(downloadConnector, (args: DownloadConnectorRequest) => rpcManger.downloadConnector(args));
     messenger.onRequest(downloadInboundConnector, (args: DownloadInboundConnectorRequest) => rpcManger.downloadInboundConnector(args));
     messenger.onRequest(copyConnectorZip, (args: CopyConnectorZipRequest) => rpcManger.copyConnectorZip(args));
+    messenger.onRequest(extractMavenCoordinates, (args: ExtractMavenCoordinatesRequest) => rpcManger.extractMavenCoordinates(args));
     messenger.onRequest(copyArtifact, (args: CopyArtifactRequest) => rpcManger.copyArtifact(args));
     messenger.onRequest(askImportFileDir, () => rpcManger.askImportFileDir());
     messenger.onRequest(removeConnector, (args: RemoveConnectorRequest) => rpcManger.removeConnector(args));
@@ -499,13 +507,16 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onNotification(remoteDeploy, () => rpcManger.remoteDeploy());
     messenger.onRequest(getDevantMetadata, () => rpcManger.getDevantMetadata());
     messenger.onNotification(exportProject, (args: ExportProjectRequest) => rpcManger.exportProject(args));
+    messenger.onNotification(exportConsolidatedProject, () => rpcManger.exportConsolidatedProject());
     messenger.onRequest(checkOldProject, () => rpcManger.checkOldProject());
     messenger.onNotification(refreshAccessToken, () => rpcManger.refreshAccessToken());
     messenger.onRequest(getOpenAPISpec, (args: SwaggerTypeRequest) => rpcManger.getOpenAPISpec(args));
+    messenger.onRequest(getDataServiceOpenAPISpec, (args: DataServiceSwaggerRequest) => rpcManger.getDataServiceOpenAPISpec(args));
     messenger.onNotification(editOpenAPISpec, (args: SwaggerTypeRequest) => rpcManger.editOpenAPISpec(args));
     messenger.onRequest(compareSwaggerAndAPI, (args: SwaggerTypeRequest) => rpcManger.compareSwaggerAndAPI(args));
     messenger.onNotification(updateSwaggerFromAPI, (args: SwaggerTypeRequest) => rpcManger.updateSwaggerFromAPI(args));
     messenger.onNotification(updateAPIFromSwagger, (args: UpdateAPIFromSwaggerRequest) => rpcManger.updateAPIFromSwagger(args));
+    messenger.onRequest(updateResourceQueryParams, (args: UpdateResourceQueryParamsRequest) => rpcManger.updateResourceQueryParams(args));
     messenger.onRequest(updateTestSuite, (args: UpdateTestSuiteRequest) => rpcManger.updateTestSuite(args));
     messenger.onRequest(updateTestCase, (args: UpdateTestCaseRequest) => rpcManger.updateTestCase(args));
     messenger.onRequest(updateMockService, (args: UpdateMockServiceRequest) => rpcManger.updateMockService(args));

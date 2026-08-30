@@ -39,6 +39,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -210,7 +211,7 @@ public class ConnectorConfigService {
 
             // Find existing entry to replace
             DependencyOverride existing = findMatchingOverride(
-                    connectorCfg.dependencies, request.connectionType, request.groupId, request.artifactId);
+                    connectorCfg.dependencies, request.connectionType, request.groupId, request.artifactId, true);
 
             if (existing != null) {
                 // Update in-place; blank strings are normalized to null so they are
@@ -233,6 +234,9 @@ public class ConnectorConfigService {
                 if (request.localPath != null) {
                     existing.localPath = blankToNull(request.localPath);
                 }
+                if (request.additionalDependency != null) {
+                    existing.additionalDependency = request.additionalDependency ? Boolean.TRUE : null;
+                }
             } else {
                 // Add new entry
                 DependencyOverride override = new DependencyOverride();
@@ -242,6 +246,7 @@ public class ConnectorConfigService {
                 override.version = blankToNull(request.version);
                 override.omit = Boolean.TRUE.equals(request.omit) ? Boolean.TRUE : null;
                 override.localPath = blankToNull(request.localPath);
+                override.additionalDependency = Boolean.TRUE.equals(request.additionalDependency) ? Boolean.TRUE : null;
                 connectorCfg.dependencies.add(override);
             }
 
@@ -362,7 +367,9 @@ public class ConnectorConfigService {
             data.omit = Boolean.TRUE.equals(connectorCfg != null ? connectorCfg.omit : null);
             data.omitAllDrivers = Boolean.TRUE.equals(config.omitAllDrivers)
                     || Boolean.TRUE.equals(connectorCfg != null ? connectorCfg.omitAllDrivers : null);
-            data.dependencies = descriptorDeps.isEmpty()
+            boolean hasOverrides = connectorCfg != null && connectorCfg.dependencies != null
+                    && !connectorCfg.dependencies.isEmpty();
+            data.dependencies = (descriptorDeps.isEmpty() && !hasOverrides)
                     ? new ArrayList<>()
                     : mergeDependencies(descriptorDeps, config, artifactId, activeConnectionTypes);
             result.put(artifactId, data);
@@ -411,7 +418,7 @@ public class ConnectorConfigService {
         if (cfg == null || cfg.dependencies == null) {
             return null;
         }
-        return findMatchingOverride(cfg.dependencies, connectionType, null, null);
+        return findMatchingOverride(cfg.dependencies, connectionType, null, null, true);
     }
 
     // -------------------------------------------------------------------------
@@ -481,6 +488,7 @@ public class ConnectorConfigService {
                         ? connectorCfg.dependencies
                         : Collections.emptyList();
 
+        Set<DependencyOverride> consumedOverrides = Collections.newSetFromMap(new IdentityHashMap<>());
         List<EffectiveDependency> result = new ArrayList<>();
         for (Map<String, Object> dep : descriptorDeps) {
             String groupId = (String) dep.get("groupId");
@@ -488,7 +496,10 @@ public class ConnectorConfigService {
             String version = (String) dep.get("version");
             String connectionType = (String) dep.get("connectionType");
 
-            DependencyOverride override = findMatchingOverride(overrides, connectionType, groupId, artifactId);
+            DependencyOverride override = findMatchingOverride(overrides, connectionType, groupId, artifactId, false);
+            if (override != null) {
+                consumedOverrides.add(override);
+            }
 
             EffectiveDependency eff = new EffectiveDependency();
             eff.connectionType = connectionType;
@@ -519,6 +530,32 @@ public class ConnectorConfigService {
                 }
             }
             result.add(eff);
+        }
+
+        // Identify user added dependencies that are not present in the descriptor.yml and 
+        // add them to the effective list.
+        for (DependencyOverride override : overrides) {
+            if (consumedOverrides.contains(override)) {
+                continue;
+            }
+            if (StringUtils.isBlank(override.artifactId) && StringUtils.isBlank(override.connectionType)) {
+                continue;
+            }
+            if (!Boolean.TRUE.equals(override.additionalDependency)) {
+                continue;
+            }
+            EffectiveDependency effectiveDep = new EffectiveDependency();
+            effectiveDep.connectionType = blankToNull(override.connectionType);
+            effectiveDep.groupId = blankToNull(override.groupId);
+            effectiveDep.artifactId = blankToNull(override.artifactId);
+            effectiveDep.defaultVersion = null; // Not defined in the descriptor.yml
+            effectiveDep.overriddenVersion = blankToNull(override.version);
+            effectiveDep.localPath = blankToNull(override.localPath);
+            effectiveDep.isOverridden = true;
+            effectiveDep.omit = globalOmitAllDrivers || Boolean.TRUE.equals(override.omit);
+            effectiveDep.isConnectionTypeActive = (effectiveDep.connectionType == null)
+                    || activeConnectionTypes.contains(effectiveDep.connectionType.toUpperCase());
+            result.add(effectiveDep);
         }
         return result;
     }
@@ -584,13 +621,17 @@ public class ConnectorConfigService {
     /** Finds the best-matching override by connectionType, then by groupId+artifactId. */
     private static DependencyOverride findMatchingOverride(List<DependencyOverride> overrides,
                                                            String connectionType,
-                                                           String groupId, String artifactId) {
+                                                           String groupId, String artifactId,
+                                                           boolean includeAdditionalDependencies) {
 
         if (overrides == null) {
             return null;
         }
         if (connectionType != null) {
             for (DependencyOverride o : overrides) {
+                if (!includeAdditionalDependencies && Boolean.TRUE.equals(o.additionalDependency)) {
+                    continue;
+                }
                 if (connectionType.equalsIgnoreCase(o.connectionType)) {
                     return o;
                 }
@@ -598,6 +639,9 @@ public class ConnectorConfigService {
         }
         if (groupId != null && artifactId != null) {
             for (DependencyOverride o : overrides) {
+                if (!includeAdditionalDependencies && Boolean.TRUE.equals(o.additionalDependency)) {
+                    continue;
+                }
                 if (o.connectionType == null
                         && groupId.equals(o.groupId)
                         && artifactId.equals(o.artifactId)) {

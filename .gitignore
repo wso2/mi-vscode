@@ -58,6 +58,7 @@ node_modules/
 
 lib/
 build
+build-federation
 
 # Rush temporary files
 common/deploy/

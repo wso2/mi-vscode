@@ -21,9 +21,9 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { createTempDebugBatchFile, setJavaHomeInEnvironmentAndPath } from './debugHelper';
 import { LogLevel, logDebug } from '../util/logger';
-import { escapeShellArg } from '../util/shell';
 import { Uri, workspace } from "vscode";
 import { MVN_COMMANDS } from "../constants";
+import { escapeShellArg } from '../util/shellEscapeUtils';
 
 export function getBuildTask(projectUri: string): vscode.Task {
     const config = workspace.getConfiguration('MI', Uri.file(projectUri));
@@ -145,7 +145,7 @@ export async function getRunCommand(serverPath: string, isDebug: boolean): Promi
         // HACK to get the server to run as the debugger since MI 4.2.0 version's .bat file is not supported to run java variables
         if (process.platform === 'win32') {
             const binDirectoryPath = path.join(serverPath, 'bin');
-            let copiedBatchFile;
+            let copiedBatchFile: string;
             try {
                 copiedBatchFile = await createTempDebugBatchFile(binPath, binDirectoryPath);
             } catch (error) {

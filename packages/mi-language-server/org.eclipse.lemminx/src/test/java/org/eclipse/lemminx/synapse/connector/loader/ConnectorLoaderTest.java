@@ -98,7 +98,7 @@ public class ConnectorLoaderTest {
     @Order(3)
     public void testConnectorLoading_AddingValidConnector() throws Exception {
 
-        String connectorPath = getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip");
+        String connectorPath = getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip");
         loadConnector(connectorPath);
 
         assertEquals(1, connectorHolder.getConnectors().size());
@@ -144,7 +144,7 @@ public class ConnectorLoaderTest {
     @Order(7)
     public void testConnectorLoading_RemovingValidConnector() throws IOException {
 
-        FileUtils.forceDelete(tempPath.resolve("connectors").resolve("mi-connector-http-0.1.8.zip").toFile());
+        FileUtils.forceDelete(tempPath.resolve("connectors").resolve("mi-connector-http-1.0.0.zip").toFile());
         connectorLoader.loadConnector();
 
         assertEquals(1, connectorHolder.getConnectors().size());
@@ -156,7 +156,7 @@ public class ConnectorLoaderTest {
     public void testConnectorLoading_AddValidAndInvalidConnectorAtSameTime() throws Exception {
 
         String connectorPath1 = getResourceFilePath("/synapse/connector/zips/invalid-connector-0.1.0.zip");
-        String connectorPath2 = getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip");
+        String connectorPath2 = getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip");
         loadConnector(connectorPath1, connectorPath2);
 
         assertEquals(2, connectorHolder.getConnectors().size());

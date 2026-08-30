@@ -38,6 +38,7 @@ import { DataMapper } from './views/DataMapper';
 import { ErrorBoundary } from '@wso2/ui-toolkit';
 import PopupPanel from './PopupPanel';
 import { AddArtifactView } from './views/AddArtifact';
+import { ManageDependencies } from './views/ManageDependencies';
 import { SequenceTemplateView } from './views/Diagram/SequenceTemplate';
 import { ConnectionWizard } from './views/Forms/ConnectionForm';
 import { TestSuiteForm } from './views/Forms/Tests/TestSuiteForm';
@@ -63,6 +64,7 @@ import { IdpConnectorSchemaGenerateForm }from './views/Forms/IDPConnectorForm/Id
 import { KubernetesConfigurationForm } from "./views/Forms/KubernetesConfigurationForm";
 import { RegistryPropertyForm } from "./views/Forms/RegistryPropertyForm";
 import { ConvertToConsolidatedWizard } from './views/Forms/ConvertToConsolidated';
+import { WorkspaceOverview } from './views/WorkspaceOverview';
 
 const MainContainer = styled.div`
     display: flex;
@@ -164,8 +166,14 @@ const MainPanel = (props: MainPanelProps) => {
             case MACHINE_VIEW.Overview:
                 setViewComponent(<Overview />);
                 break;
+            case MACHINE_VIEW.WorkspaceOverview:
+                setViewComponent(<WorkspaceOverview />);
+                break;
             case MACHINE_VIEW.ADD_ARTIFACT:
                 setViewComponent(<AddArtifactView />);
+                break;
+            case MACHINE_VIEW.ManageDependencies:
+                setViewComponent(<ManageDependencies />);
                 break;
             case MACHINE_VIEW.UnsupportedProject:
                 setViewComponent(

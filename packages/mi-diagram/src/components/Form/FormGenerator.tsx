@@ -119,6 +119,7 @@ export interface FormGeneratorProps {
     disableFields?: string[];
     autoGenerateSequences?: boolean;
     range?: Range;
+    dataServiceName?: string;
 }
 
 export interface Element {
@@ -133,6 +134,8 @@ export interface Element {
     defaultValue?: any;
     currentValue?: any;
     allowedConnectionTypes?: string[];
+    inputTypeDisplayName?: string;
+    inputTypeDescription?: string;
     keyType?: any;
     canAddNew?: boolean;
     elements?: any[];
@@ -253,7 +256,8 @@ export function FormGenerator(props: FormGeneratorProps) {
         connectionName,
         connectorArtifactId: connectorArtifactIdProp,
         parameters,
-        setComboValues
+        setComboValues,
+        dataServiceName: parentDataServiceName
     } = props;
     const [currentExpressionValue, setCurrentExpressionValue] =  useState<ExpressionValueWithSetter | null>(null);
     const [expressionEditorField, setExpressionEditorField] = useState<string | null>(null);
@@ -279,6 +283,10 @@ export function FormGenerator(props: FormGeneratorProps) {
     const [showFillWithAI, setShowFillWithAI] = useState<boolean>(false);
     const selectedConnection = useWatch({ control, name: 'configKey' });
     const selectedMcpTools = useWatch({ control, name: 'mcpToolsSelection' });
+    // Subscribe to the data service field at host scope to refresh dsOperations when it changes.
+    // Use a sentinel name when this form has no data service field, so other forms don't watch the whole form.
+    const dataServiceFieldName = findFieldNameByKeyType("dataService");
+    const selectedDataService = useWatch({ control, name: dataServiceFieldName ?? 'non_data_service' });
     const [customErrors, setCustomErrors] = useState<Record<string, string | null>>({});
     const dynamicFieldsHandler = useRef<DynamicFieldsHandler>(null);
     const [dynamicFields, setDynamicFields] = useState<Record<string, DynamicFieldGroup>>({});
@@ -289,6 +297,20 @@ export function FormGenerator(props: FormGeneratorProps) {
         }));
     };
     const [effectiveDriverDep, setEffectiveDriverDep] = useState<ConnectorEffectiveDependency | null>(null);
+
+    // reset only on a genuine user-driven change, not on initial load.
+    const lastDataServiceValueRef = useRef<string | undefined>(undefined);
+    useEffect(() => {
+        if (!dataServiceFieldName || lastDataServiceValueRef.current === selectedDataService) {
+            return;
+        }
+        lastDataServiceValueRef.current = selectedDataService;
+        setValue(getNameForController("operationType"), "SINGLE");
+        setValue(getNameForController("operationName"), "");
+        setValue(getNameForController("singleOperations"), []);
+        setValue(getNameForController("batchOperations"), []);
+        setValue(getNameForController("requestBoxoperations"), []);
+    }, [selectedDataService, dataServiceFieldName]);
 
     useEffect(() => {
         let cancelled = false;
@@ -434,6 +456,7 @@ export function FormGenerator(props: FormGeneratorProps) {
         if (formData.elements) {
             const defaultValues = getDefaultValues(formData.elements);
             reset(defaultValues);
+            lastDataServiceValueRef.current = dataServiceFieldName ? defaultValues[dataServiceFieldName] : undefined;
             const details: any = formData.elements.map((element: any) => processElement(element));
             setElementDetails(details);
         }
@@ -684,6 +707,8 @@ export function FormGenerator(props: FormGeneratorProps) {
         useEffect(() => {
             handleValueChange(field.value, element.name.toString(), element);
         }, []); // run only on mount
+
+        const dataServiceName = parentDataServiceName ?? selectedDataService;
         return <ComponentCard id={'parameterManager-' + element.name} sx={cardStyle} disbaleHoverEffect>
             <div style={{ display: 'flex', alignItems: 'center' }}>
                 <Typography variant="h3">{element.displayName}</Typography>
@@ -703,6 +728,7 @@ export function FormGenerator(props: FormGeneratorProps) {
                     handleValueChange(e, element.name.toString(), element);
                 }}
                 nodeRange={range}
+                dataServiceName={dataServiceName}
             />
         </ComponentCard>;
     }
@@ -818,6 +844,24 @@ export function FormGenerator(props: FormGeneratorProps) {
                 />
             </>
         );
+    }
+
+    // Find the controller name of a sibling field with the given keyType
+    function findFieldNameByKeyType(targetKeyType: string, elements: any[] = formData?.elements): string | undefined {
+        if (!Array.isArray(elements)) {
+            return undefined;
+        }
+        for (const el of elements) {
+            if (Array.isArray(el?.value?.elements)) {
+                const found = findFieldNameByKeyType(targetKeyType, el.value.elements);
+                if (found) {
+                    return found;
+                }
+            } else if (el?.value?.keyType === targetKeyType) {
+                return getNameForController(el.value.name);
+            }
+        }
+        return undefined;
     }
 
     const renderFormElement = (element: Element, field: any) => {
@@ -1053,11 +1097,18 @@ export function FormGenerator(props: FormGeneratorProps) {
                     }
                 }
 
+                // Scope the results to the selected data service for a dsOperation lookup.
+                let dataServiceName: string | undefined;
+                if (keyType === "dsOperation") {
+                    dataServiceName = parentDataServiceName ?? selectedDataService;
+                }
+
                 return (
                     <div>
                         <Keylookup
                             value={field.value}
                             filterType={(keyType as any) ?? "registry"}
+                            dataServiceName={dataServiceName}
                             label={element.displayName}
                             labelAdornment={helpTipElement}
                             allowItemCreate={element.canAddNew !== false || (element.canAddNew as any) !== "false"}
@@ -1276,7 +1327,9 @@ export function FormGenerator(props: FormGeneratorProps) {
                         fetchItems,
                         handleValueChange,
                         props.documentUri,
-                        { allowedConnectionTypes: allowedConnectionTypes },
+                        { allowedConnectionTypes: allowedConnectionTypes,
+                            formTitle: element.inputTypeDisplayName ? element.inputTypeDisplayName : undefined,
+                            formDescription: element.inputTypeDescription ? element.inputTypeDescription : undefined },
                         sidePanelContext
                     );
                 }
@@ -1291,7 +1344,7 @@ export function FormGenerator(props: FormGeneratorProps) {
                                 </div>}
                             </div>
                             {!isDisabled && <LinkButton onClick={() => onCreateButtonClick(name, element.allowedConnectionTypes)}>
-                                <Codicon name="plus" />Add new connection
+                                <Codicon name="plus" />{ element.inputTypeDisplayName ? element.inputTypeDisplayName : 'Add New Connection'}
                             </LinkButton>}
                         </div>
                         <AutoComplete

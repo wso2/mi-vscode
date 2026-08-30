@@ -21,6 +21,7 @@ import org.eclipse.lemminx.customservice.synapse.parser.OverviewPageDetailsRespo
 import org.eclipse.lemminx.customservice.synapse.parser.pom.PomParser;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.ArtifactResource;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.ConflictingDependency;
+import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.DataServiceOperationResource;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.LoadDependentResourcesResponse;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.RegistryResource;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.RequestedResource;
@@ -31,6 +32,9 @@ import org.eclipse.lemminx.customservice.synapse.resourceFinder.registryHander.N
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.registryHander.SchemaResourceHandler;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.registryHander.SimpleResourceHandler;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.registryHander.SwaggerResourceHandler;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.dataservice.Data;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
@@ -619,6 +623,104 @@ public abstract class AbstractResourceFinder {
         requestedResource.type = type;
         requestedResource.needRegistry = true;
         return findResources(projectPath, List.of(requestedResource));
+    }
+
+    /**
+     * Resolves the operations exposed by a single data service as a {@link ResourceResponse}.
+     *
+     * The data service file with the given name is located within the project, parsed, and its
+     * {@code <operation>} and {@code <resource>} entries are collected into the response's
+     * resource list. An operation contributes its name directly, while a resource contributes a
+     * name generated from its path and method via {@link #generateRequestName(String, String)}
+     * mirroring the request names the MI runtime exposes for REST-style data service resources.
+     *
+     * @param projectPath     the absolute path to the project
+     * @param dataServiceName the name of the data service whose operations should be listed
+     * @return a {@link ResourceResponse} whose resources hold one entry per operation/resource
+     */
+    public ResourceResponse getDataServiceOperations(String projectPath, String dataServiceName) {
+
+        ResourceResponse response = new ResourceResponse();
+        List<Resource> operations = new ArrayList<>();
+        response.setResources(operations);
+
+        String dataServicePath = findDataServicePath(projectPath, dataServiceName);
+        if (dataServicePath == null) {
+            LOGGER.warning("Data service not found in project: " + dataServiceName);
+            return response;
+        }
+
+        try {
+            DOMDocument document = Utils.getDOMDocument(new File(dataServicePath));
+            if (document == null || document.getDocumentElement() == null) {
+                return response;
+            }
+            STNode node = SyntaxTreeGenerator.buildTree(document.getDocumentElement());
+            if (!(node instanceof Data)) {
+                return response;
+            }
+            Data data = (Data) node;
+            if (data.getOperations() != null) {
+                for (var operation : data.getOperations()) {
+                    if (operation.getName() != null) {
+                        operations.add(new DataServiceOperationResource(operation.getName()));
+                    }
+                }
+            }
+            if (data.getResources() != null) {
+                for (var resource : data.getResources()) {
+                    if (resource.getPath() != null && resource.getMethod() != null) {
+                        operations.add(new DataServiceOperationResource(
+                                generateRequestName(resource.getPath(), resource.getMethod())));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            LOGGER.warning("Error while reading data service file: " + dataServicePath);
+        } catch (Exception e) {
+            LOGGER.warning("Error while parsing data service file: " + dataServicePath);
+        }
+        return response;
+    }
+
+    /**
+     * Locates the absolute path of the data service file with the given name by scanning the
+     * project's data service artifacts. Returns null if no matching data service is found.
+     * 
+     * @param projectPath     the absolute path to the project
+     * @param dataServiceName the name of the data service to locate
+     * @return the absolute path to the data service file, or null if not found
+     */
+    private String findDataServicePath(String projectPath, String dataServiceName) {
+
+        ResourceResponse dataServices = findResources(projectPath, Constant.DATA_SERVICE);
+        if (dataServices == null || dataServices.getResources() == null) {
+            return null;
+        }
+        for (Resource resource : dataServices.getResources()) {
+            if (dataServiceName.equals(resource.getName()) && resource instanceof ArtifactResource) {
+                return ((ArtifactResource) resource).getAbsolutePath();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Generates the request name the MI runtime exposes for a data service REST resource from its
+     * path and HTTP method. Slashes become underscores and path variable braces are stripped, e.g.
+     * {@code (path="student/{id}", method="PUT")} yields {@code _put_student_id}.
+     *
+     * @param path   the resource path
+     * @param method the HTTP method of the resource
+     * @return the generated request name in lower case
+     */
+    private static String generateRequestName(String path, String method) {
+
+        String pathWithoutSlashes = path.replaceAll("/", "_");
+        String pathWithoutLeftBraces = pathWithoutSlashes.replaceAll("\\{", "");
+        String pathWithoutRightBraces = pathWithoutLeftBraces.replaceAll("\\}", "");
+        String requestName = "_" + method + pathWithoutRightBraces;
+        return requestName.toLowerCase();
     }
 
     /**

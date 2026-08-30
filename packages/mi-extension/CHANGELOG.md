@@ -1,6 +1,46 @@
 # Change Log
 
-All notable changes to the "micro-integrator" extension will be documented in this file.
+All notable changes to the "micro-integrator" extension will be documented in this file.   
+
+## [4.1.4] - 2026-07-30      
+
+### Fixed   
+
+Fixed: Shell arguments handling inconsistencies      
+Fixed: Gaps in query parameters support for APIs via the OpenAPI specification     
+Fixed: Class mediator build issues with JDK 25          
+Fixed: Input-variable suggestion support for inbound endpoints ([#1539](https://github.com/wso2/mi-vscode/issues/1539))     
+
+## [4.1.3] - 2026-07-15   
+
+### Fixed   
+
+Fixed: ASB inbound-endpoint create form is not rendering   
+Fixed: Connector generation tool fails with JDK 25   
+
+## [4.1.2] - 2026-07-04   
+
+### Fixed   
+
+Fixed: Table field values are incorrectly shown in inbound endpoint form ([#1079](https://github.com/wso2/mi-vscode/issues/1079))    
+Fixed: Minor bug fixes in the extension and the language server   
+Fixed: Update the custom inbound-endpoints importing process   
+
+## [4.1.1] - 2026-06-30   
+
+### Fixed   
+
+Fixed: Error in adding connector operations without child parameters ([#1508](https://github.com/wso2/mi-vscode/issues/1508))    
+Fixed: Custom Message Store: 'providerClass' field is empty and shows required error when reopening edit form ([#1506](https://github.com/wso2/mi-vscode/issues/1506))    
+Fixed: Connection form: Cannot update connection when another connection form is already open ([#1505](https://github.com/wso2/mi-vscode/issues/1505))    
+Fixed: HTTP connector is always added in window reload ([#1440](https://github.com/wso2/mi-vscode/issues/1440))    
+Fixed: Expression editor in Script Mediator appends additional parentheses ([#1376](https://github.com/wso2/mi-vscode/issues/1376))    
+Fixed: No error shown we retry connectors without internet connection ([#1314](https://github.com/wso2/mi-vscode/issues/1314))    
+Fixed: Show a message when the CApp generation is successful ([#1289](https://github.com/wso2/mi-vscode/issues/1289))    
+Fixed: Improve Query UI in dataservices ([#721](https://github.com/wso2/mi-vscode/issues/721))    
+Fixed: Datasource is not marked as required in Data Service create form ([#708](https://github.com/wso2/mi-vscode/issues/708))    
+Fixed: Update unit test page artifact select dropdowns don't work properly  ([#487](https://github.com/wso2/mi-vscode/issues/487))    
+Fixed: Improvements to the MI Copilot ([#1640](https://github.com/wso2/product-integrator/issues/1640))    
 
 ## [4.1.0] - 2026-06-11   
 

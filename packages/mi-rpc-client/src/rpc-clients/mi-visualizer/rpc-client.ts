@@ -44,6 +44,7 @@ import {
     ToggleDisplayOverviewRequest,
     UpdateContextRequest,
     WorkspacesResponse,
+    WorkspaceMiProjectsResponse,
     addToHistory,
     downloadSelectedSampleFromGithub,
     fetchSamplesFromGithub,
@@ -53,10 +54,13 @@ import {
     addConfigurable,
     getHistory,
     getProjectOverview,
+    getWorkspaceProjectSummary,
+    WorkspaceProjectSummary,
     getProjectStructure,
     getReadmeContent,
     getProjectUri,
     getWorkspaces,
+    getWorkspaceMiProjects,
     findOldProjects,
     goBack,
     goHome,
@@ -118,7 +122,16 @@ import {
     DeployConfigParam,
     getMcpToolSuggestion,
     McpToolSuggestionRequest,
-    McpToolSuggestionResponse
+    McpToolSuggestionResponse,
+    getConsolidatedProjectDetails,
+    updateConsolidatedProjectDetails,
+    ConsolidatedProjectDetails,
+    UpdateConsolidatedProjectDetailsRequest,
+    getConsolidatedRemoteDeployConfig,
+    saveConsolidatedRemoteDeployConfig,
+    ConsolidatedRemoteDeployConfig,
+    getConsolidatedRemoteDeployConfigs,
+    executeConsolidatedRemoteDeployWithParams
 } from "@wso2/mi-core";
 import { HOST_EXTENSION } from "vscode-messenger-common";
 import { Messenger } from "vscode-messenger-webview";
@@ -138,6 +151,10 @@ export class MiVisualizerRpcClient implements MIVisualizerAPI {
         return this._messenger.sendRequest(getWorkspaces, HOST_EXTENSION);
     }
 
+    getWorkspaceMiProjects(): Promise<WorkspaceMiProjectsResponse> {
+        return this._messenger.sendRequest(getWorkspaceMiProjects, HOST_EXTENSION);
+    }
+
     findOldProjects(): Promise<string[]> {
         return this._messenger.sendRequest(findOldProjects, HOST_EXTENSION);
     }
@@ -148,6 +165,10 @@ export class MiVisualizerRpcClient implements MIVisualizerAPI {
 
     getProjectOverview(params: ProjectStructureRequest): Promise<ProjectOverviewResponse> {
         return this._messenger.sendRequest(getProjectOverview, HOST_EXTENSION, params);
+    }
+
+    getWorkspaceProjectSummary(params: ProjectStructureRequest): Promise<WorkspaceProjectSummary> {
+        return this._messenger.sendRequest(getWorkspaceProjectSummary, HOST_EXTENSION, params);
     }
 
     getCurrentThemeKind(): Promise<ColorThemeKind> {
@@ -333,5 +354,29 @@ export class MiVisualizerRpcClient implements MIVisualizerAPI {
 
     getMcpToolSuggestion(params: McpToolSuggestionRequest): Promise<McpToolSuggestionResponse> {
         return this._messenger.sendRequest(getMcpToolSuggestion, HOST_EXTENSION, params);
+    }
+
+    getConsolidatedProjectDetails(): Promise<ConsolidatedProjectDetails | null> {
+        return this._messenger.sendRequest(getConsolidatedProjectDetails, HOST_EXTENSION);
+    }
+
+    updateConsolidatedProjectDetails(params: UpdateConsolidatedProjectDetailsRequest): Promise<boolean> {
+        return this._messenger.sendRequest(updateConsolidatedProjectDetails, HOST_EXTENSION, params);
+    }
+
+    getConsolidatedRemoteDeployConfig(): Promise<ConsolidatedRemoteDeployConfig | null> {
+        return this._messenger.sendRequest(getConsolidatedRemoteDeployConfig, HOST_EXTENSION);
+    }
+
+    saveConsolidatedRemoteDeployConfig(params: ConsolidatedRemoteDeployConfig): Promise<boolean> {
+        return this._messenger.sendRequest(saveConsolidatedRemoteDeployConfig, HOST_EXTENSION, params);
+    }
+
+    getConsolidatedRemoteDeployConfigs(): Promise<DeployConfigParam[]> {
+        return this._messenger.sendRequest(getConsolidatedRemoteDeployConfigs, HOST_EXTENSION);
+    }
+
+    executeConsolidatedRemoteDeployWithParams(params: ExecuteRemoteDeployParams): Promise<void> {
+        return this._messenger.sendRequest(executeConsolidatedRemoteDeployWithParams, HOST_EXTENSION, params);
     }
 }

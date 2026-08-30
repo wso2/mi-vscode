@@ -143,10 +143,11 @@ interface DeploymentOptionsProps {
     goToDevant: () => void;
     devantMetadata?: DevantMetadata;
     isConsolidatedProject?: boolean;
+    showAllOptions?: boolean;
 }
 
-export function DeploymentOptions({ handleDockerBuild, handleConfigureKubernetes, handleCAPPBuild, handleConsolidatedBuild, handleRemoteDeploy, handleDeploy, goToDevant, devantMetadata, isConsolidatedProject }: DeploymentOptionsProps) {
-    const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set(['cloud', isConsolidatedProject ? 'vm' : 'devant']));
+export function DeploymentOptions({ handleDockerBuild, handleConfigureKubernetes, handleCAPPBuild, handleConsolidatedBuild, handleRemoteDeploy, handleDeploy, goToDevant, devantMetadata, isConsolidatedProject, showAllOptions }: DeploymentOptionsProps) {
+    const [expandedOptions, setExpandedOptions] = useState<Set<string>>(new Set([]));
     const { rpcClient } = useVisualizerContext();
 
     const toggleOption = (option: string) => {
@@ -165,7 +166,7 @@ export function DeploymentOptions({ handleDockerBuild, handleConfigureKubernetes
         <div>
             <Title variant="h3">Deployment Options</Title>
 
-            {!isConsolidatedProject && (
+            {(!isConsolidatedProject || showAllOptions) && (
                 <>
                     <DeploymentOption
                         title={devantMetadata?.hasComponent ? "Deployed in WSO2 Cloud" : "Deploy to WSO2 Cloud"}
@@ -202,8 +203,7 @@ export function DeploymentOptions({ handleDockerBuild, handleConfigureKubernetes
                         onDeploy={handleRemoteDeploy}
                     />
                 </>
-            )
-            }
+            )}
 
             <DeploymentOption
                 title="Build Docker Image"

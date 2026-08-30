@@ -415,6 +415,10 @@ export async function activateProjectExplorer(treeviewId: string, context: Exten
 		revealWebviewPanel(false);
 		openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.Overview, projectUri: entry.info?.path });
 	});
+	commands.registerCommand(COMMANDS.OPEN_WORKSPACE_OVERVIEW, async () => {
+		revealWebviewPanel(false);
+		openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.WorkspaceOverview });
+	});
 	commands.registerCommand(COMMANDS.OPEN_SERVICE_DESIGNER, async (entry: ProjectExplorerEntry) => {
 		revealWebviewPanel(false);
 		openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.ServiceDesigner, documentUri: entry.info?.path });

@@ -180,8 +180,11 @@ import {
     EditAPIRequest,
     EditAPIResponse,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     UpdateAPIFromSwaggerRequest,
     CompareSwaggerAndAPIResponse,
+    UpdateResourceQueryParamsRequest,
+    UpdateResourceQueryParamsResponse,
     UpdateTestSuiteRequest,
     UpdateTestCaseRequest,
     UpdateTestCaseResponse,
@@ -303,6 +306,8 @@ import {
     ResetConnectorDependencyOverridesRequest,
     UpdateConnectorFlagsRequest,
     UpdateGlobalConnectorFlagsRequest,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
 } from "./types";
 import { RequestType, NotificationType } from "vscode-messenger-common";
 
@@ -402,6 +407,7 @@ export const rangeFormat: RequestType<RangeFormatRequest, ApplyEditResponse> = {
 export const downloadConnector: RequestType<DownloadConnectorRequest, DownloadConnectorResponse> = { method: `${_preFix}/downloadConnector` };
 export const downloadInboundConnector: RequestType<DownloadInboundConnectorRequest, DownloadInboundConnectorResponse> = { method: `${_preFix}/downloadInboundConnector` };
 export const copyConnectorZip: RequestType<CopyConnectorZipRequest, CopyConnectorZipResponse> = { method: `${_preFix}/copyConnectorZip` };
+export const extractMavenCoordinates: RequestType<ExtractMavenCoordinatesRequest, ExtractMavenCoordinatesResponse> = { method: `${_preFix}/extractMavenCoordinates` };
 export const copyArtifact: RequestType<CopyArtifactRequest, CopyArtifactResponse> = { method: `${_preFix}/copyArtifact` };
 export const askImportFileDir: RequestType<void, FileDirResponse> = { method: `${_preFix}/askImportFileDir` };
 export const getAvailableConnectors: RequestType<GetAvailableConnectorRequest, GetAvailableConnectorResponse> = { method: `${_preFix}/getAvailableConnectors` };
@@ -432,13 +438,16 @@ export const deployProject: RequestType<DeployProjectRequest, DeployProjectRespo
 export const remoteDeploy: NotificationType<void> = { method: `${_preFix}/remoteDeploy` };
 export const getDevantMetadata: RequestType<void, DevantMetadata> = { method: `${_preFix}/getDevantMetadata` };
 export const exportProject: NotificationType<ExportProjectRequest> = { method: `${_preFix}/exportProject` };
+export const exportConsolidatedProject: NotificationType<void> = { method: `${_preFix}/exportConsolidatedProject` };
 export const checkOldProject: RequestType<void, boolean> = { method: `${_preFix}/checkOldProject` };
 export const refreshAccessToken: NotificationType<void> = { method: `${_preFix}/refreshAccessToken` };
 export const getOpenAPISpec: RequestType<SwaggerTypeRequest, SwaggerFromAPIResponse> = { method: `${_preFix}/getOpenAPISpec` };
+export const getDataServiceOpenAPISpec: RequestType<DataServiceSwaggerRequest, SwaggerFromAPIResponse> = { method: `${_preFix}/getDataServiceOpenAPISpec` };
 export const editOpenAPISpec: NotificationType<SwaggerTypeRequest> = { method: `${_preFix}/editOpenAPISpec` };
 export const compareSwaggerAndAPI: RequestType<SwaggerTypeRequest, CompareSwaggerAndAPIResponse> = { method: `${_preFix}/compareSwaggerAndAPI` };
 export const updateSwaggerFromAPI: NotificationType<SwaggerTypeRequest> = { method: `${_preFix}/updateSwaggerFromAPI` };
 export const updateAPIFromSwagger: NotificationType<UpdateAPIFromSwaggerRequest> = { method: `${_preFix}/updateAPIFromSwagger` };
+export const updateResourceQueryParams: RequestType<UpdateResourceQueryParamsRequest, UpdateResourceQueryParamsResponse> = { method: `${_preFix}/updateResourceQueryParams` };
 export const updateTestSuite: RequestType<UpdateTestSuiteRequest, UpdateTestSuiteResponse> = { method: `${_preFix}/updateTestSuite` };
 export const updateTestCase: RequestType<UpdateTestCaseRequest, UpdateTestCaseResponse> = { method: `${_preFix}/updateTestCase` };
 export const updateMockService: RequestType<UpdateMockServiceRequest, UpdateMockServiceResponse> = { method: `${_preFix}/updateMockService` };

@@ -1440,7 +1440,8 @@ export type ResourceType =
     | "crt"
     | "registry"
     | "bindToInbound"
-    | "inbound-endpoint";
+    | "inbound-endpoint"
+    | "dsOperation";
 
 export interface MultipleResourceType {
     type: ResourceType;
@@ -1452,6 +1453,7 @@ export interface GetAvailableResourcesRequest {
     documentIdentifier: string | undefined;
     resourceType: ResourceType | MultipleResourceType[];
     isDebugFlow?: boolean;
+    dataServiceName?: string;
     projectUri?: string;
 }
 
@@ -1839,6 +1841,9 @@ export interface ExportProjectRequest {
 
 interface GenerateAPIBase {
     apiName: string;
+    context?: string | null;
+    version?: string | null;
+    versionType?: string | null;
     swaggerOrWsdlPath: string;
 }
 
@@ -1851,6 +1856,10 @@ export interface GenerateAPIResponse {
     apiXml: string;
     endpointXml?: string;
     error?: string;
+}
+
+export interface DataServiceSwaggerRequest {
+    name: string;
 }
 
 export interface SwaggerTypeRequest {
@@ -1875,16 +1884,35 @@ export interface SwaggerFromAPIRequest {
     projectPath?: string;
 }
 
+export interface QueryParamInfo {
+    name: string;
+    required: boolean;
+}
+
 export interface CompareSwaggerAndAPIResponse {
     swaggerExists: boolean;
     isEqual?: boolean;
     generatedSwagger?: string;
     existingSwagger?: string;
+    queryParams?: { [resourcePath: string]: { [method: string]: QueryParamInfo[] } };
 }
 
 export interface UpdateAPIFromSwaggerRequest extends SwaggerTypeRequest {
     resources: any[];
     insertPosition: Position;
+}
+
+export interface UpdateResourceQueryParamsRequest {
+    apiName: string;
+    apiPath: string;
+    resourcePath: string;
+    oldResourcePath?: string;
+    methods: string[];
+    queryParams: QueryParamInfo[];
+}
+
+export interface UpdateResourceQueryParamsResponse {
+    queryParams: QueryParamInfo[];
 }
 
 export interface UpdateTestSuiteRequest {
@@ -2361,8 +2389,15 @@ export interface GetPomFileContentResponse{
     content: string;
 }
 
+export interface ExternalConnectorDetail {
+    name: string;
+    path: string;
+    type: 'connector' | 'inbound';
+}
+
 export interface GetExternalConnectorDetailsResponse{
     connectors: string[];
+    connectorDetails?: ExternalConnectorDetail[];
 }
 
 export interface WriteMockServicesRequest {
@@ -2502,6 +2537,9 @@ export interface UpdateConnectorDependencyOverrideRequest {
     version?: string;
     omit?: boolean;
     localPath?: string;
+    // Marks this override as a user-added dependency that has no entry in descriptor.yml,
+    // so the language server includes it in the effective dependency list.
+    additionalDependency?: boolean;
     projectUri?: string;
 }
 
@@ -2619,4 +2657,15 @@ export interface GetAPIOperationInputSchemasRequest {
 export interface GetAPIOperationInputSchemasResponse {
     schemas: { [operationId: string]: string };
     descriptions: { [operationId: string]: string };
+}
+
+export interface ExtractMavenCoordinatesRequest {
+    pomPath: string;
+}
+
+export interface ExtractMavenCoordinatesResponse {
+    groupId: string;
+    artifactId: string;
+    version: string;
+    packaging?: string;
 }

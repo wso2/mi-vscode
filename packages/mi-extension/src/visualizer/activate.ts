@@ -38,10 +38,14 @@ import { CACHED_FOLDER, INTEGRATION_PROJECT_DEPENDENCIES_DIR, isConsolidatedProj
 import { extractZip, formatAndSavePomDocument, getHash, zipProjectFolder, deleteApiMetadata } from '../util/fileOperations';
 import { MILanguageClient } from '../lang-client/activator';
 import { ConflictingDependency } from '../lang-client/ExtendedLanguageClient';
-import { askForProject } from '../util/workspace';
+import { askForProject, shouldShowWorkspaceOverview } from '../util/workspace';
+import { DefaultServer } from '../webview-communication/DefaultServer';
 
 export function activateVisualizer(context: vscode.ExtensionContext, firstProject: string) {
     context.subscriptions.push(
+        commands.registerCommand(COMMANDS.GET_MI_FORM_WS_BOOTSTRAP, () => {
+            return DefaultServer.getInstance().getWsBootstrap();
+        }),
         vscode.commands.registerCommand(COMMANDS.OPEN_PROJECT, (providedUri?: vscode.Uri) => {
             const processUri = async (uri: vscode.Uri[] | undefined) => {
                 if (uri && uri[0]) {
@@ -353,6 +357,10 @@ export function activateVisualizer(context: vscode.ExtensionContext, firstProjec
 
     context.subscriptions.push(
         commands.registerCommand(COMMANDS.SHOW_OVERVIEW, async () => {
+            if (shouldShowWorkspaceOverview()) {
+                openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.WorkspaceOverview });
+                return;
+            }
             const projectType: string | undefined = extension.context.workspaceState.get('projectType');
             switch (projectType) {
                 case 'miProject':

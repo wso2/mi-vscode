@@ -37,7 +37,7 @@ export function escapeXml(text: string) {
     .replace(/"/g, '&quot;');
 };
 
-export const LATEST_CAR_PLUGIN_VERSION = "5.4.17";
+export const LATEST_CAR_PLUGIN_VERSION = "5.4.19";
 
 export const rootPomXmlContent = async (projectName: string, groupID: string, artifactID: string, projectUuid: string, version: string, miVersion: string, initialDependencies: string, directory?: string) => {
   const addDeploymentType = compareVersions(miVersion, RUNTIME_VERSION_450) >= 0;
@@ -485,6 +485,37 @@ COPY resources/wso2carbon.jks \${WSO2_SERVER_HOME}/repository/resources/security
 COPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/security/client-truststore.jks
 # COPY libs/*.jar \${WSO2_SERVER_HOME}/lib/`;
 
+// Aggregate Dockerfile: one commented-out COPY line per real sub-project
+// module, from libs staged per-module by updateCopyModulesInAggregatePom.
+export const dockerBuildDockerfileContent = (modules: string[], existingContent?: string) => {
+  const realModules = modules.filter(m => m && m !== "docker-build");
+
+  // persist existing changes made to the dockerfile by uncommenting libs copying
+  const existingLibLines = new Map<string, string>();
+  if (existingContent) {
+    const libLineRegex = /^#?\s*COPY\s+libs\/([^/]+)\/\s+\$\{WSO2_SERVER_HOME\}\/lib\/$/;
+    for (const line of existingContent.split('\n')) {
+      const match = line.trim().match(libLineRegex);
+      if (match) {
+        existingLibLines.set(match[1], line);
+      }
+    }
+  }
+
+  const libsCopyLines = realModules.map(m =>
+    existingLibLines.get(m) ?? `# COPY libs/${m}/ \${WSO2_SERVER_HOME}/lib/`
+  );
+
+  return [
+    `ARG BASE_IMAGE`,
+    `FROM \${BASE_IMAGE}`,
+    `COPY CompositeApps/*.car \${WSO2_SERVER_HOME}/repository/deployment/server/carbonapps/`,
+    `COPY resources/wso2carbon.jks \${WSO2_SERVER_HOME}/repository/resources/security/wso2carbon.jks`,
+    `COPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/security/client-truststore.jks`,
+    ...libsCopyLines
+  ].join('\n');
+};
+
 export const consolidatedProjectPomContent = (projectName: string, groupID: string, artifactID: string, version: string, miVersion: string, modules: string[]) => {
 
   const modulesXml = modules
@@ -505,12 +536,21 @@ export const consolidatedProjectPomContent = (projectName: string, groupID: stri
     modulesXml,
     `    </modules>`,
     `    <properties>`,
+    `        <projectType>integration-project</projectType>`,
     `        <project.runtime.version>${miVersion}</project.runtime.version>`,
     `        <car.plugin.version>${LATEST_CAR_PLUGIN_VERSION}</car.plugin.version>`,
     `        <maven.compiler.source>1.8</maven.compiler.source>`,
     `        <maven.compiler.target>1.8</maven.compiler.target>`,
+    `        <dockerfile.base.image>wso2/wso2mi:${miVersion}</dockerfile.base.image>`,
     `        <is.consolidated.project>true</is.consolidated.project>`,
+    `        <is.remote.deployment.enabled>false</is.remote.deployment.enabled>`,
     `    </properties>`,
+    `    <pluginRepositories>`,
+    `        <pluginRepository>`,
+    `            <id>wso2-public</id>`,
+    `            <url>https://maven.wso2.org/nexus/content/groups/wso2-public/</url>`,
+    `        </pluginRepository>`,
+    `    </pluginRepositories>`,
     `</project>`
   ].join('\n');
 };
@@ -652,7 +692,7 @@ export async function createAggregatePomInRoot(projectUri: string, modules: stri
     `    <properties>`,
     `        <project.runtime.version>${runtimeVersion}</project.runtime.version>`,
     `        <dockerfile.base.image>wso2/wso2mi:${runtimeVersion}</dockerfile.base.image>`,
-    `        <dockerfile.name>${parent.artifactId}:${parent.version}</dockerfile.name>`,
+    `        <dockerfile.name>${parent.artifactId?.toLowerCase()}:${parent.version}</dockerfile.name>`,
     `        <keystore.type>JKS</keystore.type>`,
     `        <keystore.name>wso2carbon.jks</keystore.name>`,
     `        <keystore.password>wso2carbon</keystore.password>`,

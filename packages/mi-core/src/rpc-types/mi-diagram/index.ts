@@ -182,6 +182,7 @@ import {
     ExportProjectRequest,
     EditAPIRequest,
     EditAPIResponse,
+    DataServiceSwaggerRequest,
     SwaggerTypeRequest,
     UpdateAPIFromSwaggerRequest,
     CompareSwaggerAndAPIResponse,
@@ -235,6 +236,8 @@ import {
     GetConnectionSchemaResponse,
     CopyConnectorZipRequest,
     CopyConnectorZipResponse,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
     RemoveConnectorRequest,
     RemoveConnectorResponse,
     GetHelperPaneInfoRequest,
@@ -300,6 +303,8 @@ import {
     ResetConnectorDependencyOverridesRequest,
     UpdateConnectorFlagsRequest,
     UpdateGlobalConnectorFlagsRequest,
+    UpdateResourceQueryParamsRequest,
+    UpdateResourceQueryParamsResponse,
 } from "./types";
 
 export interface MiDiagramAPI {
@@ -395,6 +400,7 @@ export interface MiDiagramAPI {
     rangeFormat: (params: RangeFormatRequest) => Promise<ApplyEditResponse>;
     downloadConnector: (params: DownloadConnectorRequest) => Promise<DownloadConnectorResponse>;
     copyConnectorZip: (params: CopyConnectorZipRequest) => Promise<CopyConnectorZipResponse>;
+    extractMavenCoordinates: (params: ExtractMavenCoordinatesRequest) => Promise<ExtractMavenCoordinatesResponse>;
     copyArtifact: (params: CopyArtifactRequest) => Promise<CopyArtifactResponse>;
     askImportFileDir: () => Promise<FileDirResponse>;
     downloadInboundConnector: (params: DownloadInboundConnectorRequest) => Promise<DownloadInboundConnectorResponse>;
@@ -425,13 +431,16 @@ export interface MiDiagramAPI {
     deployProject: (params: DeployProjectRequest) => Promise<DeployProjectResponse>;
     getDevantMetadata: () => Promise<DevantMetadata>;
     exportProject: (params: ExportProjectRequest) => void;
+    exportConsolidatedProject: () => void;
     checkOldProject: () => Promise<boolean>;
     refreshAccessToken: () => void;
     getOpenAPISpec: (params: SwaggerTypeRequest) => Promise<SwaggerFromAPIResponse>;
+    getDataServiceOpenAPISpec: (params: DataServiceSwaggerRequest) => Promise<SwaggerFromAPIResponse>;
     editOpenAPISpec: (params: SwaggerTypeRequest) => void;
     compareSwaggerAndAPI: (params: SwaggerTypeRequest) => Promise<CompareSwaggerAndAPIResponse>;
     updateSwaggerFromAPI: (params: SwaggerTypeRequest) => void;
     updateAPIFromSwagger: (params: UpdateAPIFromSwaggerRequest) => void;
+    updateResourceQueryParams: (params: UpdateResourceQueryParamsRequest) => Promise<UpdateResourceQueryParamsResponse>;
     updateTestSuite: (params: UpdateTestSuiteRequest) => Promise<UpdateTestSuiteResponse>;
     updateTestCase: (params: UpdateTestCaseRequest) => Promise<UpdateTestCaseResponse>;
     updateMockService: (params: UpdateMockServiceRequest) => Promise<UpdateMockServiceResponse>;
@@ -506,6 +515,7 @@ export interface MiDiagramAPI {
 
 // Re-export LS-only types (consumed by the extension's LS client; not part of MiDiagramAPI).
 export type {
+    ExternalConnectorDetail,
     GetConnectorInfoRequest,
     GetConnectorInfoResponse,
     ConnectorInfo,

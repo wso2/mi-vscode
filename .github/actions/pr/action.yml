@@ -34,7 +34,8 @@ runs:
       shell: bash
       id: commit
       run: |
-        git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+        mv .git/config .git/config-old
+        git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
         git diff --staged --quiet || git commit -m "Update version to ${{ inputs.version }}"
       env:
         GH_TOKEN: ${{ github.token }}

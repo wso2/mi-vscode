@@ -36,7 +36,7 @@ import { ChildProcess } from 'child_process';
 import treeKill = require('tree-kill');
 import { serverLog, showServerOutputChannel } from '../util/serverLogger';
 import { getJavaHomeFromConfig, getServerPathFromConfig } from '../util/onboardingUtils';
-import { escapeShellArg } from '../util/shell';
+import { escapeShellArg } from '../util/shellEscapeUtils';
 import * as crypto from 'crypto';
 import { Uri, workspace } from "vscode";
 import { MILanguageClient } from '../lang-client/activator';

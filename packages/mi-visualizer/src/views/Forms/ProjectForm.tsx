@@ -16,7 +16,7 @@
  * under the License.
  */
 import React, { useEffect, useState } from "react";
-import { Button, Dropdown, FormActions, FormGroup, FormView, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, Tooltip, Icon } from "@wso2/ui-toolkit";
+import { Banner, Button, Dropdown, FormActions, FormGroup, FormView, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, Tooltip, Icon } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { EVENT_TYPE, MACHINE_VIEW } from "@wso2/mi-core";
 import { yupResolver } from "@hookform/resolvers/yup"
@@ -60,10 +60,10 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
     const [isConsolidatedProject, setIsConsolidatedProject] = useState(false);
     const [isSubProjectsAdded, setIsSubProjectsAdded] = useState(false);
     const [addToConsolidatedProject, setAddToConsolidatedProject] = useState(false);
-    const [viewAddToConsolidatedProject, setViewAddToConsolidatedProject] = useState(false);
 
     const [supportedMIVersions, setSupportedMIVersions] = useState<OptionProps[]>([]);
     const [formSaved, setFormSaved] = useState(false);
+    const [parentVersionError, setParentVersionError] = useState(false);
 
     const consolidatedHelpTip = <Tooltip
                 content="A consolidated project allows you to manage multiple related integration projects as a single unit"
@@ -126,7 +126,6 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
             const canCreate = await rpcClient.getMiDiagramRpcClient().canCreateConsolidatedProject();
             setCanCreateConsolidatedProject(canCreate.canCreateConsolidatedProject);
             setAddToConsolidatedProject(canCreate.isConsolidatedProject);
-            setViewAddToConsolidatedProject(canCreate.isConsolidatedProject);
         })();
     }, []);
 
@@ -135,10 +134,18 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
     }, [watch("name")]);
 
     useEffect(() => {
-        if (viewAddToConsolidatedProject) {
+        if (addToConsolidatedProject) {
             (async () => {
-                const currentDir = await rpcClient.getMiDiagramRpcClient().getWorkspaceRoot(!addToConsolidatedProject);
+                const currentDir = await rpcClient.getMiDiagramRpcClient().getWorkspaceRoot(false);
                 setValue("directory", currentDir.path);
+                const { version } = await rpcClient.getMiDiagramRpcClient().getMIVersionFromPom();
+                if (version) {
+                    setValue("miVersion", version);
+                    setParentVersionError(false);
+                } else {
+                    setValue("miVersion", "");
+                    setParentVersionError(true);
+                }
             })();
         }
     }, [addToConsolidatedProject]);
@@ -205,29 +212,32 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                 {...register("name")}
                 onKeyDown={onKeyDown}
             />
-            {viewAddToConsolidatedProject &&
-                <CheckBox
-                    label="Add to current Consolidated Project"
-                    value="addToConsolidated"
-                    checked={addToConsolidatedProject}
-                    onChange={(isChecked: boolean) => setAddToConsolidatedProject(isChecked)}
+            {addToConsolidatedProject && parentVersionError &&
+                <Banner
+                    messageTextSx={{ fontSize: "12px" }}
+                    type="error"
+                    message="Could not determine the WSO2 Integrator: MI runtime version of the consolidated project. Please check the parent project's pom.xml."
                 />
             }
-            <Dropdown
-                id='miVersion'
-                label="WSO2 Integrator: MI runtime version"
-                isRequired={true}
-                errorMsg={errors.miVersion?.message.toString()}
-                items={supportedMIVersions}
-                {...register("miVersion")}
-            />
-            <LocationSelector
-                label="Project Directory"
-                selectedFile={watch("directory")}
-                required
-                onSelect={handleProjecDirSelection}
-                {...register("directory")}
-            />
+            {!addToConsolidatedProject &&
+                <Dropdown
+                    id='miVersion'
+                    label="WSO2 Integrator: MI runtime version"
+                    isRequired={true}
+                    errorMsg={errors.miVersion?.message.toString()}
+                    items={supportedMIVersions}
+                    {...register("miVersion")}
+                />
+            }
+            {!addToConsolidatedProject &&
+                <LocationSelector
+                    label="Project Directory"
+                    selectedFile={watch("directory")}
+                    required
+                    onSelect={handleProjecDirSelection}
+                    {...register("directory")}
+                />
+            }
             {!addToConsolidatedProject &&
                 <FormGroup title="Advanced Options">
                     <React.Fragment>
@@ -269,7 +279,9 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                     </React.Fragment>
                 </FormGroup>
             }
-            <DownloadLabel>If the necessary WSO2 Integrator: MI runtime and tools are not available, you will be prompted to download them after project creation.</DownloadLabel>
+            {!addToConsolidatedProject &&
+                <DownloadLabel>If the necessary WSO2 Integrator: MI runtime and tools are not available, you will be prompted to download them after project creation.</DownloadLabel>
+            }
             <FormActions>
                 <Button
                     appearance="secondary"
@@ -280,7 +292,7 @@ export function ProjectWizard({ cancelView }: { cancelView: MACHINE_VIEW }) {
                 <Button
                     appearance="primary"
                     onClick={handleSubmit(handleCreateProject)}
-                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || (isConsolidatedProject && !isSubProjectsAdded)}
+                    disabled={(!isDirty) || Object.keys(errors).length > 0 || formSaved || (isConsolidatedProject && !isSubProjectsAdded) || parentVersionError}
                 >
                     {formSaved ? (
                         <>

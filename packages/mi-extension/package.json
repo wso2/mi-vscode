@@ -3,7 +3,7 @@
   "displayName": "WSO2 Integrator: MI",
   "description": "The official low-code development toolkit for WSO2 Integrator: MI. Everything you need to build, test, and deploy integrations — right from within VS Code.",
   "icon": "resources/images/wso2-micro-integrator-icon.png",
-  "version": "4.1.2",
+  "version": "4.1.4",
   "publisher": "wso2",
   "engines": {
     "vscode": "^1.100.0"
@@ -23,6 +23,11 @@
     "wso2.wso2-integrator"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
   "contributes": {
     "languages": [
       {
@@ -375,6 +380,12 @@
         "title": "Open Project Overview",
         "icon": "$(list-unordered)",
         "when": "false"
+      },
+      {
+        "command": "MI.project-explorer.open-workspace-overview",
+        "title": "Workspace Overview",
+        "icon": "$(folder-library)",
+        "category": "MI"
       },
       {
         "command": "MI.project-explorer.open-service-designer",
@@ -905,6 +916,11 @@
           "group": "navigation"
         },
         {
+          "command": "MI.project-explorer.open-workspace-overview",
+          "when": "view == MI.project-explorer && projectOpened && MI.hasMultipleProjects",
+          "group": "navigation"
+        },
+        {
           "command": "MI.test.add.suite",
           "when": "view == workbench.view.testing",
           "group": "navigation"
@@ -1144,14 +1160,14 @@
         "description": "design-view",
         "default": {
           "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-          "fontCharacter": "\\f1c7"
+          "fontCharacter": "\\f1c9"
         }
       },
       "mi-build-package": {
         "description": "build-package",
         "default": {
           "fontPath": "./resources/font-wso2-vscode/dist/wso2-vscode.woff",
-          "fontCharacter": "\\f19f"
+          "fontCharacter": "\\f1a0"
         }
       }
     }
@@ -1230,9 +1246,10 @@
     "@wso2/mi-diagram": "workspace:*",
     "@wso2/mi-rpc-client": "workspace:*",
     "@wso2/syntax-tree": "workspace:*",
+    "@wso2/webview-giga-bridge": "workspace:*",
     "@wso2/playwright-vscode-tester": "workspace:*",
-    "adm-zip": "0.5.16",
-    "axios": "1.16.0",
+    "adm-zip": "0.6.0",
+    "axios": "1.18.0",
     "copyfiles": "2.4.1",
     "cors-anywhere": "0.4.4",
     "dotenv": "16.5.0",

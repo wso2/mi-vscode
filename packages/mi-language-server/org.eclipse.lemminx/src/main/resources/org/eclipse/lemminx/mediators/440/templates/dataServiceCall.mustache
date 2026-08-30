@@ -1,4 +1,5 @@
     <dataServiceCall {{#traceFilter}}traceFilter="enable" {{/traceFilter}}{{#description}}description="{{description}}"{{/description}} {{#serviceName}}serviceName="{{serviceName}}"{{/serviceName}}>
+        {{#isInline}}
         {{^hasOperations}}
         <operations type="{{operationType}}"/>
         {{/hasOperations}}
@@ -13,6 +14,7 @@
             {{/operations}}
         </operations>
         {{/hasOperations}}
+        {{/isInline}}
         <source type="{{sourceType}}"/>
         <target {{#targetProperty}}name="{{targetProperty}}" {{/targetProperty}}{{#targetType}}type="{{targetType}}{{/targetType}}"/>
     </dataServiceCall>

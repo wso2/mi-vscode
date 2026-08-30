@@ -15,6 +15,8 @@
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate;
 
 import com.google.gson.JsonPrimitive;
+import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.customservice.synapse.InvalidConfigurationException;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.TryOutUtils;
 import org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor.SchemaVisitor;
@@ -24,6 +26,9 @@ import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTr
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.inbound.InboundEndpoint;
+import org.eclipse.lemminx.customservice.synapse.utils.ConfigFinder;
+import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
 
@@ -47,25 +52,46 @@ public class ServerLessTryoutHandler {
     public MediatorTryoutInfo handle(MediatorTryoutRequest request) {
 
         try {
-            String filePath = request.getFile();
+            String visitFilePath = request.getFile();
             if (request.getEdits() != null) {
+                STNode node = getSTNode(request.getFile());
                 String documentUri = request.getFile();
+                String editFilePath = TEMP_FOLDER.resolve(TEMP_FILE_NAME).toString();
+                if (node instanceof InboundEndpoint) {
+                    String sequence = ((InboundEndpoint) node).getSequence();
+                    if (StringUtils.isNotEmpty(sequence)) {
+                        String seqPath = ConfigFinder.findEsbComponentPath(sequence, Constant.SEQUENCES, projectUri);
+                        if (StringUtils.isNotEmpty(seqPath)) {
+                            documentUri = seqPath;
+                        }
+                    }
+                } else {
+                    visitFilePath = editFilePath;
+                }
                 Utils.copyFile(documentUri, TEMP_FOLDER.toString(), TEMP_FILE_NAME);
-                filePath = TEMP_FOLDER.resolve(TEMP_FILE_NAME).toString();
-                TryOutUtils.doEdits(request.getEdits(), Path.of(filePath));
-                request = new MediatorTryoutRequest(filePath, request.getLine(), request.getColumn() + 1,
+                TryOutUtils.doEdits(request.getEdits(), Path.of(editFilePath));
+                request = new MediatorTryoutRequest(editFilePath, request.getLine(), request.getColumn() + 1,
                         request.getInputPayload(), null);
             }
-            DOMDocument domDocument = Utils.getDOMDocument(new File(filePath));
+            DOMDocument domDocument = Utils.getDOMDocument(new File(visitFilePath));
             STNode node = SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
             MediatorTryoutInfo mediatorTryoutInfo = createInitialMediatorTryoutInfo(request);
             if (node != null) {
                 visitNode(node, request, mediatorTryoutInfo);
             }
             return mediatorTryoutInfo;
-        } catch (IOException e) {
+        } catch (IOException | InvalidConfigurationException e) {
             return new MediatorTryoutInfo(e.getMessage());
         }
+    }
+
+    private STNode getSTNode(String filePath) throws IOException, InvalidConfigurationException {
+
+        if (StringUtils.isEmpty(filePath)) {
+            throw new IllegalArgumentException("FilePath is null");
+        }
+        DOMDocument domDocument = Utils.getDOMDocument(new File(filePath));
+        return SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
     }
 
     private MediatorTryoutInfo createInitialMediatorTryoutInfo(MediatorTryoutRequest request) {

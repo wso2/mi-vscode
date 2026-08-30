@@ -60,13 +60,13 @@ public class ConnectorInfoEndpointTest {
 
     @Test
     public void testReadConnector_ReturnsFullMetadata() {
-        String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String connectorPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         ConnectorReader reader = new ConnectorReader();
         Connector connector = reader.readConnector(connectorPath, StringUtils.EMPTY);
 
         assertNotNull(connector);
         assertEquals("http", connector.getName());
-        assertEquals("0.1.8", connector.getVersion());
+        assertEquals("1.0.0", connector.getVersion());
         assertEquals("HTTP", connector.getDisplayName());
         assertFalse(connector.getActions().isEmpty());
         assertFalse(connector.getConnectionUiSchema().values().isEmpty());
@@ -74,7 +74,7 @@ public class ConnectorInfoEndpointTest {
 
     @Test
     public void testReadConnector_OperationsHaveParameters() {
-        String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String connectorPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         ConnectorReader reader = new ConnectorReader();
         Connector connector = reader.readConnector(connectorPath, StringUtils.EMPTY);
 
@@ -96,7 +96,7 @@ public class ConnectorInfoEndpointTest {
 
     @Test
     public void testHolderUpsert_NewConnector() {
-        String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String connectorPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         ConnectorReader reader = new ConnectorReader();
         Connector connector = reader.readConnector(connectorPath, StringUtils.EMPTY);
 
@@ -109,11 +109,11 @@ public class ConnectorInfoEndpointTest {
     @Test
     public void testHolderUpsert_ReplacesExisting() {
         // Add first version
-        String httpPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String httpPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         ConnectorReader reader = new ConnectorReader();
         Connector http = reader.readConnector(httpPath, StringUtils.EMPTY);
         connectorHolder.addConnector(http);
-        assertEquals("0.1.8", connectorHolder.getConnector("http").getVersion());
+        assertEquals("1.0.0", connectorHolder.getConnector("http").getVersion());
 
         // Simulate upsert with a "different version" (same zip, but tests the remove+add pattern)
         String filePath = tempPath.resolve("mi-connector-file-4.0.36").toString();
@@ -140,7 +140,7 @@ public class ConnectorInfoEndpointTest {
 
     @Test
     public void testReadConnector_InboundZip_ReturnsEmptyOperations() {
-        // An inbound connector zip has a stub connector.xml with no subComponents.
+        // An inbound endpoint zip has a stub connector.xml with no subComponents.
         // ConnectorReader will return a Connector with empty operations.
         // This is why getConnectorInfo routes mi-inbound-* to the inbound path instead.
         String inboundPath = tempPath.resolve("mi-inbound-amazonsqs-2.0.2").toString();
@@ -150,12 +150,12 @@ public class ConnectorInfoEndpointTest {
         assertNotNull(connector,
                 "ConnectorReader should return a non-null Connector for the inbound fixture");
         assertTrue(connector.getActions().isEmpty(),
-                "Inbound connector should have no operations when read by ConnectorReader");
+                "Inbound endpoint should have no operations when read by ConnectorReader");
     }
 
     @Test
     public void testParameterTypes() {
-        String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String connectorPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         ConnectorReader reader = new ConnectorReader();
         Connector connector = reader.readConnector(connectorPath, StringUtils.EMPTY);
 

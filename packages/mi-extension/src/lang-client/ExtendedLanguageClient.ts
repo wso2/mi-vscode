@@ -304,8 +304,9 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/availableResources", {
             documentIdentifier: { uri: uri }, resourceType: req.resourceType,
             projectUri: req.projectUri,
-            ...(req.isDebugFlow && { customProjectUri: req.documentIdentifier })
-        });
+            ...(req.isDebugFlow && { customProjectUri: req.documentIdentifier }),
+            ...(req.dataServiceName && { dataServiceName: req.dataServiceName })
+        }) as Promise<GetAvailableResourcesResponse>;
     }
 
     async getDiagnostics(req: GetDiagnosticsReqeust): Promise<GetDiagnosticsResponse> {

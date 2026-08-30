@@ -103,8 +103,11 @@ public class RestApiAdmin {
         String endpoint = param.wsdlEndpointName;
         String publishSwaggerPath = param.publishSwaggerPath;
         String mode = param.mode;
+        String context = param.context;
+        String version = param.version;
+        String versionType = param.versionType;
 
-        return createAPI(apiName, sourcePath, endpoint, publishSwaggerPath, mode);
+        return createAPI(apiName, sourcePath, endpoint, publishSwaggerPath, mode, context, version, versionType);
     }
 
     /**
@@ -115,14 +118,18 @@ public class RestApiAdmin {
      * @param endpoint           WSDL endpoint
      * @param publishSwaggerPath Swagger publish path
      * @param mode               Mode of the API creation (Swagger / WSDL)
+     * @param context            API context, takes priority over the context derived from the swagger
+     * @param version            API version, takes priority over the version derived from the swagger
+     * @param versionType        API version type (url / context), takes priority over the version type
+     *                           derived from the swagger
      * @return
      */
     public GenerateAPIResponse createAPI(String apiName, String sourcePath, String endpoint, String publishSwaggerPath
-            , String mode) {
+            , String mode, String context, String version, String versionType) {
 
         if (CREATE_FROM_SWAGGER.equalsIgnoreCase(mode)) {
             try {
-                return createAPIFromSwagger(apiName, sourcePath, publishSwaggerPath);
+                return createAPIFromSwagger(apiName, sourcePath, publishSwaggerPath, context, version, versionType);
             } catch (JsonProcessingException e) {
                 LOGGER.log(Level.SEVERE, "Exception occurred while creating API from Swagger", e);
                 return new GenerateAPIResponse(null, null,
@@ -130,7 +137,7 @@ public class RestApiAdmin {
             }
         } else if (CREATE_FROM_WSDL.equalsIgnoreCase(mode)) {
             try {
-                return createAPIFromWSDL(apiName, endpoint, sourcePath);
+                return createAPIFromWSDL(apiName, endpoint, sourcePath, context, version, versionType);
             } catch (SOAPToRESTException e) {
                 LOGGER.log(Level.SEVERE, "Exception occurred while converting SOAP to REST", e);
                 return new GenerateAPIResponse(null, null,
@@ -147,26 +154,26 @@ public class RestApiAdmin {
         return null;
     }
 
-    private GenerateAPIResponse createAPIFromSwagger(String apiName, String swaggerPath, String publishSwaggerPath) throws JsonProcessingException {
+    private GenerateAPIResponse createAPIFromSwagger(String apiName, String swaggerPath, String publishSwaggerPath, String context, String version, String versionType) throws JsonProcessingException {
 
         File swaggerFile = new File(swaggerPath);
         String swaggerYaml = getSwaggerFileAsYAML(swaggerFile, apiName);
 
-        String api = getSynapseAPIFromSwagger(swaggerYaml, publishSwaggerPath);
+        String api = getSynapseAPIFromSwagger(swaggerYaml, publishSwaggerPath, context, version, versionType);
         return new GenerateAPIResponse(api);
     }
 
-    private String getSynapseAPIFromSwagger(String swaggerYaml, String publishSwaggerPath) throws JsonProcessingException {
+    private String getSynapseAPIFromSwagger(String swaggerYaml, String publishSwaggerPath, String context, String version, String versionType) throws JsonProcessingException {
 
         String swaggerString = GenericApiObjectDefinition.convertYamlToJson(swaggerYaml);
         JsonParser jsonParser = new JsonParser();
         JsonElement swaggerJson = jsonParser.parse(swaggerString);
-        APIGenerator apiGenerator = new APIGenerator(swaggerJson.getAsJsonObject(), publishSwaggerPath);
+        APIGenerator apiGenerator = new APIGenerator(swaggerJson.getAsJsonObject(), publishSwaggerPath, context, version, versionType);
         String apiXml = apiGenerator.generateSynapseAPIXml();
         return apiXml;
     }
 
-    private GenerateAPIResponse createAPIFromWSDL(String apiName, String endpoint, String sourcePath) throws SOAPToRESTException, MalformedURLException, JsonProcessingException, TransformerException {
+    private GenerateAPIResponse createAPIFromWSDL(String apiName, String endpoint, String sourcePath, String context, String version, String versionType) throws SOAPToRESTException, MalformedURLException, JsonProcessingException, TransformerException {
 
         URL url = new URL(sourcePath);
         SOAPtoRESTConversionData soaPtoRESTConversionData = SOAPToRESTConverter.getSOAPtoRESTConversionData(url,
@@ -191,7 +198,7 @@ public class RestApiAdmin {
         wsdlEndpoint.setWsdl(wsdlEndpointData);
 
         String swaggerYaml = soaPtoRESTConversionData.getOASString();
-        String apiXml = getSynapseAPIFromSwagger(swaggerYaml, null);
+        String apiXml = getSynapseAPIFromSwagger(swaggerYaml, null, context, version, versionType);
         APIFactory apiFactory = new APIFactory();
         API api = (API) apiFactory.create(Utils.getDOMDocument(apiXml).getDocumentElement());
 

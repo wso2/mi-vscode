@@ -3,7 +3,7 @@
 	<parent>
 		<groupId>org.wso2.language.server</groupId>
 		<artifactId>mi-language-server-parent</artifactId>
-		<version>0.24.0-wso2v93</version>
+		<version>0.24.0-wso2v95</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 	<name>MI Language Server</name>
@@ -15,7 +15,7 @@
 		<dev.build.timestamp>${maven.build.timestamp}</dev.build.timestamp>
 		<cbi.jarsigner.skip>true</cbi.jarsigner.skip>
 		<native.maven.plugin.version>0.9.16</native.maven.plugin.version>
-		<mi.connector.generator.version>0.9.10</mi.connector.generator.version>
+		<mi.connector.generator.version>0.9.11</mi.connector.generator.version>
 		<graalvm.static />
 	</properties>
 	<build>

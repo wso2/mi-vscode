@@ -220,6 +220,7 @@ import {
     SwaggerData,
     SwaggerFromAPIResponse,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     TemplatesResponse,
     TestDbConnectionRequest,
     TestDbConnectionResponse,
@@ -227,6 +228,8 @@ import {
     UpdateAPIFromSwaggerRequest,
     UpdateAddressEndpointRequest,
     UpdateAddressEndpointResponse,
+    UpdateResourceQueryParamsRequest,
+    UpdateResourceQueryParamsResponse,
     UpdateConnectorRequest,
     UpdateDefaultEndpointRequest,
     UpdateDefaultEndpointResponse,
@@ -306,6 +309,7 @@ import {
     SubmitFeedbackRequest,
     SubmitFeedbackResponse,
     GetPomFileContentResponse,
+    ExternalConnectorDetail,
     GetExternalConnectorDetailsResponse,
     GetMockServicesResponse,
     ConfigureKubernetesRequest,
@@ -327,6 +331,8 @@ import {
     ResetConnectorDependencyOverridesRequest,
     UpdateConnectorFlagsRequest,
     UpdateGlobalConnectorFlagsRequest,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
 } from "@wso2/mi-core";
 import axios from 'axios';
 import { error } from "console";
@@ -364,7 +370,7 @@ import { copyDockerResources, copyMavenWrapper, createFolderStructure, getAPIRes
 import { addNewEntryToArtifactXML, createMetadataFilesForRegistryCollection, deleteApiMetadata, deleteRegistryResource, detectMediaType, getAvailableRegistryResources, getMediatypeAndFileExtension, getRegistryResourceMetadata, updateRegistryResourceMetadata, generatePathFromRegistryPath, updatePomWithParent } from "../../util/fileOperations";
 import { log } from "../../util/logger";
 import { importProjects } from "../../util/migrationUtils";
-import { deleteSwagger, generateSwagger, getResourceInfo, isEqualSwaggers, mergeSwaggers } from "../../util/swagger";
+import { copyQueryParamsFromSource, deleteSwagger, extractQueryParams, generateSwagger, generateSwaggerCore, getResourceInfo, isEqualSwaggers, mergeGeneratedSwagger, updateQueryParamsInSwagger, withSwaggerFileLock } from "../../util/swagger";
 import { getDataSourceXml } from "../../util/template-engine/mustach-templates/DataSource";
 import { getClassMediatorContent } from "../../util/template-engine/mustach-templates/classMediator";
 import { getBallerinaModuleContent, getBallerinaConfigContent } from "../../util/template-engine/mustach-templates/ballerinaModule";
@@ -375,7 +381,7 @@ import { replaceFullContentToFile, saveIdpSchemaToFile } from "../../util/worksp
 import { VisualizerWebview, webviews } from "../../visualizer/webview";
 import path = require("path");
 import { importCapp } from "../../util/importCapp";
-import { compareVersions, filterConnectorVersion, generateInitialDependencies, getDefaultProjectPath, getMIVersionFromPom, buildBallerinaModule, updatePomForClassMediator, isConsolidatedProject, getProjectJavaVersion } from "../../util/onboardingUtils";
+import { compareVersions, filterConnectorVersion, generateInitialDependencies, getDefaultProjectPath, getMIVersionFromPom, buildBallerinaModule, updatePomForClassMediator, isConsolidatedProject, isRemoteDeploymentEnabledInConsolidatedProject, getProjectJavaVersion } from "../../util/onboardingUtils";
 import { Range as STRange } from '@wso2/syntax-tree/lib/src';
 import { checkForWso2IntegratorExt } from "../../extension";
 import { getAPIMetadata } from "../../util/template-engine/mustach-templates/API";
@@ -387,7 +393,7 @@ import { getKubernetesConfiguration, getKubernetesDataConfiguration } from "../.
 import { parseStringPromise, Builder } from "xml2js";
 import { MILanguageClient } from "../../lang-client/activator";
 import { addWSO2AIConfigProperties } from "../../ai-features/configUtils";
-import { reorderModulesByBuildOrder, updatePomModules } from "../../debugger/pomResolver";
+import { getModules, parseConsolidatedProjectPom, reorderModulesByBuildOrder, updatePomModules } from "../../debugger/pomResolver";
 import {
     buildInputSchemasForAPITools,
     cleanPathForToolName,
@@ -411,6 +417,8 @@ const undoRedo = new UndoRedoManager();
 
 const connectorCache = new Map<string, any>();
 const legacyConnectorCache = new Map<string, any>();
+
+let swaggerCorsProxyPort: Promise<number> | undefined;
 
 export class MiDiagramRpcManager implements MiDiagramAPI {
     constructor(private projectUri: string) { }
@@ -801,6 +809,9 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
                 if (swaggerDefPath) {
                     response = await langClient.generateAPI({
                         apiName: name,
+                        context: apiContext !== "" ? apiContext : null,
+                        version: apiVersion !== "" ? apiVersion : null,
+                        versionType: apiVersionType !== "" ? apiVersionType : null,
                         swaggerOrWsdlPath: swaggerDefPath,
                         publishSwaggerPath: saveSwaggerDef ? getPublishSwaggerPath(swaggerDefPath) : undefined,
                         mode: "create.api.from.swagger"
@@ -809,6 +820,9 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
                     const filePath = wsdlType === "file" && Uri.file(wsdlDefPath).toString();
                     response = await langClient.generateAPI({
                         apiName: name,
+                        context: apiContext !== "" ? apiContext : null,
+                        version: apiVersion !== "" ? apiVersion : null,
+                        versionType: apiVersionType !== "" ? apiVersionType : null,
                         swaggerOrWsdlPath: filePath || wsdlDefPath,
                         mode: "create.api.from.wsdl",
                         wsdlEndpointName
@@ -843,7 +857,7 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
                     fs.mkdirSync(path.dirname(swaggerRegPath), { recursive: true });
                     if (ext === ".json" || ext === ".yml") {
                         const swaggerContent = parse(fs.readFileSync(swaggerDefPath, "utf8"));
-                        fs.writeFileSync(swaggerRegPath, stringify(swaggerContent));
+                        fs.writeFileSync(swaggerRegPath, stringify(swaggerContent, { aliasDuplicateObjects: false }));
                     } else {
                         fs.copyFileSync(swaggerDefPath, swaggerRegPath);
                     }
@@ -870,6 +884,10 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
 
             if (!saveSwaggerDef) {
                 await generateSwagger(filePath);
+                // copy query params from the source swagger definition if it exists
+                if (swaggerDefPath) {
+                    await copyQueryParamsFromSource(filePath, swaggerDefPath);
+                }
             }
             const metadataPath = path.join(this.projectUri, "src", "main", "wso2mi", "resources", "metadata", name + (apiVersion == "" ? "" : "_" + apiVersion) + "_metadata.yaml");
             fs.writeFileSync(metadataPath, getAPIMetadata({ name: name, version: apiVersion == "" ? "1.0.0" : apiVersion, context: apiContext, versionType: apiVersionType ? (apiVersionType == "url" ? apiVersionType : false) : false }));
@@ -3355,8 +3373,18 @@ ${endpointAttributes}
         const parentUri = vscode.Uri.file(parentFolderPath);
         const entries = await vscode.workspace.fs.readDirectory(parentUri);
 
+        let declaredModules: string[];
+        try {
+            const pom = parseConsolidatedProjectPom(path.join(parentFolderPath, 'pom.xml'));
+            declaredModules = getModules(pom.project);
+        } catch (err) {
+            console.error('Could not read modules from consolidated project pom.xml', err);
+            window.showErrorMessage('Could not read modules from the consolidated project pom.xml.');
+            return;
+        }
+
         const folderEntries = entries.filter(
-            ([_, type]) => type === vscode.FileType.Directory
+            ([name, type]) => type === vscode.FileType.Directory && declaredModules.includes(name)
         );
 
         const foldersToAdd = (
@@ -4146,6 +4174,32 @@ ${endpointAttributes}
         }
     }
 
+    async extractMavenCoordinates(params: ExtractMavenCoordinatesRequest): Promise<ExtractMavenCoordinatesResponse> {
+        const { pomPath } = params;
+        if (!pomPath || !fs.existsSync(pomPath) || !fs.statSync(pomPath).isFile()) {
+            const errorMsg = `pom.xml not found at path: ${pomPath}`;
+            console.error(errorMsg);
+            throw new Error(errorMsg);
+        }
+        try {
+            const { XMLParser } = require("fast-xml-parser");
+            const xmlData = fs.readFileSync(pomPath, "utf8");
+            const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false });
+            const parsed = parser.parse(xmlData);
+            const project = parsed?.project ?? {};
+            const parent = project?.parent ?? {};
+            return {
+                groupId: String(project.groupId ?? parent.groupId ?? ""),
+                artifactId: String(project.artifactId ?? ""),
+                version: String(project.version ?? parent.version ?? ""),
+                packaging: project.packaging !== undefined ? String(project.packaging) : undefined,
+            };
+        } catch (error) {
+            console.error(`Failed to extract maven coordinates from ${pomPath}:`, error);
+            throw new Error(`Failed to parse pom.xml at path: ${pomPath}`);
+        }
+    }
+
     async copyConnectorZip(params: CopyConnectorZipRequest): Promise<CopyConnectorZipResponse> {
         const { connectorPath, isInbound } = params;
         const langClient = await MILanguageClient.getInstance(this.projectUri);
@@ -4384,10 +4438,11 @@ ${endpointAttributes}
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const responses = await Promise.all(
                 DebuggerConfig.getProjectList().map(async projectPath =>
-                    langClient.getAvailableResources({ 
-                        documentIdentifier: projectPath, 
-                        resourceType: params.resourceType, 
-                        isDebugFlow: params.isDebugFlow 
+                    langClient.getAvailableResources({
+                        documentIdentifier: projectPath,
+                        resourceType: params.resourceType,
+                        isDebugFlow: params.isDebugFlow,
+                        dataServiceName: params.dataServiceName
                     })
                 )
             );
@@ -5320,10 +5375,38 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const workspaceFolderUri = vscode.Uri.file(path.resolve(this.projectUri));
             if (workspaceFolderUri) {
-                const config = vscode.workspace.getConfiguration('MI', workspaceFolderUri);
-                const isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED");
+                const consolidatedRoot = path.dirname(this.projectUri);
+                let isRemoteDeploymentEnabled: boolean;
+                if (isConsolidatedProject(consolidatedRoot)) {
+                    isRemoteDeploymentEnabled = isRemoteDeploymentEnabledInConsolidatedProject(consolidatedRoot);
+                } else {
+                    const config = vscode.workspace.getConfiguration('MI', workspaceFolderUri);
+                    isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED") ?? false;
+                }
                 if (isRemoteDeploymentEnabled) {
-                    await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
+                    if (isConsolidatedProject(consolidatedRoot)) {
+                        const subprojects = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
+                        const failures: { subprojectPath: string; err: unknown }[] = [];
+                        for (const subprojectPath of subprojects) {
+                            try {
+                                await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, subprojectPath, false);
+                            } catch (err) {
+                                console.error(`Remote deploy failed for ${subprojectPath}`, err);
+                                failures.push({ subprojectPath, err });
+                            }
+                        }
+                        if (failures.length > 0) {
+                            vscode.window.showErrorMessage(
+                                `Remote deployment failed for: ${failures.map(f => path.basename(f.subprojectPath)).join(', ')}`
+                            );
+                        }
+                    } else {
+                        await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
+                    }
+                } else if (isConsolidatedProject(consolidatedRoot)) {
+                    vscode.window.showInformationMessage(
+                        'Remote deployment is not configured. Use the Workspace Overview page to set up remote deployment.'
+                    );
                 } else {
                     const configure = await vscode.window.showWarningMessage(
                         'Remote deployment is not enabled. Do you want to enable and configure it now?',
@@ -5359,8 +5442,21 @@ ${keyValuesXML}`;
 
             let integrationType: string | undefined;
             if (this.projectUri) {
-                const rootPath = (await this.getProjectRoot({ path: this.projectUri })).path;
-                const resp = await langClient.getProjectIntegrationType(rootPath);
+                const consolidatedRoot = path.dirname(this.projectUri);
+                const consolidated = isConsolidatedProject(consolidatedRoot);
+
+                // Collect integration types across all relevant project paths, deduplicated
+                const projectPaths = consolidated
+                    ? (vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [])
+                    : [this.projectUri];
+
+                const allTypes = new Set<string>();
+                for (const projectPath of projectPaths) {
+                    const rootPath = (await this.getProjectRoot({ path: projectPath })).path;
+                    const types = await langClient.getProjectIntegrationType(rootPath);
+                    types.forEach((t: string) => allTypes.add(t));
+                }
+                const resp = [...allTypes];
 
                 function mapTypeToScope(type: string): string | undefined {
                     switch (type) {
@@ -5380,35 +5476,33 @@ ${keyValuesXML}`;
                 }
 
                 if (resp.length === 1) {
-                    const type = resp[0]
-                    integrationType = mapTypeToScope(type);
+                    integrationType = mapTypeToScope(resp[0]);
                 } else if (resp.length === 0) {
                     window.showErrorMessage("You don't have any artifacts within this project. Please add an artifact and try again.");
                 } else {
-                    // Show a quick pick to select deployment option
                     const selectedScope = await window.showQuickPick(resp, {
                         placeHolder: 'You have different types of artifacts within this project. Select the artifact type to be deployed'
                     });
-
                     if (selectedScope) {
                         integrationType = mapTypeToScope(selectedScope);
                     }
                 }
 
                 if (!integrationType) {
-                    return { success: false };
+                    resolve({ success: false });
+                    return;
                 }
 
-                const paramsWithType: ICreateNewIntegrationCmdParams = { 
-                    buildPackLang: "microintegrator", 
-                    workspaceDir: this.projectUri, 
-                    integrations: [{ 
-                        fsPath: this.projectUri, 
-                        name: path.basename(this.projectUri), 
+                const workspaceDir = consolidated ? consolidatedRoot : this.projectUri;
+                const paramsWithType: ICreateNewIntegrationCmdParams = {
+                    buildPackLang: "microintegrator",
+                    workspaceDir,
+                    integrations: [{
+                        fsPath: workspaceDir,
+                        name: path.basename(workspaceDir),
                         supportedIntegrationTypes: [integrationType]
                     }]
-                }
-                
+                };
                 commands.executeCommand(WICommandIds.CreateNewComponent, paramsWithType);
                 resolve({ success: true });
 
@@ -5451,7 +5545,7 @@ ${keyValuesXML}`;
     }
 
     async exportProject(params: ExportProjectRequest): Promise<void> {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             const exportTask = async () => {
                 const carFile = await vscode.workspace.findFiles(
                     new vscode.RelativePattern(params.projectPath, 'target/*.car'),
@@ -5530,7 +5624,110 @@ ${keyValuesXML}`;
                     }
                 }
             }
-            await commands.executeCommand(COMMANDS.BUILD_PROJECT, this.projectUri, false, exportTask);
+            commands.executeCommand(COMMANDS.BUILD_PROJECT, this.projectUri, false, exportTask).then(undefined, reject);
+        });
+    }
+
+    async exportConsolidatedProject(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const exportTask = async () => {
+                const workspaceFolders = vscode.workspace.workspaceFolders;
+                if (!workspaceFolders || workspaceFolders.length === 0) {
+                    const errorMessage = 'Error: No workspace folder is opened.';
+                    window.showErrorMessage(errorMessage);
+                    log(errorMessage);
+                    return reject(errorMessage);
+                }
+
+                const carFiles: vscode.Uri[] = [];
+                for (const folder of workspaceFolders) {
+                    const found = await vscode.workspace.findFiles(
+                        new vscode.RelativePattern(folder.uri.fsPath, 'target/*.car')
+                    );
+                    carFiles.push(...found);
+                }
+
+                if (carFiles.length === 0) {
+                    const errorMessage =
+                        'Error: No .car files found in the target directories. Please build the project before exporting.';
+                    window.showErrorMessage(errorMessage);
+                    log(errorMessage);
+                    return reject(errorMessage);
+                }
+
+                const consolidatedRoot = path.dirname(this.projectUri);
+                const lastExportedPath: string | undefined = extension.context.globalState.get(LAST_EXPORTED_CAR_PATH);
+                const quickPicks: vscode.QuickPickItem[] = [
+                    {
+                        label: "Select Destination",
+                        description: "Select a destination folder to export .car files",
+                    },
+                ];
+                if (lastExportedPath) {
+                    quickPicks.push({
+                        label: "Last Exported Path: " + lastExportedPath,
+                        description: "Use the last exported path to export .car files",
+                    });
+                }
+                const selection = await vscode.window.showQuickPick(
+                    quickPicks,
+                    {
+                        placeHolder: "Export Options",
+                    }
+                );
+
+                if (selection) {
+                    let destination: string | undefined;
+                    if (selection.label == "Select Destination") {
+                        // Get the destination folder
+                        const selectedLocation = await this.browseFile({
+                            canSelectFiles: false,
+                            canSelectFolders: true,
+                            canSelectMany: false,
+                            defaultUri: lastExportedPath ?? consolidatedRoot,
+                            title: "Select a folder to export the project",
+                            openLabel: "Select Folder"
+                        });
+                        destination = selectedLocation.filePath;
+                        await extension.context.globalState.update(LAST_EXPORTED_CAR_PATH, destination);
+                    } else {
+                        destination = lastExportedPath;
+                    }
+                    if (destination) {
+                        const relativeToProject = path.relative(consolidatedRoot, destination);
+                        const isInsideProject = relativeToProject === '' ||
+                            (!relativeToProject.startsWith('..') && !path.isAbsolute(relativeToProject));
+                        if (isInsideProject) {
+                            const errorMessage = 'Error: The export destination cannot be inside the project. Please select a folder outside the project.';
+                            window.showErrorMessage(errorMessage);
+                            log(errorMessage);
+                            return reject(errorMessage);
+                        }
+                        try {
+                            carFiles.forEach(carFile => {
+                                const destinationPath = path.join(destination, path.basename(carFile.fsPath));
+                                if (fs.existsSync(destinationPath)) {
+                                    fs.rmSync(destinationPath, { force: true });
+                                }
+                                fs.copyFileSync(carFile.fsPath, destinationPath);
+                            });
+                            window.showInformationMessage(`Exported ${carFiles.length} project(s) successfully!`);
+                            log(`Exported ${carFiles.length} project(s) to: ${destination}`);
+                            resolve();
+                        } catch (err) {
+                            const errorMessage = `Error exporting projects: ${err instanceof Error ? err.message : String(err)}`;
+                            window.showErrorMessage("Failed to export projects. Please try again.");
+                            log(errorMessage);
+                            reject(errorMessage);
+                        }
+                    } else {
+                        resolve();
+                    }
+                } else {
+                    resolve();
+                }
+            }
+            commands.executeCommand(COMMANDS.BUILD_PROJECT, this.projectUri, false, exportTask, true).then(undefined, reject);
         });
     }
 
@@ -5584,12 +5781,7 @@ ${keyValuesXML}`;
             } else {
                 swaggerContent = swagger;
             }
-            const port = await getPortPromise({ port: 1000, stopPort: 3000 });
-            const cors_proxy = require('cors-anywhere');
-            cors_proxy.createServer({
-                originWhitelist: [], // Allow all origins
-                requireHeader: ['origin', 'x-requested-with']
-            }).listen(port, 'localhost');
+            const port = await startSwaggerCorsProxy();
 
             const swaggerData: SwaggerData = {
                 generatedSwagger: swaggerContent,
@@ -5601,33 +5793,73 @@ ${keyValuesXML}`;
     }
 
     async compareSwaggerAndAPI(params: SwaggerTypeRequest): Promise<CompareSwaggerAndAPIResponse> {
-        return new Promise(async (resolve) => {
+        const { apiPath, apiName } = params;
+        const swaggerPath = path.join(
+            this.projectUri,
+            SWAGGER_REL_DIR,
+            `${path.basename(params.apiPath, ".xml")}.yaml`
+        );
 
-            const { apiPath, apiName } = params;
-            const swaggerPath = path.join(
-                this.projectUri,
-                SWAGGER_REL_DIR,
-                `${path.basename(params.apiPath, ".xml")}.yaml`
-            );
-
+        // Runs on every syntax-tree refresh, so read under the same lock used for writes
+        // to avoid seeing a mid-write, momentarily-stale copy as a false mismatch.
+        return withSwaggerFileLock(swaggerPath, async () => {
             if (!fs.existsSync(swaggerPath)) {
-                return resolve({ swaggerExists: false });
+                return { swaggerExists: false };
             }
 
-            const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const { swagger: generatedSwagger } = await langClient.swaggerFromAPI({ apiPath: apiPath, swaggerPath: swaggerPath });
             const swaggerContent = fs.readFileSync(swaggerPath, 'utf-8');
-            const isEqualSwagger = isEqualSwaggers({
-                existingSwagger: parse(swaggerContent),
-                generatedSwagger: parse(generatedSwagger!)
-            });
-            return resolve({
-                swaggerExists: true,
-                isEqual: isEqualSwagger,
-                generatedSwagger,
-                existingSwagger: swaggerContent
-            });
+            const parsedExistingSwagger = parse(swaggerContent);
+            const queryParams = extractQueryParams(parsedExistingSwagger);
+
+            try {
+                const langClient = await MILanguageClient.getInstance(this.projectUri);
+                const { swagger: generatedSwagger } = await langClient.swaggerFromAPI({ apiPath: apiPath, swaggerPath: swaggerPath });
+                const isEqualSwagger = isEqualSwaggers({
+                    existingSwagger: parsedExistingSwagger,
+                    generatedSwagger: parse(generatedSwagger!)
+                });
+                return {
+                    swaggerExists: true,
+                    isEqual: isEqualSwagger,
+                    generatedSwagger,
+                    existingSwagger: swaggerContent,
+                    queryParams
+                };
+            } catch (error) {
+                // Read directly from the swagger file on disk.
+                console.error('Error generating swagger from API for comparison:', error);
+                window.showErrorMessage(`Failed to compare the OpenAPI definition with the API '${apiName}'.`);
+                return {
+                    swaggerExists: true,
+                    isEqual: true,
+                    existingSwagger: swaggerContent,
+                    queryParams
+                };
+            }
         });
+    }
+
+    async updateResourceQueryParams(params: UpdateResourceQueryParamsRequest): Promise<UpdateResourceQueryParamsResponse> {
+        const { apiPath, resourcePath, oldResourcePath, methods, queryParams } = params;
+        const swaggerPath = path.join(this.projectUri, SWAGGER_REL_DIR, `${path.basename(apiPath, ".xml")}.yaml`);
+
+        // Locked so this can't interleave with generateSwagger's auto-regeneration on API
+        // save; both read-modify-write the same file.
+        await withSwaggerFileLock(swaggerPath, async () => {
+            let existingSwagger: string;
+            if (fs.existsSync(swaggerPath)) {
+                existingSwagger = fs.readFileSync(swaggerPath, 'utf-8');
+            } else {
+                const generatedSwagger = await generateSwaggerCore(apiPath, this.projectUri, swaggerPath);
+                if (!generatedSwagger) {
+                    throw new Error(`Failed to generate OpenAPI definition for ${apiPath}`);
+                }
+                existingSwagger = generatedSwagger;
+            }
+            const updatedYaml = updateQueryParamsInSwagger(existingSwagger, resourcePath, methods, queryParams, false, oldResourcePath);
+            await replaceFullContentToFile(swaggerPath, updatedYaml);
+        });
+        return { queryParams };
     }
 
     async updateSwaggerFromAPI(params: SwaggerTypeRequest): Promise<void> {
@@ -5639,21 +5871,19 @@ ${keyValuesXML}`;
                 `${path.basename(params.apiPath, ".xml")}.yaml`
             );
 
-            let generatedSwagger = params.generatedSwagger;
-            let existingSwagger = params.existingSwagger;
-            if (!generatedSwagger || !existingSwagger) {
-                const langClient = await MILanguageClient.getInstance(this.projectUri);
-                const response = await langClient.swaggerFromAPI({ apiPath: apiPath, ...(fs.existsSync(swaggerPath) && { swaggerPath: swaggerPath }) });
-                generatedSwagger = response.swagger;
-                existingSwagger = fs.readFileSync(swaggerPath, 'utf-8');
-            }
+            await withSwaggerFileLock(swaggerPath, async () => {
+                let generatedSwagger = params.generatedSwagger;
+                let existingSwagger = params.existingSwagger;
+                if (!generatedSwagger || !existingSwagger) {
+                    const langClient = await MILanguageClient.getInstance(this.projectUri);
+                    const response = await langClient.swaggerFromAPI({ apiPath: apiPath, ...(fs.existsSync(swaggerPath) && { swaggerPath: swaggerPath }) });
+                    generatedSwagger = response.swagger;
+                    existingSwagger = fs.existsSync(swaggerPath) ? fs.readFileSync(swaggerPath, 'utf-8') : generatedSwagger!;
+                }
 
-            const mergedContent = mergeSwaggers({
-                existingSwagger: parse(existingSwagger),
-                generatedSwagger: parse(generatedSwagger!)
+                const yamlContent = mergeGeneratedSwagger(existingSwagger!, generatedSwagger!);
+                await replaceFullContentToFile(swaggerPath, yamlContent);
             });
-            const yamlContent = stringify(mergedContent);
-            await replaceFullContentToFile(swaggerPath, yamlContent);
         });
     }
 
@@ -5942,16 +6172,30 @@ ${keyValuesXML}`;
             response = await langClient.swaggerFromAPI({ apiPath: params.apiPath, ...(fs.existsSync(swaggerPath) && { swaggerPath: swaggerPath }) });
         }
         const generatedSwagger = response.swagger;
-        const port = await getPortPromise({ port: 1000, stopPort: 3000 });
-        const cors_proxy = require('cors-anywhere');
-        cors_proxy.createServer({
-            originWhitelist: [], // Allow all origins
-            requireHeader: ['origin', 'x-requested-with']
-        }).listen(port, 'localhost');
+        const port = await startSwaggerCorsProxy();
 
         RPCLayer._messengers.get(this.projectUri)?.sendNotification(onSwaggerSpecReceived, { type: 'webview', webviewType: 'micro-integrator.runtime-services-panel' }, { generatedSwagger: generatedSwagger, port: port });
 
         return { generatedSwagger: generatedSwagger }; // TODO: refactor rpc function with void
+    }
+
+    async getDataServiceOpenAPISpec(params: DataServiceSwaggerRequest): Promise<SwaggerFromAPIResponse> {
+        const swaggerUrl = `http://${DebuggerConfig.getHost()}:${DebuggerConfig.getServerPort()}/services/${params.name}?swagger.json`;
+        let generatedSwagger: string;
+        try {
+            const swaggerResponse = await axios.get(swaggerUrl, { responseType: 'text', transformResponse: [(d) => d], timeout: 10000 });
+            generatedSwagger = swaggerResponse.data;
+        } catch (error) {
+            console.error('Error fetching data service swagger:', error);
+            window.showErrorMessage(`Failed to fetch the OpenAPI spec for ${params.name}. Make sure the Micro Integrator runtime is running and accessible at ${DebuggerConfig.getHost()}:${DebuggerConfig.getServerPort()}.`);
+            throw new Error(`Failed to fetch the OpenAPI spec for ${params.name}`);
+        }
+
+        const port = await startSwaggerCorsProxy();
+
+        RPCLayer._messengers.get(this.projectUri)?.sendNotification(onSwaggerSpecReceived, { type: 'webview', webviewType: 'micro-integrator.runtime-services-panel' }, { generatedSwagger: generatedSwagger, port: port });
+
+        return { generatedSwagger: generatedSwagger };
     }
 
     async openDependencyPom(params: OpenDependencyPomRequest): Promise<void> {
@@ -6374,6 +6618,7 @@ ${keyValuesXML}`;
         const searchMavenArtifactIdConnector = name.startsWith('mi-connector-') ? name : `mi-connector-${name}`;
         const searchMavenArtifactIdModule = name.startsWith('mi-module-') ? name : `mi-module-${name}`;
         const artifactMatch = connectorStoreData?.find(artifact =>
+            artifact.mavenArtifactId === name ||
             artifact.mavenArtifactId === searchMavenArtifactIdConnector ||
             artifact.mavenArtifactId === searchMavenArtifactIdModule
         );
@@ -6495,23 +6740,35 @@ ${keyValuesXML}`;
     }
 
     async getExternalConnectorDetails(): Promise<GetExternalConnectorDetailsResponse> {
-        return new Promise((resolve, reject) => {
-            const connectorsPath = path.join(this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'connectors');
+        const readConnectorZips = (dir: string, type: 'connector' | 'inbound'): ExternalConnectorDetail[] => {
+            if (!fs.existsSync(dir)) {
+                return [];
+            }
+            try {
+                return fs.readdirSync(dir, { withFileTypes: true })
+                    .filter(entry => entry.isFile() && entry.name.endsWith('.zip'))
+                    .map(entry => ({
+                        name: entry.name.replace('.zip', ''),
+                        path: path.join(dir, entry.name),
+                        type
+                    }));
+            } catch {
+                return [];
+            }
+        };
 
-            fs.readdir(connectorsPath, { withFileTypes: true }, (err, entries) => {
-                if (err) {
-                    // If directory doesn't exist or can't be read, return empty array
-                    resolve({ connectors: [] });
-                } else {
-                    // Filter only zip files and get their names without extension
-                    const connectorNames = entries
-                        .filter(entry => entry.isFile() && entry.name.endsWith('.zip'))
-                        .map(entry => entry.name.replace('.zip', ''));
+        const resourcesPath = path.join(this.projectUri, 'src', 'main', 'wso2mi', 'resources');
+        const connectorDetails = [
+            ...readConnectorZips(path.join(resourcesPath, 'connectors'), 'connector'),
+            ...readConnectorZips(path.join(resourcesPath, 'inbound-endpoints'), 'inbound'),
+            // below path is added to maintain backward compatibility
+            ...readConnectorZips(path.join(resourcesPath, 'inbound-connectors'), 'inbound'),
+        ];
 
-                    resolve({ connectors: connectorNames });
-                }
-            });
-        });
+        // `connectors` keeps the outbound connector names only, for backward compatibility with existing callers.
+        const connectors = connectorDetails.filter(c => c.type === 'connector').map(c => c.name);
+
+        return { connectors, connectorDetails };
     }
 
     async getMockServices(): Promise<GetMockServicesResponse> {
@@ -6980,6 +7237,21 @@ async function exposeVersionedServices(projectUri: string): Promise<boolean> {
         }
     }
     return false;
+}
+
+async function startSwaggerCorsProxy(): Promise<number> {
+    if (!swaggerCorsProxyPort) {
+        swaggerCorsProxyPort = (async () => {
+            const port = await getPortPromise({ port: 1000, stopPort: 3000 });
+            const cors_proxy = require('cors-anywhere');
+            cors_proxy.createServer({
+                originWhitelist: [], // Allow all origins
+                requireHeader: ['origin', 'x-requested-with']
+            }).listen(port, 'localhost');
+            return port;
+        })();
+    }
+    return swaggerCorsProxyPort;
 }
 
 export function getRepoRoot(projectRoot: string): string | undefined {

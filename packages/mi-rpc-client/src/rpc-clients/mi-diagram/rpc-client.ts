@@ -164,6 +164,7 @@ import {
     ShowErrorMessageRequest,
     SwaggerFromAPIResponse,
     SwaggerTypeRequest,
+    DataServiceSwaggerRequest,
     TemplatesResponse,
     UndoRedoParams,
     UpdateAPIFromSwaggerRequest,
@@ -172,6 +173,8 @@ import {
     UpdateConnectorRequest,
     UpdateDefaultEndpointRequest,
     UpdateDefaultEndpointResponse,
+    UpdateResourceQueryParamsRequest,
+    UpdateResourceQueryParamsResponse,
     UpdateFailoverEPRequest,
     UpdateFailoverEPResponse,
     UpdateHttpEndpointRequest,
@@ -240,6 +243,7 @@ import {
     editAPI,
     editOpenAPISpec,
     executeCommand,
+    exportConsolidatedProject,
     exportProject,
     getAPIDirectory,
     getAddressEndpoint,
@@ -280,6 +284,7 @@ import {
     getMessageStore,
     getMetadataOfRegistryResource,
     getOpenAPISpec,
+    getDataServiceOpenAPISpec,
     getProjectRoot,
     getProjectUuid,
     getRecipientEndpoint,
@@ -324,6 +329,7 @@ import {
     updateMockService,
     updateRecipientEndpoint,
     updateRegistryMetadata,
+    updateResourceQueryParams,
     updateSwaggerFromAPI,
     updateTemplateEndpoint,
     updateTestCase,
@@ -401,6 +407,9 @@ import {
     CopyConnectorZipRequest,
     CopyConnectorZipResponse,
     copyConnectorZip,
+    ExtractMavenCoordinatesRequest,
+    ExtractMavenCoordinatesResponse,
+    extractMavenCoordinates,
     askOpenAPIDirPath,
     RemoveConnectorRequest,
     removeConnector,
@@ -903,6 +912,10 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
         return this._messenger.sendRequest(copyConnectorZip, HOST_EXTENSION, params);
     }
 
+    extractMavenCoordinates(params: ExtractMavenCoordinatesRequest): Promise<ExtractMavenCoordinatesResponse> {
+        return this._messenger.sendRequest(extractMavenCoordinates, HOST_EXTENSION, params);
+    }
+
     copyArtifact(params: CopyArtifactRequest): Promise<CopyArtifactResponse> {
         return this._messenger.sendRequest(copyArtifact, HOST_EXTENSION, params);
     }
@@ -1027,6 +1040,10 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
         return this._messenger.sendNotification(exportProject, HOST_EXTENSION, params);
     }
 
+    exportConsolidatedProject(): void {
+        return this._messenger.sendNotification(exportConsolidatedProject, HOST_EXTENSION);
+    }
+
     checkOldProject(): Promise<boolean> {
         return this._messenger.sendRequest(checkOldProject, HOST_EXTENSION);
     }
@@ -1043,12 +1060,20 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
         return this._messenger.sendRequest(getOpenAPISpec, HOST_EXTENSION, params);
     }
 
+    getDataServiceOpenAPISpec(params: DataServiceSwaggerRequest): Promise<SwaggerFromAPIResponse> {
+        return this._messenger.sendRequest(getDataServiceOpenAPISpec, HOST_EXTENSION, params);
+    }
+
     updateSwaggerFromAPI(params: SwaggerTypeRequest): void {
         return this._messenger.sendNotification(updateSwaggerFromAPI, HOST_EXTENSION, params);
     }
 
     updateAPIFromSwagger(params: UpdateAPIFromSwaggerRequest): void {
         return this._messenger.sendNotification(updateAPIFromSwagger, HOST_EXTENSION, params);
+    }
+
+    updateResourceQueryParams(params: UpdateResourceQueryParamsRequest): Promise<UpdateResourceQueryParamsResponse> {
+        return this._messenger.sendRequest(updateResourceQueryParams, HOST_EXTENSION, params);
     }
 
     updateTestSuite(params: UpdateTestSuiteRequest): Promise<UpdateTestSuiteResponse> {

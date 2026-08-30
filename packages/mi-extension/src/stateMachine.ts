@@ -26,7 +26,7 @@ import { fileURLToPath } from 'url';
 import path = require('path');
 import { activateTestExplorer } from './test-explorer/activator';
 import { DMProject } from './datamapper/DMProject';
-import { setupEnvironment, getMIVersionFromPom, compareVersions } from './util/onboardingUtils';
+import { setupEnvironment, getMIVersionFromPom, compareVersions, checkSynapseCoreDependencyVersion } from './util/onboardingUtils';
 import { getPopupStateMachine } from './stateMachinePopup';
 import { askForProject } from './util/workspace';
 import { containsMultiModuleNatureInProjectFile, containsMultiModuleNatureInPomFile, findMultiModuleProjectsInWorkspaceDir } from './util/migrationUtils';
@@ -405,6 +405,8 @@ const stateMachine = createMachine<MachineContext>({
 
                     resolve(ls);
                     console.log("LS is ready " + new Date().toLocaleTimeString());
+
+                    checkSynapseCoreDependencyVersion(context.projectUri!);
                 } catch (error) {
                     console.log("Error occured while waiting for LS to be ready " + new Date().toLocaleTimeString());
                     reject(error);
@@ -733,6 +735,12 @@ export const deleteStateMachine = (projectUri: string) => {
     }
 };
 
+// The machine has three distinct "viewReady" shapes, `ready`, `newProject`, or `environmentSetup`
+// A view can be open while the machine sits in any of them.
+function isViewReadyState(state: any): boolean {
+    return typeof state === 'object' && ['ready', 'newProject', 'environmentSetup'].some(key => state?.[key] === 'viewReady');
+}
+
 export function openView(type: EVENT_TYPE, viewLocation?: VisualizerLocation) {
     if (viewLocation?.documentUri) {
         viewLocation.documentUri = viewLocation.documentUri.startsWith("file") ? fileURLToPath(viewLocation.documentUri) : Uri.file(viewLocation.documentUri).fsPath;
@@ -750,9 +758,9 @@ export function openView(type: EVENT_TYPE, viewLocation?: VisualizerLocation) {
 
         const stateMachine = getStateMachine(viewLocation?.projectUri);
         const state = stateMachine.state();
-        if (state === 'initialize') {
-            const listener = (state: { value: { ready: string; }; }) => {
-                if (state?.value?.ready === "viewReady") {
+        if (!isViewReadyState(state)) {
+            const listener = (s: { value: any; }) => {
+                if (isViewReadyState(s?.value)) {
                     stateMachine.service().send({ type: type, viewLocation: viewLocation });
                     stateMachine.service().off(listener);
                 }
@@ -768,7 +776,8 @@ export function openView(type: EVENT_TYPE, viewLocation?: VisualizerLocation) {
             return;
         }
 
-        if (workspaces.length > 1 && viewLocation?.view !== MACHINE_VIEW.Welcome) {
+        const isWorkspaceWideView = viewLocation?.view === MACHINE_VIEW.Welcome || viewLocation?.view === MACHINE_VIEW.WorkspaceOverview;
+        if (workspaces.length > 1 && !isWorkspaceWideView) {
             askForPrj();
             async function askForPrj() {
                 const projectUri = await askForProject();
@@ -779,9 +788,26 @@ export function openView(type: EVENT_TYPE, viewLocation?: VisualizerLocation) {
             }
         }
 
-        viewLocation!.projectUri = workspaces[0].uri.fsPath;
-        const stateMachine = getStateMachine(workspaces[0].uri.fsPath);
-        return stateMachine.service().send({ type: type, viewLocation: viewLocation });
+        // Prefer the currently visible webview's project so the view opens in
+        // the same tab rather than revealing a different project's tab.
+        const visibleEntry = [...webviews.entries()].find(([, wv]) => wv.getWebview()?.active)
+            ?? [...webviews.entries()].find(([, wv]) => wv.getWebview()?.visible);
+        const targetProjectUri = visibleEntry?.[0] ?? workspaces[0].uri.fsPath;
+
+        viewLocation!.projectUri = targetProjectUri;
+        const stateMachine = getStateMachine(targetProjectUri);
+        const state = stateMachine.state();
+        if (!isViewReadyState(state)) {
+            const listener = (s: { value: any; }) => {
+                if (isViewReadyState(s?.value)) {
+                    stateMachine.service().send({ type: type, viewLocation: viewLocation });
+                    stateMachine.service().off(listener);
+                }
+            };
+            stateMachine.service().onTransition(listener);
+        } else {
+            return stateMachine.service().send({ type: type, viewLocation: viewLocation });
+        }
     }
 }
 
@@ -867,8 +893,9 @@ async function checkIfMiProject(projectUri: string, view: MACHINE_VIEW = MACHINE
 
     if (isProject) {
         // Check if the project is empty
+        const isWorkspaceWideView = view === MACHINE_VIEW.WorkspaceOverview || view === MACHINE_VIEW.Welcome;
         const files = await vscode.workspace.findFiles(new vscode.RelativePattern(projectUri, "src/main/wso2mi/artifacts/*/*.xml"), '**/node_modules/**', 1);
-        if (files.length === 0) {
+        if (files.length === 0 && !isWorkspaceWideView) {
             let workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(projectUri));
             const config = vscode.workspace.getConfiguration('MI', workspaceFolder);
             const scope = config.get<string>("Scope");

@@ -16,6 +16,7 @@ package org.eclipse.lemminx.customservice.synapse.api.generator;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.CommentMediator;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.api.API;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.api.APIResource;
@@ -51,12 +52,99 @@ public class APIGenerator {
 
     private JsonObject swaggerJson;
     private String publishSwaggerPath;
+    private String context;
+    private String version;
+    private String versionType;
     private static final Logger log = Logger.getLogger(APIGenerator.class.getName());
 
     public APIGenerator(JsonObject swaggerJson, String publishSwaggerPath) {
 
+        this(swaggerJson, publishSwaggerPath, null, null);
+    }
+
+    public APIGenerator(JsonObject swaggerJson, String publishSwaggerPath, String context) {
+
+        this(swaggerJson, publishSwaggerPath, context, null);
+    }
+
+    public APIGenerator(JsonObject swaggerJson, String publishSwaggerPath, String context, String version) {
+
+        this(swaggerJson, publishSwaggerPath, context, version, null);
+    }
+
+    public APIGenerator(JsonObject swaggerJson, String publishSwaggerPath, String context, String version,
+                        String versionType) {
+
         this.swaggerJson = swaggerJson;
         this.publishSwaggerPath = publishSwaggerPath;
+        this.context = context;
+        this.version = version;
+        this.versionType = versionType;
+    }
+
+    /**
+     * Normalize the optionally provided context so that it starts with '/' and has no trailing '/'.
+     *
+     * @return the normalized context, or null when no usable context was provided
+     */
+    private String getNormalizedProvidedContext() {
+
+        if (StringUtils.isBlank(context)) {
+            return null;
+        }
+        String resolved = context.trim();
+        // remove trailing '/'
+        if (resolved.length() > 1 && resolved.endsWith("/")) {
+            resolved = resolved.substring(0, resolved.length() - 1);
+        }
+        // add leading '/' if not present
+        if (!resolved.startsWith("/")) {
+            resolved = "/" + resolved;
+        }
+        if (StringUtils.isEmpty(resolved) || "/".equals(resolved)) {
+            return null;
+        }
+        return resolved;
+    }
+
+    /**
+     * Normalize the optionally provided version.
+     *
+     * @return the trimmed version, or null when no usable version was provided
+     */
+    private String getNormalizedProvidedVersion() {
+
+        if (StringUtils.isBlank(version)) {
+            return null;
+        }
+        return version.trim();
+    }
+
+    /**
+     * Normalize the optionally provided version type.
+     *
+     * @return the matching {@link ApiVersionType}, or null when no valid version type was provided
+     */
+    private ApiVersionType getNormalizedProvidedVersionType() {
+
+        if (StringUtils.isBlank(versionType)) {
+            return null;
+        }
+        try {
+            return ApiVersionType.valueOf(versionType.trim().toLowerCase());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Check whether the caller explicitly asked for the API to be unversioned.
+     *
+     * @return true when the provided version type is "none"
+     */
+    private boolean isProvidedVersionTypeNone() {
+
+        return StringUtils.equalsIgnoreCase(SwaggerConstants.VERSION_TYPE_NONE, StringUtils.trim(versionType));
     }
 
     public String generateSynapseAPIXml() {
@@ -81,40 +169,43 @@ public class APIGenerator {
      */
     public API generateSynapseAPI() throws APIGenException {
 
-        String apiContext;
-        if (swaggerJson.get(SwaggerConstants.SERVERS) == null ||
-                swaggerJson.get(SwaggerConstants.SERVERS).getAsJsonArray().size() == 0) {
-            apiContext = SwaggerConstants.DEFAULT_CONTEXT;
-        } else {
-            JsonObject firstServer = swaggerJson.getAsJsonArray(SwaggerConstants.SERVERS).get(0).getAsJsonObject();
-            // get the first path in the servers section
-            String serversString = firstServer.get(SwaggerConstants.URL).getAsString();
-            if (serversString.contains("{") && serversString.contains("}")) {
-                // url is templated, need to resolve
-                if (firstServer.has(SwaggerConstants.VARIABLES)) {
-                    JsonObject variables = firstServer.get(SwaggerConstants.VARIABLES).getAsJsonObject();
-                    serversString = replaceTemplates(serversString, variables);
-                } else {
-                    throw new APIGenException("Server url is templated, but variables cannot be found");
-                }
-            }
-            try {
-                URL url = new URL(serversString);
-                apiContext = url.getPath();
-            } catch (MalformedURLException e) {
-                // url can be relative the place where the swagger is hosted.
-                apiContext = serversString;
-            }
-            if (apiContext.isEmpty() || "/".equals(apiContext)) {
+        // A provided context always takes priority over the one derived from the swagger servers section
+        String apiContext = getNormalizedProvidedContext();
+        if (apiContext == null) {
+            if (swaggerJson.get(SwaggerConstants.SERVERS) == null ||
+                    swaggerJson.get(SwaggerConstants.SERVERS).getAsJsonArray().size() == 0) {
                 apiContext = SwaggerConstants.DEFAULT_CONTEXT;
-            }
-            //cleanup context : remove ending '/'
-            if (apiContext.lastIndexOf('/') == (apiContext.length() - 1)) {
-                apiContext = apiContext.substring(0, apiContext.length() - 1);
-            }
-            // add leading / if not exists
-            if (!apiContext.startsWith("/")) {
-                apiContext = "/" + apiContext;
+            } else {
+                JsonObject firstServer = swaggerJson.getAsJsonArray(SwaggerConstants.SERVERS).get(0).getAsJsonObject();
+                // get the first path in the servers section
+                String serversString = firstServer.get(SwaggerConstants.URL).getAsString();
+                if (serversString.contains("{") && serversString.contains("}")) {
+                    // url is templated, need to resolve
+                    if (firstServer.has(SwaggerConstants.VARIABLES)) {
+                        JsonObject variables = firstServer.get(SwaggerConstants.VARIABLES).getAsJsonObject();
+                        serversString = replaceTemplates(serversString, variables);
+                    } else {
+                        throw new APIGenException("Server url is templated, but variables cannot be found");
+                    }
+                }
+                try {
+                    URL url = new URL(serversString);
+                    apiContext = url.getPath();
+                } catch (MalformedURLException e) {
+                    // url can be relative the place where the swagger is hosted.
+                    apiContext = serversString;
+                }
+                if (StringUtils.isEmpty(apiContext) || "/".equals(apiContext)) {
+                    apiContext = SwaggerConstants.DEFAULT_CONTEXT;
+                }
+                //cleanup context : remove ending '/'
+                if (apiContext.lastIndexOf('/') == (apiContext.length() - 1)) {
+                    apiContext = apiContext.substring(0, apiContext.length() - 1);
+                }
+                // add leading / if not exists
+                if (!apiContext.startsWith("/")) {
+                    apiContext = "/" + apiContext;
+                }
             }
         }
 
@@ -129,21 +220,27 @@ public class APIGenerator {
 
         String apiName = swaggerInfo.get(SwaggerConstants.TITLE).getAsString();
 
-        // Extract version information
-        ApiVersionType versionType = null;
-        String version = "";
-        JsonElement swaggerVersionElement = swaggerInfo.get(SwaggerConstants.VERSION);
-        if (swaggerVersionElement != null && swaggerVersionElement.isJsonPrimitive() &&
-                swaggerVersionElement.getAsJsonPrimitive().isString()) {
-            version = swaggerVersionElement.getAsString();
-            if (apiContext.endsWith(version)) {
-                // If the base path ends with the version, then it will be considered as version-type=url
-                versionType = ApiVersionType.url;
-                //cleanup api context path : remove version from base path
-                apiContext = apiContext.substring(0, apiContext.length() - version.length() - 1);
-            } else {
-                // otherwise context based version strategy
-                versionType = ApiVersionType.context;
+        // Extract version information. A user provided version always takes priority over the values derived from the swagger info section.
+        String providedVersion = getNormalizedProvidedVersion();
+        ApiVersionType versionType = getNormalizedProvidedVersionType();
+        boolean versionTypeNone = isProvidedVersionTypeNone();
+        String swaggerVersion = null;
+        if (!versionTypeNone) {
+            JsonElement swaggerVersionElement = swaggerInfo.get(SwaggerConstants.VERSION);
+            if (swaggerVersionElement != null && swaggerVersionElement.isJsonPrimitive() &&
+                    swaggerVersionElement.getAsJsonPrimitive().isString()) {
+                swaggerVersion = swaggerVersionElement.getAsString();
+            }
+        }
+        String version = versionTypeNone ? StringUtils.EMPTY :
+                (StringUtils.isNotBlank(providedVersion) ? providedVersion :
+                (StringUtils.isNotBlank(swaggerVersion) ? swaggerVersion : StringUtils.EMPTY));
+
+        if (ApiVersionType.url.equals(versionType)) {
+            String versionInPath = StringUtils.isNotBlank(swaggerVersion) ? swaggerVersion : version;
+            if (StringUtils.isNotEmpty(versionInPath) && apiContext.endsWith(versionInPath)) {
+                // remove version from base path
+                apiContext = apiContext.substring(0, apiContext.length() - versionInPath.length() - 1);
             }
         }
 

@@ -60,7 +60,7 @@ export class BallerinaModule {
         await ballerinaFormFrame.getByRole('textbox', { name: 'Version*' }).fill('1.0.0');
         await ballerinaFormFrame.getByRole('button', { name: 'Create' }).click();
 
-        await this._page.getByRole('tab', { name: `${moduleName}-module.bal` }).getByLabel('Close').click();
+        await this._page.getByRole('tab', { name: `${moduleName}-module.bal` }).getByLabel('Close').click({ force: true });
         await projectExplorer.goToOverview("testProject");
         const overview = await switchToIFrame('Project Overview', this._page);
         if (!overview) {
@@ -120,7 +120,7 @@ export class BallerinaModule {
         console.log("Ballerina module build successful");
         await clearNotificationAlerts();
 
-        await currentPage.getByRole('tab', { name: `${moduleName}-module.bal` }).getByLabel('Close').click();
+        await currentPage.getByRole('tab', { name: `${moduleName}-module.bal` }).getByLabel('Close').click({ force: true });
         await page.selectSidebarItem('WSO2 Integrator');
         await projectExplorer.goToOverview("testProject");
     }

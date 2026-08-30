@@ -30,6 +30,18 @@ export interface WorkspaceFolder {
     fsPath: string;
 }
 
+export interface WorkspaceMiProject {
+    name: string;
+    fsPath: string;
+    groupId: string;
+    artifactId: string;
+    version: string;
+}
+
+export interface WorkspaceMiProjectsResponse {
+    projects: WorkspaceMiProject[];
+}
+
 export interface Range {
     start: {
         line: number;
@@ -195,6 +207,19 @@ export interface UpdateConfigValuesRequest {
 export interface UpdatePropertiesRequest {
     properties: PropertyDetails[];
     projectUri?: string;
+}
+
+export interface ConsolidatedProjectDetails {
+    groupId: string;
+    artifactId: string;
+    version: string;
+    runtimeVersion: string;
+    cappBuildPluginVersion: string;
+    dockerBaseImage: string;
+}
+
+export interface UpdateConsolidatedProjectDetailsRequest {
+    details: ConsolidatedProjectDetails;
 }
 export interface UpdateDependenciesRequest {
     dependencies: DependencyDetails[];
@@ -425,6 +450,17 @@ export interface ProjectOverviewResponse {
     projectDetails: ProjectDetailsResponse;
 }
 
+export interface WorkspaceProjectSummary {
+    name: string;
+    artifactCounts: {
+        apis: number;
+        automations: number;
+        eventIntegrations: number;
+        other: number;
+    };
+    runtimeVersion?: string;
+}
+
 export interface Connection {
     name: string;
 }
@@ -492,9 +528,22 @@ export interface ProjectConfig {
     value: boolean;
 }
 
+export interface ConsolidatedRemoteDeployConfig {
+    serverUrl: string;
+    username: string;
+    password: string;
+    truststorePath?: string;
+    truststorePassword?: string;
+    truststoreType?: string;
+    serverType?: string;
+    isEnabled: boolean;
+}
+
 export interface ReloadDependenciesRequest {
     newDependencies?: DependencyDetails[];
     isProjectDependenciesUpdated?: boolean;
+    // true when the dependency was added from a local integration project source
+    fromLocalProjectSource?: boolean;
 }
 
 export interface DeployConfigParam {

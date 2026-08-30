@@ -30,6 +30,7 @@ import { refreshDiagram } from './activate';
 import { MILanguageClient } from '../lang-client/activator';
 import { hasOpenedDocumentInProject } from '../util/workspace';
 import { disposeProjectResourcesIfOrphaned } from '../util/projectResources';
+import { DefaultServer } from '../webview-communication/DefaultServer';
 
 export const webviews: Map<string, VisualizerWebview> = new Map();
 export class VisualizerWebview {
@@ -47,6 +48,7 @@ export class VisualizerWebview {
         this._panel.onDidDispose(async () => await this.dispose(), null, this._disposables);
         this._panel.webview.html = this.getWebviewContent(this._panel.webview);
         RPCLayer.create(this._panel, projectUri);
+        this._disposables.push(DefaultServer.getInstance().registerVisualizerPanel(this._panel));
 
         this._panel.onDidChangeViewState(() => {
             // Enable the Run and Build Project, Open AI Panel commands when the webview is active
@@ -151,6 +153,12 @@ export class VisualizerWebview {
         </div>`;
 
         const styles = `
+            body {
+                /* Override VS Code's default webview body padding (0 20px) which
+                   leaves an empty gutter on the left/right of every non-canvas view. */
+                padding: 0;
+                margin: 0;
+            }
             .container {
                 background-color: var(--vscode-editor-background);
                 height: 100vh;

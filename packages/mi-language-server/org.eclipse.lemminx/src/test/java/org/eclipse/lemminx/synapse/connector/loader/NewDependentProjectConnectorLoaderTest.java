@@ -269,7 +269,7 @@ public class NewDependentProjectConnectorLoaderTest {
 
         Path downloadedDir = createDownloadedConnectorDir();
         FileUtils.copyFileToDirectory(
-                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip")),
+                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip")),
                 downloadedDir.toFile());
 
         loader.init(projectRoot.toString());
@@ -290,7 +290,7 @@ public class NewDependentProjectConnectorLoaderTest {
         Path projectConnectorDir = projectRoot.resolve(CONNECTOR_RELATIVE_PATH);
         Files.createDirectories(projectConnectorDir);
         FileUtils.copyFileToDirectory(
-                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip")),
+                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip")),
                 projectConnectorDir.toFile());
 
         Path downloadedDir = createDownloadedConnectorDir();
@@ -320,7 +320,7 @@ public class NewDependentProjectConnectorLoaderTest {
 
         Path downloadedDir = createDownloadedConnectorDir();
         FileUtils.copyFileToDirectory(
-                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip")),
+                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip")),
                 downloadedDir.toFile());
 
         Path extractedDir = createDependencyExtractedDir();
@@ -351,7 +351,7 @@ public class NewDependentProjectConnectorLoaderTest {
     @Test
     public void testSameConnectorInProjectAndDependency_isMarkedFromProject() throws Exception {
 
-        File httpZip = new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip"));
+        File httpZip = new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip"));
 
         Path projectConnectorDir = projectRoot.resolve(CONNECTOR_RELATIVE_PATH);
         Files.createDirectories(projectConnectorDir);
@@ -384,7 +384,7 @@ public class NewDependentProjectConnectorLoaderTest {
         Path projectConnectorDir = projectRoot.resolve(CONNECTOR_RELATIVE_PATH);
         Files.createDirectories(projectConnectorDir);
         FileUtils.copyFileToDirectory(
-                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip")),
+                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip")),
                 projectConnectorDir.toFile());
 
         loader.init(projectRoot.toString());
@@ -406,7 +406,7 @@ public class NewDependentProjectConnectorLoaderTest {
         Path depConnectorDir = extractedDir.resolve("dep-project").resolve(CONNECTOR_RELATIVE_PATH);
         Files.createDirectories(depConnectorDir);
         FileUtils.copyFileToDirectory(
-                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip")),
+                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip")),
                 depConnectorDir.toFile());
 
         loader.init(projectRoot.toString());
@@ -429,7 +429,7 @@ public class NewDependentProjectConnectorLoaderTest {
         Path projectConnectorDir = projectRoot.resolve(CONNECTOR_RELATIVE_PATH);
         Files.createDirectories(projectConnectorDir);
         FileUtils.copyFileToDirectory(
-                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-0.1.8.zip")),
+                new File(getResourceFilePath("/synapse/connector/zips/mi-connector-http-1.0.0.zip")),
                 projectConnectorDir.toFile());
 
         Path downloadedDir = createDownloadedConnectorDir();

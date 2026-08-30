@@ -21,6 +21,16 @@ import * as fs from "fs";
 import { COMMANDS } from "../constants";
 import path from "path";
 import { MILanguageClient } from "../lang-client/activator";
+import { webviews } from "../visualizer/webview";
+import { isConsolidatedProject } from "./onboardingUtils";
+
+export function shouldShowWorkspaceOverview(): boolean {
+    const wsFolders = workspace.workspaceFolders;
+    const hasMultipleProjects = (wsFolders?.length ?? 0) > 1;
+    const isWorkspace = !!workspace.workspaceFile
+        || (!!wsFolders?.length && isConsolidatedProject(path.dirname(wsFolders[0].uri.fsPath)));
+    return hasMultipleProjects || isWorkspace;
+}
 
 export async function replaceFullContentToFile(documentUri: string, content: string) {
     // Create the file if not present

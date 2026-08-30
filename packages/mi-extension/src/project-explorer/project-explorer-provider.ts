@@ -22,9 +22,10 @@ import { MCP_CONFIG_FILE_SUFFIX } from '../util/mcp-server-utils';
 import { COMMANDS, EndpointTypes, InboundEndpointTypes, MessageProcessorTypes, MessageStoreTypes, TemplateTypes } from '../constants';
 import { window } from 'vscode';
 import path = require('path');
+import * as fs from 'fs';
 import { findJavaFiles, getAvailableRegistryResources } from '../util/fileOperations';
 import { RUNTIME_VERSION_440 } from "../constants";
-import { compareVersions } from '../util/onboardingUtils';
+import { compareVersions, isConsolidatedProject } from '../util/onboardingUtils';
 import { debounce } from 'lodash';
 import { MILanguageClient } from '../lang-client/activator';
 import { isOldProjectOrWorkspace } from '../stateMachine';
@@ -90,6 +91,12 @@ export class ProjectExplorerEntryProvider implements vscode.TreeDataProvider<Pro
 	getChildren(element?: ProjectExplorerEntry | undefined): vscode.ProviderResult<ProjectExplorerEntry[]> {
 		if (element === undefined) {
 			return this._data;
+		}
+		// Read-only folder nodes (e.g. a consolidated project's "docker-build"
+		// module) are loaded lazily on expand, so an unopened node never pays
+		// the cost of walking large build-output trees like target/tmp_docker.
+		if (element.contextValue === 'readOnlyFolder' && element.children === undefined && element.info?.path) {
+			element.children = buildReadOnlyFolderChildren(element.info.path);
 		}
 		return element.children;
 	}
@@ -160,6 +167,23 @@ async function getProjectStructureData(): Promise<ProjectExplorerEntry[]> {
 				console.error(`Failed to load project explorer data for ${rootPath}:`, err);
 			}
 		};
+
+		// Surface each open consolidated project's "docker-build" module (if present)
+		// as a plain, read-only folder node
+		const consolidatedRoots = new Set<string>();
+		for (const workspace of workspaceFolders) {
+			const parent = path.dirname(workspace.uri.fsPath);
+			if (isConsolidatedProject(parent)) {
+				consolidatedRoots.add(parent);
+			}
+		}
+		for (const root of consolidatedRoots) {
+			const dockerBuildEntry = buildDockerBuildEntry(root);
+			if (dockerBuildEntry) {
+				data.push(dockerBuildEntry);
+			}
+		}
+
 		vscode.commands.executeCommand('setContext', 'projectOpened', true);
 		if (data.length > 0) {
 			vscode.commands.executeCommand('setContext', 'MI.showAddArtifact', false);
@@ -170,6 +194,85 @@ async function getProjectStructureData(): Promise<ProjectExplorerEntry[]> {
 	}
 	return [];
 
+}
+
+function buildDockerBuildEntry(consolidatedRoot: string): ProjectExplorerEntry | undefined {
+	const dockerBuildRoot = path.join(consolidatedRoot, 'docker-build');
+	const deploymentPath = path.join(dockerBuildRoot, 'deployment');
+	if (!fs.existsSync(deploymentPath)) {
+		return undefined;
+	}
+
+	// show the pom.xml of the docker-build module which is outside the deployment folder
+	const pomPath = path.join(dockerBuildRoot, 'pom.xml');
+	const hasPom = fs.existsSync(pomPath);
+	const hasDeploymentEntries = readVisibleDirEntries(deploymentPath).length > 0;
+
+	const entry = new ProjectExplorerEntry(
+		'docker-build',
+		isCollapsibleState(hasDeploymentEntries || hasPom),
+		{ name: 'docker-build', path: deploymentPath, type: 'resource' },
+		'folder',
+		true
+	);
+	entry.contextValue = 'readOnlyFolder';
+	entry.tooltip = 'Deployment resources for the consolidated project\'s docker-build module. Not an editable MI project.';
+
+	if (hasPom) {
+		const children = buildReadOnlyFolderChildren(deploymentPath);
+		children.push(buildReadOnlyFileEntry(pomPath));
+		entry.children = children;
+	}
+	return entry;
+}
+
+function readVisibleDirEntries(folderPath: string): fs.Dirent[] {
+	try {
+		return fs.readdirSync(folderPath, { withFileTypes: true }).filter(e => !e.name.startsWith('.'));
+	} catch {
+		return [];
+	}
+}
+
+function buildReadOnlyFolderEntry(folderPath: string, label: string): ProjectExplorerEntry {
+	const hasEntries = readVisibleDirEntries(folderPath).length > 0;
+	const entry = new ProjectExplorerEntry(
+		label,
+		isCollapsibleState(hasEntries),
+		{ name: label, path: folderPath, type: 'resource' },
+		'folder',
+		true
+	);
+	entry.contextValue = 'readOnlyFolder';
+	return entry;
+}
+
+function buildReadOnlyFolderChildren(folderPath: string): ProjectExplorerEntry[] {
+	const dirEntries = readVisibleDirEntries(folderPath);
+	const folders = dirEntries.filter(e => e.isDirectory()).sort((a, b) => a.name.localeCompare(b.name));
+	const files = dirEntries.filter(e => e.isFile()).sort((a, b) => a.name.localeCompare(b.name));
+
+	return [
+		...folders.map(f => buildReadOnlyFolderEntry(path.join(folderPath, f.name), f.name)),
+		...files.map(f => buildReadOnlyFileEntry(path.join(folderPath, f.name)))
+	];
+}
+
+function buildReadOnlyFileEntry(filePath: string): ProjectExplorerEntry {
+	const entry = new ProjectExplorerEntry(
+		path.basename(filePath),
+		vscode.TreeItemCollapsibleState.None,
+		{ name: path.basename(filePath), path: filePath, type: 'resource' },
+		'file',
+		true
+	);
+	entry.contextValue = 'readOnlyFile';
+	entry.command = {
+		title: 'Open File',
+		command: 'vscode.open',
+		arguments: [vscode.Uri.file(filePath)]
+	};
+	return entry;
 }
 
 async function generateTreeData(project: vscode.WorkspaceFolder, data: ProjectStructureResponse, runtimeVersion: string): Promise<ProjectExplorerEntry | undefined> {

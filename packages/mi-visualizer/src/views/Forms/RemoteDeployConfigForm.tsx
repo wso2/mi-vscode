@@ -21,6 +21,7 @@ import { Button, Codicon, Dialog, PasswordField, TextField, Typography } from "@
 import { DeployConfigParam } from "@wso2/mi-core";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { useForm } from "react-hook-form";
+import { baseDialogSx, ModalHeader, SectionDivider, ButtonRow } from "../../components/DialogBoxStyles";
 
 const FIELD_LABELS: Record<string, string> = {
     trustStorePath: "Truststore Path",
@@ -42,25 +43,11 @@ function toLabel(key: string): string {
 }
 
 const dialogSx = {
+    ...baseDialogSx,
     width: 520,
-    maxWidth: "95vw",
     maxHeight: "90vh",
-    padding: 24,
-    borderRadius: 8,
-    border: "1px solid var(--vscode-widget-border)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-    textAlign: "left",
     overflow: "hidden",
 };
-
-const ModalHeader = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-`;
 
 const ScrollArea = styled.div`
     flex: 1 1 auto;
@@ -70,14 +57,6 @@ const ScrollArea = styled.div`
     gap: 16px;
     margin: 0 -8px;
     padding: 0 8px;
-`;
-
-const SectionDivider = styled.div`
-    font-size: 11px;
-    opacity: 0.6;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-top: 4px;
 `;
 
 const SectionNote = styled.div`
@@ -92,20 +71,15 @@ const FieldGroup = styled.div`
     gap: 12px;
 `;
 
-const ButtonRow = styled.div`
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    margin-top: 4px;
-    flex-shrink: 0;
-`;
-
 interface RemoteDeployConfigFormProps {
     configs: DeployConfigParam[];
     onClose: () => void;
+    // Defaults to the single-project executeRemoteDeployWithParams RPC
+    // Pass this to target a different deploy flow
+    onDeploy?: (values: Record<string, string>) => void;
 }
 
-export function RemoteDeployConfigForm({ configs, onClose }: RemoteDeployConfigFormProps) {
+export function RemoteDeployConfigForm({ configs, onClose, onDeploy }: RemoteDeployConfigFormProps) {
     const { rpcClient } = useVisualizerContext();
 
     const fixedConfigs = configs.filter(c => !c.isParameterized);
@@ -123,8 +97,12 @@ export function RemoteDeployConfigForm({ configs, onClose }: RemoteDeployConfigF
         mode: "onChange",
     });
 
-    const onDeploy = (data: Record<string, string>) => {
-        rpcClient.getMiVisualizerRpcClient().executeRemoteDeployWithParams({ values: data });
+    const handleDeploy = (data: Record<string, string>) => {
+        if (onDeploy) {
+            onDeploy(data);
+        } else {
+            rpcClient.getMiVisualizerRpcClient().executeRemoteDeployWithParams({ values: data });
+        }
         onClose();
     };
 
@@ -184,7 +162,7 @@ export function RemoteDeployConfigForm({ configs, onClose }: RemoteDeployConfigF
                 <Button appearance="secondary" onClick={onClose} disabled={isSubmitting}>
                     Cancel
                 </Button>
-                <Button appearance="primary" onClick={handleSubmit(onDeploy)} disabled={isSubmitting}>
+                <Button appearance="primary" onClick={handleSubmit(handleDeploy)} disabled={isSubmitting}>
                     {isSubmitting ? "Deploying..." : "Deploy"}
                 </Button>
             </ButtonRow>

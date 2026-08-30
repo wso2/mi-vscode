@@ -50,14 +50,14 @@ public class ConnectorReaderTest {
     @Test
     public void testValidConnector() {
 
-        String connectorPath = tempPath.resolve("mi-connector-http-0.1.8").toString();
+        String connectorPath = tempPath.resolve("mi-connector-http-1.0.0").toString();
         System.out.println("Connector path: " + connectorPath);
         System.out.println("File exists:" + new File(connectorPath).exists());
         ConnectorReader connectorReader = new ConnectorReader();
         Connector connector = connectorReader.readConnector(connectorPath, StringUtils.EMPTY);
         assertNotNull(connector);
         assertEquals("http", connector.getName());
-        assertEquals("0.1.8", connector.getVersion());
+        assertEquals("1.0.0", connector.getVersion());
         assertEquals(8, connector.getActions().size());
         assertEquals("HTTP", connector.getDisplayName());
         assertEquals(2, connector.getConnectionUiSchema().size());

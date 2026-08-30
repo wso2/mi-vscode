@@ -624,9 +624,14 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         String effectivePath = StringUtils.isNotBlank(param.projectPath) ? param.projectPath
                 : StringUtils.isNotBlank(param.customProjectUri) ? param.customProjectUri
                 : ctx != null ? ctx.getProjectUri() : null;
-        ResourceResponse response = ctx != null
-                ? ctx.getResourceFinder().getAvailableResources(effectivePath, param.resourceType)
-                : new ResourceResponse();
+        ResourceResponse response;
+        if (ctx == null) {
+            response = new ResourceResponse();
+        } else if (StringUtils.isNotBlank(param.dataServiceName)) {
+            response = ctx.getResourceFinder().getDataServiceOperations(effectivePath, param.dataServiceName);
+        } else {
+            response = ctx.getResourceFinder().getAvailableResources(effectivePath, param.resourceType);
+        }
         return CompletableFuture.supplyAsync(() -> response);
     }
 

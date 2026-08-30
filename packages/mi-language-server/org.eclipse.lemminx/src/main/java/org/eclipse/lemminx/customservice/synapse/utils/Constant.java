@@ -587,6 +587,7 @@ public class Constant {
     public static final String MI_440_VERSION = "4.4.0";
     public static final String MI_450_VERSION = "4.5.0";
     public static final String MI_460_VERSION = "4.6.0";
+    public static final String MI_470_VERSION = "4.7.0";
     public static final String UI_SCHEMA_NAME = "UI_SCHEMA_NAME";
     public static final String SEQUENCE_NAME = "sequenceName";
     public static final String CAN_TRY_OUT = "canTryOut";
@@ -596,6 +597,8 @@ public class Constant {
     public static final String BALLERINA_MODULE_PATH = "ballerinaModulePath";
     public static final String BALLERINA = "ballerina";
     public static final String UI_SCHEMA_JSON = "uischema.json";
+    public static final String INPUT_SCHEMA_JSON = "inputschema.json";
+    public static final String INBOUND_VARIABLE_NAME = "inboundVariableName";
     public static final String JSON_FILE_EXT = ".json";
     public static final String INBOUND_CONNECTOR_PREFIX = "mi-inbound-";
     public static final String INBOUND_CONNECTORS = "inbound.connectors";
@@ -672,6 +675,7 @@ public class Constant {
         put("4.4.0", "4.4.0");
         put("4.5.0", "4.4.0");
         put("4.6.0", "4.4.0");
+        put("4.7.0", "4.4.0");
     }};
     public static final String MCP_CONNECTION = "mcpConnection";
 
