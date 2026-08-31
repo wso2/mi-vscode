@@ -17,7 +17,16 @@
  */
 
 import styled from "@emotion/styled";
-import { AI_EVENT_TYPE, LoginMethod } from "@wso2/mi-core";
+import {
+    AI_EVENT_TYPE,
+    LoginMethod,
+    BedrockInferenceProfileSlot,
+    isBedrockApplicationInferenceProfileArn,
+    getRegionFromInferenceProfileArn,
+    normalizeInferenceProfileOverrides,
+    BEDROCK_INFERENCE_PROFILE_SLOTS,
+    findMissingRequiredInferenceProfiles
+} from "@wso2/mi-core";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { useState } from "react";
 import { Codicon } from "@wso2/ui-toolkit";
@@ -27,12 +36,25 @@ import { VSCodeButton, VSCodeTextField } from "@vscode/webview-ui-toolkit/react"
 const MIN_ANTHROPIC_API_KEY_LENGTH = 20;
 type BedrockAuthType = "api_key" | "iam";
 
+/** Display names for the Application Inference Profile slots. */
+const INFERENCE_PROFILE_LABELS: Record<BedrockInferenceProfileSlot, string> = {
+    haiku: "Haiku 4.5",
+    sonnet: "Sonnet 4.6",
+    opus: "Opus 4.8",
+};
+
+// The parent chain is height:100%, so without an explicit height + overflow the
+// content is clipped rather than scrolled — the Connect button becomes
+// unreachable on short panels (and for any form long enough to overflow).
 const Container = styled.div`
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     padding: 10px;
     gap: 8px;
+    height: 100%;
+    box-sizing: border-box;
+    overflow-y: auto;
 `;
 
 // AlertBox-style container for consistency
@@ -256,6 +278,16 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
     const [showAwsSecretKey, setShowAwsSecretKey] = useState(false);
     const [showAwsAccessKey, setShowAwsAccessKey] = useState(false);
     const [showAwsSessionToken, setShowAwsSessionToken] = useState(false);
+    // Application Inference Profile ARNs. Only needed by accounts whose policy
+    // denies direct foundation-model / system inference-profile invocation and
+    // requires routing through customer-owned, taggable application profiles.
+    // Collapsed by default so the common case stays a three-field form.
+    const [showInferenceProfiles, setShowInferenceProfiles] = useState(false);
+    const [inferenceProfiles, setInferenceProfiles] = useState<Record<BedrockInferenceProfileSlot, string>>({
+        haiku: "",
+        sonnet: "",
+        opus: ""
+    });
 
     const cancelLogin = () => {
         rpcClient.sendAIStateEvent(AI_EVENT_TYPE.CANCEL_LOGIN);
@@ -320,6 +352,58 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
         }
     };
 
+    const handleInferenceProfileChange = (slot: BedrockInferenceProfileSlot) => (e: any) => {
+        const value = e.target?.value ?? '';
+        setInferenceProfiles(prev => ({ ...prev, [slot]: value }));
+        if (clientError) {
+            setClientError("");
+        }
+    };
+
+    /**
+     * Validate the optional profile ARNs and return them ready for the payload.
+     * Returns `false` when something is malformed, having already surfaced the error.
+     */
+    const collectInferenceProfiles = (region: string) => {
+        const normalized = normalizeInferenceProfileOverrides(inferenceProfiles);
+        if (!normalized) {
+            return undefined;
+        }
+
+        const missing = findMissingRequiredInferenceProfiles(normalized);
+        if (missing.length) {
+            setClientError(
+                `Also enter a profile ARN for ${missing.map((slot) => INFERENCE_PROFILE_LABELS[slot]).join(" and ")}. ` +
+                `These are the default models, so Copilot would fail on its first request without them.`
+            );
+            return false as const;
+        }
+
+        for (const slot of BEDROCK_INFERENCE_PROFILE_SLOTS) {
+            const arn = normalized[slot];
+            if (!arn) {
+                continue;
+            }
+            if (!isBedrockApplicationInferenceProfileArn(arn)) {
+                setClientError(
+                    `The ${slot} inference profile must be an Application Inference Profile ARN ` +
+                    `(arn:aws:bedrock:<region>:<account-id>:application-inference-profile/<id>).`
+                );
+                return false as const;
+            }
+            const arnRegion = getRegionFromInferenceProfileArn(arn);
+            if (arnRegion && arnRegion !== region) {
+                setClientError(
+                    `The ${slot} inference profile is in ${arnRegion}, but the region above is ${region}. ` +
+                    `Use profiles from the same region.`
+                );
+                return false as const;
+            }
+        }
+
+        return normalized;
+    };
+
     const connectWithAwsBedrock = () => {
         setClientError("");
         const { accessKeyId, secretAccessKey, region, sessionToken } = awsCredentials;
@@ -330,6 +414,12 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
         }
 
         const trimmedTavilyKey = tavilyApiKey.trim() || undefined;
+
+        const collectedProfiles = collectInferenceProfiles(region.trim());
+        if (collectedProfiles === false) {
+            setShowInferenceProfiles(true);
+            return;
+        }
 
         if (bedrockAuthType === "api_key") {
             if (!bedrockApiKey.trim()) {
@@ -344,6 +434,7 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
                     apiKey: bedrockApiKey.trim(),
                     region: region.trim(),
                     tavilyApiKey: trimmedTavilyKey,
+                    inferenceProfiles: collectedProfiles,
                 },
             } as any);
             return;
@@ -367,6 +458,7 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
                 region: region.trim(),
                 sessionToken: sessionToken.trim() || undefined,
                 tavilyApiKey: trimmedTavilyKey,
+                inferenceProfiles: collectedProfiles,
             },
         } as any);
     };
@@ -579,6 +671,61 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
                         </>
                     )}
 
+                    {/* Optional Application Inference Profile ARNs. Accounts whose SCP/IAM
+                        policy permits bedrock:InvokeModel only through customer-owned
+                        application profiles cannot use the built-in `global.` system profile
+                        at all, so without these fields sign-in is impossible for them. */}
+                    <HelperText>
+                        <button
+                            type="button"
+                            onClick={() => setShowInferenceProfiles(!showInferenceProfiles)}
+                            style={{
+                                color: "var(--vscode-textLink-foreground)",
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
+                                cursor: "pointer",
+                                font: "inherit",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                            aria-expanded={showInferenceProfiles}
+                            {...(isValidating ? { disabled: true } : {})}
+                        >
+                            <Codicon name={showInferenceProfiles ? "chevron-down" : "chevron-right"} />
+                            Advanced: Application Inference Profiles
+                        </button>
+                    </HelperText>
+
+                    {showInferenceProfiles && (
+                        <>
+                            <HelperText>
+                                Only needed if your AWS account requires all Bedrock traffic to be routed
+                                through Application Inference Profiles (commonly enforced for cost allocation).
+                                Leave blank to use the default cross-region system profiles.
+                            </HelperText>
+                            {BEDROCK_INFERENCE_PROFILE_SLOTS.map((slot) => (
+                                <InputContainer key={slot}>
+                                    <InputRow>
+                                        <StyledTextField
+                                            type="text"
+                                            placeholder={`${INFERENCE_PROFILE_LABELS[slot]} profile ARN (optional)`}
+                                            value={inferenceProfiles[slot]}
+                                            onChange={handleInferenceProfileChange(slot)}
+                                            {...(isValidating ? { disabled: true } : {})}
+                                        />
+                                    </InputRow>
+                                </InputContainer>
+                            ))}
+                            <HelperText>
+                                Haiku 4.5 and Sonnet 4.6 are the default models and are both required once
+                                you use profiles. Opus 4.8 is optional — set it only if you select Opus in
+                                Settings, otherwise requests using it will be rejected.
+                            </HelperText>
+                        </>
+                    )}
+
                     {/* Optional Tavily key — Bedrock has no first-party web tools, so without
                         this key the agent can't run web_search / web_fetch. Skippable; can be
                         added later in Settings. */}
@@ -654,7 +801,7 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
                         <VSCodeButton
                             appearance="primary"
                             onClick={connectWithAwsBedrock}
-                            {...(isValidating || !isFormValid ? { disabled: true } : {})}
+                            disabled={isValidating || !isFormValid}
                         >
                             {isValidating ? "Validating..." : "Connect to AWS Bedrock"}
                         </VSCodeButton>

@@ -208,6 +208,91 @@ interface AnthropicKeySecrets {
 
 export type AwsBedrockAuthType = 'iam' | 'api_key';
 
+/** Logical model slots that can be pointed at an Application Inference Profile. */
+export type BedrockInferenceProfileSlot = 'haiku' | 'sonnet' | 'opus';
+
+/**
+ * Optional Bedrock Application Inference Profile ARNs, one per logical model.
+ *
+ * Some organizations attach an SCP/IAM policy that denies direct invocation of
+ * `foundation-model/*` and system-defined `inference-profile/*` resources, and
+ * permits `bedrock:InvokeModel` only against customer-owned, taggable
+ * application inference profiles — the standard cost-allocation / chargeback
+ * pattern. Without an override, both sign-in and every subsequent Copilot
+ * request are denied in such accounts.
+ *
+ * Any slot left unset falls back to the built-in `global.` system profile, so
+ * existing users are unaffected.
+ */
+export type BedrockInferenceProfileOverrides = Partial<Record<BedrockInferenceProfileSlot, string>>;
+
+/** Shape of a Bedrock application inference profile ARN. */
+const BEDROCK_APP_INFERENCE_PROFILE_ARN =
+    /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:\d{12}:application-inference-profile\/[A-Za-z0-9._-]+$/;
+
+/** True when `value` looks like a Bedrock application inference profile ARN. */
+export const isBedrockApplicationInferenceProfileArn = (value: string): boolean =>
+    BEDROCK_APP_INFERENCE_PROFILE_ARN.test(value.trim());
+
+/**
+ * Extract the region embedded in an application inference profile ARN, or
+ * undefined when the value is not a well-formed ARN. Used to warn when the ARN
+ * disagrees with the region the user entered.
+ */
+export const getRegionFromInferenceProfileArn = (value: string): string | undefined => {
+    if (!isBedrockApplicationInferenceProfileArn(value)) {
+        return undefined;
+    }
+    return value.trim().split(':')[3];
+};
+
+/** Every override slot, in the order they are presented to the user. */
+export const BEDROCK_INFERENCE_PROFILE_SLOTS: BedrockInferenceProfileSlot[] = ['haiku', 'sonnet', 'opus'];
+
+/**
+ * Slots the default model presets resolve to, so a partial configuration cannot
+ * pass sign-in and then fail on the first request. Sonnet 4.6 is the default
+ * main model and Haiku 4.5 the default sub-agent model; Opus is opt-in, so a
+ * profile for it is only needed if the user selects it in Settings.
+ */
+export const REQUIRED_BEDROCK_INFERENCE_PROFILE_SLOTS: BedrockInferenceProfileSlot[] = ['haiku', 'sonnet'];
+
+/** Trim and drop empty slots so an all-blank advanced form is stored as undefined. */
+export const normalizeInferenceProfileOverrides = (
+    overrides: BedrockInferenceProfileOverrides | undefined
+): BedrockInferenceProfileOverrides | undefined => {
+    if (!overrides) {
+        return undefined;
+    }
+
+    const normalized: BedrockInferenceProfileOverrides = {};
+    let count = 0;
+    for (const slot of BEDROCK_INFERENCE_PROFILE_SLOTS) {
+        const arn = overrides[slot]?.trim();
+        if (arn) {
+            normalized[slot] = arn;
+            count++;
+        }
+    }
+    return count ? normalized : undefined;
+};
+
+/**
+ * Once any Application Inference Profile is configured, the account is one that
+ * forbids the default `global.` profiles — so every slot the default presets use
+ * must be supplied too. Returns the missing slots (empty when nothing is set, or
+ * when the configuration is complete).
+ */
+export const findMissingRequiredInferenceProfiles = (
+    overrides: BedrockInferenceProfileOverrides | undefined
+): BedrockInferenceProfileSlot[] => {
+    const normalized = normalizeInferenceProfileOverrides(overrides);
+    if (!normalized) {
+        return [];
+    }
+    return REQUIRED_BEDROCK_INFERENCE_PROFILE_SLOTS.filter((slot) => !normalized[slot]);
+};
+
 export interface AwsBedrockIamSecrets {
     authType?: 'iam';
     accessKeyId: string;
@@ -216,6 +301,8 @@ export interface AwsBedrockIamSecrets {
     sessionToken?: string;
     /** Optional Tavily API key for web search/fetch on Bedrock (Bedrock has no first-party web tools). */
     tavilyApiKey?: string;
+    /** Optional Application Inference Profile ARNs; see BedrockInferenceProfileOverrides. */
+    inferenceProfiles?: BedrockInferenceProfileOverrides;
 }
 
 export interface AwsBedrockApiKeySecrets {
@@ -224,6 +311,8 @@ export interface AwsBedrockApiKeySecrets {
     region: string;
     /** Optional Tavily API key for web search/fetch on Bedrock (Bedrock has no first-party web tools). */
     tavilyApiKey?: string;
+    /** Optional Application Inference Profile ARNs; see BedrockInferenceProfileOverrides. */
+    inferenceProfiles?: BedrockInferenceProfileOverrides;
 }
 
 export type AwsBedrockSecrets = AwsBedrockIamSecrets | AwsBedrockApiKeySecrets;

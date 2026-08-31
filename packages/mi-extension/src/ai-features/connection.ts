@@ -26,7 +26,13 @@ import {
     isStsTokenUnavailableError
 } from "./auth";
 import { StateMachineAI, openAIWebview } from "./aiMachine";
-import { AI_EVENT_TYPE, LoginMethod } from "@wso2/mi-core";
+import {
+    AI_EVENT_TYPE,
+    LoginMethod,
+    BedrockInferenceProfileOverrides,
+    BedrockInferenceProfileSlot,
+    isBedrockApplicationInferenceProfileArn
+} from "@wso2/mi-core";
 import { logInfo, logDebug, logError } from "./copilot/logger";
 
 export const ANTHROPIC_HAIKU_4_5 = "claude-haiku-4-5";
@@ -63,14 +69,48 @@ const BEDROCK_INFERENCE_PROFILE_PREFIX = 'global';
 
 export const getBedrockRegionalPrefix = (_region: string): string => BEDROCK_INFERENCE_PROFILE_PREFIX;
 
-/**
- * Resolve the Bedrock inference-profile ID used to validate AWS credentials.
- * Uses Haiku 4.5 — cheapest of the three.
- */
-export const getBedrockValidationModelId = (region: string): string => {
-    const regionalPrefix = getBedrockRegionalPrefix(region);
-    return `${regionalPrefix}.${BEDROCK_MODEL_MAP[ANTHROPIC_HAIKU_4_5]}`;
+/** Maps each supported model onto the override slot users configure at sign-in. */
+const BEDROCK_PROFILE_SLOT: Record<string, BedrockInferenceProfileSlot> = {
+    [ANTHROPIC_HAIKU_4_5]: 'haiku',
+    [ANTHROPIC_SONNET_4_6]: 'sonnet',
+    [ANTHROPIC_OPUS_4_8]: 'opus',
 };
+
+/**
+ * Resolve the Bedrock model reference for `model`.
+ *
+ * When the account supplies an Application Inference Profile ARN for this
+ * model, that ARN is returned verbatim — accounts whose policy permits
+ * `bedrock:InvokeModel` only through application profiles cannot invoke the
+ * `global.` system profile at all. Otherwise we fall back to the system
+ * profile, which is what every account without such a policy uses.
+ */
+export const resolveBedrockModelReference = (
+    model: AnthropicModel,
+    region: string,
+    overrides?: BedrockInferenceProfileOverrides
+): string => {
+    const slot = BEDROCK_PROFILE_SLOT[model];
+    const override = slot ? overrides?.[slot]?.trim() : undefined;
+    if (override) {
+        return override;
+    }
+
+    const bedrockModelId = BEDROCK_MODEL_MAP[model];
+    if (!bedrockModelId) {
+        throw new Error(`No Bedrock model mapping found for: ${model}`);
+    }
+    return `${getBedrockRegionalPrefix(region)}.${bedrockModelId}`;
+};
+
+/**
+ * Resolve the Bedrock model reference used to validate AWS credentials.
+ * Uses Haiku 4.5 — cheapest of the three — honouring an override when set.
+ */
+export const getBedrockValidationModelId = (
+    region: string,
+    overrides?: BedrockInferenceProfileOverrides
+): string => resolveBedrockModelReference(ANTHROPIC_HAIKU_4_5, region, overrides);
 
 let cachedAnthropic: ReturnType<typeof createAnthropic> | null = null;
 let cachedAuthMethod: LoginMethod | null = null;
@@ -338,12 +378,7 @@ export const getAnthropicClient = async (model: AnthropicModel): Promise<any> =>
 
     if (loginMethod === LoginMethod.AWS_BEDROCK) {
         const { provider: bedrockProvider, credentials } = await getBedrockProvider();
-        const regionalPrefix = getBedrockRegionalPrefix(credentials.region);
-        const bedrockModelId = BEDROCK_MODEL_MAP[model];
-        if (!bedrockModelId) {
-            throw new Error(`No Bedrock model mapping found for: ${model}`);
-        }
-        const fullModelId = `${regionalPrefix}.${bedrockModelId}`;
+        const fullModelId = resolveBedrockModelReference(model, credentials.region, credentials.inferenceProfiles);
         logDebug(`Using Bedrock model: ${fullModelId}`);
         return bedrockProvider(fullModelId);
     }
@@ -354,12 +389,24 @@ export const getAnthropicClient = async (model: AnthropicModel): Promise<any> =>
 
 /**
  * Get an Anthropic client for an arbitrary (custom) model ID string.
- * Custom model IDs are NOT supported with AWS Bedrock — throws immediately.
+ *
+ * On AWS Bedrock only one form of custom reference is meaningful: an
+ * Application Inference Profile ARN, which the Bedrock provider passes straight
+ * through (it URL-encodes the model reference into the request path). Plain
+ * Anthropic model slugs still have no Bedrock equivalent and are rejected.
  */
 export const getAnthropicClientForCustomModel = async (modelId: string): Promise<any> => {
     const loginMethod = await getLoginMethod();
     if (loginMethod === LoginMethod.AWS_BEDROCK) {
-        throw new Error('Custom model IDs are not supported with AWS Bedrock. Use a standard model preset instead.');
+        if (!isBedrockApplicationInferenceProfileArn(modelId)) {
+            throw new Error(
+                'Custom model IDs are not supported with AWS Bedrock. Use a standard model preset, ' +
+                'or supply an Application Inference Profile ARN.'
+            );
+        }
+        const { provider: bedrockProvider } = await getBedrockProvider();
+        logDebug(`Using Bedrock application inference profile: ${modelId}`);
+        return bedrockProvider(modelId);
     }
     const provider = await getAnthropicProvider();
     return provider(modelId);
