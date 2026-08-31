@@ -336,19 +336,17 @@ export function activateVisualizer(context: vscode.ExtensionContext, firstProjec
     );
     // Activate editor/title items
     context.subscriptions.push(
-        commands.registerCommand(COMMANDS.SHOW_GRAPHICAL_VIEW, async (file: vscode.Uri | string) => {
-            let projectUri;
-            if (typeof file !== 'string') {
-                file = file.fsPath;
-                projectUri = vscode.workspace.getWorkspaceFolder(file as any)?.uri.fsPath
-            } else {
-                projectUri = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file))?.uri.fsPath;
-            }
-            if (!projectUri) {
-                return;
-            }
-            navigate(projectUri, { location: { view: null, documentUri: file } });
-        })
+	    commands.registerCommand(COMMANDS.SHOW_GRAPHICAL_VIEW, async (file: vscode.Uri | string) => {
+    const fileUri = typeof file !== 'string' ? file : vscode.Uri.file(file);
+    if (typeof file !== 'string') {
+        file = file.fsPath;
+    }
+    const projectUri = vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath;
+    if (!projectUri) {
+        return;
+    }
+    navigate(projectUri, { location: { view: null, documentUri: file } });
+})
     );
 
     context.subscriptions.push(
