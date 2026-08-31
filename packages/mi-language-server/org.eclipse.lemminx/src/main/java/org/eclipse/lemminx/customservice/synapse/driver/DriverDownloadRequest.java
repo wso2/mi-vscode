@@ -21,6 +21,7 @@ public class DriverDownloadRequest {
 
     private String connectorName;
     private String connectionType;
+    private String projectUri;
 
     public DriverDownloadRequest() {
     }
@@ -44,6 +45,14 @@ public class DriverDownloadRequest {
 
     public void setConnectionType(String connectionType) {
         this.connectionType = connectionType;
+    }
+
+    public String getProjectUri() {
+        return projectUri;
+    }
+
+    public void setProjectUri(String projectUri) {
+        this.projectUri = projectUri;
     }
 
 }

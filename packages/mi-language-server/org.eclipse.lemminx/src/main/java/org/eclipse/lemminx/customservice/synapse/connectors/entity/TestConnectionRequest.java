@@ -21,6 +21,7 @@ public class TestConnectionRequest {
     private String connectorName;
     private String connectionType;
     private Map<String, Object> parameters;
+    private String projectUri;
 
     public String getConnectorName() {
 
@@ -55,5 +56,15 @@ public class TestConnectionRequest {
     public void addParameter(String key, String value) {
 
         this.parameters.put(key, value);
+    }
+
+    public String getProjectUri() {
+
+        return projectUri;
+    }
+
+    public void setProjectUri(String projectUri) {
+
+        this.projectUri = projectUri;
     }
 }

@@ -27,7 +27,6 @@ import {
     TextDocument,
     window,
     workspace,
-    RelativePattern,
     Uri,
 } from 'vscode';
 import * as path from 'path';
@@ -101,85 +100,75 @@ const main: string = 'org.eclipse.lemminx.XMLServerLauncher';
 const versionRegex = /(\d+\.\d+\.?\d*)/g;
 
 export class MILanguageClient {
+    // Single well-known key: one shared LS process serves every MI workspace folder.
+    private static readonly SHARED_KEY = '__shared__';
     private static _instances: Map<string, MILanguageClient> = new Map();
-    private static lsChannels: Map<string, vscode.OutputChannel> = new Map();
-    private static stopTimers: Map<string, NodeJS.Timeout> = new Map();
-    private static stoppingInstances: Set<string> = new Set();
-    private static readonly STOP_DEBOUNCE_MS = 30000; // 30 seconds
+    // In-flight launch promise, used as a lock so concurrent getInstance() calls
+    // (e.g. multiple workspace folders activating at once) await the same JVM
+    // spawn instead of each seeing an empty _instances map and launching their own.
+    private static _launchPromise: Promise<MILanguageClient> | undefined;
+    private static lsChannel: vscode.OutputChannel | undefined;
     private languageClient: ExtendedLanguageClient | undefined;
 
     // eslint-disable-next-line @typescript-eslint/naming-convention
     private COMPATIBLE_JDK_VERSION = "11"; // Minimum JDK version required to run the language server
     private _errorStack: ErrorType[] = [];
+    // Per-project work, keyed by projectUri, on the single shared instance. Cached so
+    // repeated getInstance() calls for the same project do not redo it, and so concurrent
+    // callers coalesce onto one in-flight promise.
+    private _projectSetup: Map<string, Promise<void>> = new Map();
+    private _projectInit: Map<string, Promise<void>> = new Map();
 
     constructor(private projectUri: string) { }
 
     public static async getInstance(projectUri: string): Promise<ExtendedLanguageClient> {
-        // Cancel any pending stop operation for this project
-        const existingTimer = this.stopTimers.get(projectUri);
-        if (existingTimer) {
-            clearTimeout(existingTimer);
-            this.stopTimers.delete(projectUri);
+        if (!this._launchPromise) {
+            // First caller seeds JDK/version resolution and spawns the single JVM.
+            // The promise itself is the lock: concurrent callers (e.g. several
+            // workspace folders activating at once) await it below instead of
+            // each finding an empty map and launching their own JVM.
+            this._launchPromise = (async () => {
+                const instance = new MILanguageClient(projectUri);
+                await instance.launch(projectUri);
+                this._instances.set(this.SHARED_KEY, instance);
+                return instance;
+            })();
         }
-
-        // If instance is currently stopping, wait for it to complete and create a new one
-        if (this.stoppingInstances.has(projectUri)) {
-            // Wait a bit for the stop operation to complete
-            await new Promise(resolve => setTimeout(resolve, 100));
-            this.stoppingInstances.delete(projectUri);
-        }
-
-        if (!this._instances.has(projectUri)) {
-            const instance = new MILanguageClient(projectUri);
-            await instance.launch(projectUri);
-            this._instances.set(projectUri, instance);
-        }
-        const languageClient = this._instances.get(projectUri)!.languageClient;
+        const instance = await this._launchPromise;
+        const languageClient = instance.languageClient;
         if (!languageClient) {
             const errorMessage = "Language client failed to initialize";
             window.showErrorMessage(errorMessage);
             throw new Error(errorMessage);
         }
+        // Every project initializes itself here, including the one that spawned the JVM
+        // and the ones that arrived while it was still spawning. Doing this outside
+        // launch() is what makes it run for all of them: launch() runs exactly once.
+        await instance.initProject(projectUri, languageClient);
         return languageClient;
     }
 
     public static async stopInstance(projectUri: string) {
-        // Cancel any existing timer for this project
-        const existingTimer = this.stopTimers.get(projectUri);
-        if (existingTimer) {
-            clearTimeout(existingTimer);
-        }
-
-        // Schedule the stop operation with debounce
-        const timer = setTimeout(async () => {
-            this.stoppingInstances.add(projectUri);
-            const instance = this._instances.get(projectUri);
-            if (instance) {
-                await instance.stop();
-                this._instances.delete(projectUri);
-            }
-            this.stopTimers.delete(projectUri);
-            this.stoppingInstances.delete(projectUri);
-        }, this.STOP_DEBOUNCE_MS);
-
-        this.stopTimers.set(projectUri, timer);
+        // No-op: a single shared language server now serves all MI projects, so one
+        // project's last document closing (or its explicit teardown) must not stop
+        // it for the rest. The shared server is only stopped on extension deactivate.
     }
 
-    public static async getAllInstances(): Promise<MILanguageClient[]> {
-        const instances: MILanguageClient[] = [];
-        for (const instance of this._instances.values()) {
-            instances.push(instance);
+    // Called only from extension deactivate() - stops the single shared server, if running.
+    public static async stopSharedInstance(): Promise<void> {
+        const instance = this._instances.get(this.SHARED_KEY);
+        if (instance) {
+            await instance.stop();
+            this._instances.delete(this.SHARED_KEY);
+            this._launchPromise = undefined;
         }
-        return instances;
     }
 
-    public static getOrCreateOutputChannel(projectUri: string): vscode.OutputChannel {
-        let channel = this.lsChannels.get(projectUri);
-        if (!channel) {
-            channel = vscode.window.createOutputChannel(`Synapse Language Server - ${path.basename(projectUri)}`);
-            this.lsChannels.set(projectUri, channel);
+    public static getOrCreateOutputChannel(): vscode.OutputChannel {
+        if (!this.lsChannel) {
+            this.lsChannel = vscode.window.createOutputChannel("Synapse Language Server");
         }
-        return channel;
+        return this.lsChannel;
     }
 
     public getErrors() {
@@ -211,21 +200,81 @@ export class MILanguageClient {
         return isCompatible;
     }
 
+    // Per-project runtime setup (JDK/MI download for that project's own runtime,
+    // LEGACY_EXPRESSION_ENABLED). Runs once per project even though the JVM itself
+    // is launched only once for the shared client.
+    private async setupProject(projectUri: string): Promise<void> {
+        const { miVersionFromPom } = await getProjectSetupDetails(projectUri);
+        if (!miVersionFromPom) {
+            const errorMessage = `Runtime version not found in the pom file of project ${projectUri}. Please add the runtime version and reload to continue.`;
+            window.showErrorMessage(errorMessage);
+            this.updateErrors(ERRORS.MISSING_MI_RUNTIME_VERSION);
+            throw new Error(errorMessage);
+        }
+        await isJavaSetup(projectUri, miVersionFromPom);
+        await isMISetup(projectUri, miVersionFromPom);
+        const versions: string[] = ["4.0.0", "4.1.0", "4.2.0", "4.3.0"];
+        const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));
+        await config.update("LEGACY_EXPRESSION_ENABLED", miVersionFromPom && versions.includes(miVersionFromPom),
+            vscode.ConfigurationTarget.WorkspaceFolder);
+    }
+
+    private runSetupProject(projectUri: string): Promise<void> {
+        let setup = this._projectSetup.get(projectUri);
+        if (!setup) {
+            const attempt = (async () => {
+                try {
+                    await this.setupProject(projectUri);
+                    return true;
+                } catch (error: any) {
+                    const errorMessage = "Failed to launch the language client. Please check the console for more details.";
+                    console.error(errorMessage, error);
+                    window.showErrorMessage(errorMessage);
+                    log(error.toString());
+                    this.updateErrors(ERRORS.LANG_CLIENT);
+                    return false;
+                }
+            })();
+            // A failed attempt is not cached, so a project whose runtime version or
+            // JDK/MI path is corrected later gets another try on the next getInstance().
+            setup = attempt.then(succeeded => {
+                if (!succeeded) {
+                    this._projectSetup.delete(projectUri);
+                }
+            });
+            this._projectSetup.set(projectUri, setup);
+        }
+        return setup;
+    }
+
+    // Runtime setup plus this project's own dependency download and CApp conflict
+    // detection. Every MI project in the window needs this, not just the one that
+    // happened to spawn the shared language server, so it lives here rather than in
+    // launch() - a conflict in a project that joined an existing server was otherwise
+    // never detected, leaving its pom.xml entry in place.
+    private initProject(projectUri: string, languageClient: ExtendedLanguageClient): Promise<void> {
+        let init = this._projectInit.get(projectUri);
+        if (!init) {
+            const attempt = (async () => {
+                await this.runSetupProject(projectUri);
+                await languageClient.updateConnectorDependencies(projectUri);
+                await loadCAppResources(projectUri, languageClient);
+            })();
+            init = attempt.catch((error: any) => {
+                // Not cached on failure: a transient language-server error must not
+                // permanently disable dependency loading for this project.
+                this._projectInit.delete(projectUri);
+                console.error(`Failed to initialize project ${projectUri}`, error);
+                log(error?.toString() ?? String(error));
+            });
+            this._projectInit.set(projectUri, init);
+        }
+        return init;
+    }
+
     private async launch(projectUri: string) {
+        await this.runSetupProject(projectUri);
         try {
-            const { miVersionFromPom } = await getProjectSetupDetails(projectUri);
-            if (!miVersionFromPom) {
-                const errorMessage = `Runtime version not found in the pom file of project ${projectUri}. Please add the runtime version and reload to continue.`;
-                window.showErrorMessage(errorMessage);
-                this.updateErrors(ERRORS.MISSING_MI_RUNTIME_VERSION);
-                throw new Error(errorMessage);
-            }
-            await isJavaSetup(projectUri, miVersionFromPom);
-            await isMISetup(projectUri, miVersionFromPom);
-            const versions: string[] = ["4.0.0", "4.1.0", "4.2.0", "4.3.0"];
-            const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));
-            await config.update("LEGACY_EXPRESSION_ENABLED", miVersionFromPom && versions.includes(miVersionFromPom),
-                vscode.ConfigurationTarget.WorkspaceFolder);
             const JAVA_HOME = getJavaHomeFromConfig(this.projectUri);
             if (JAVA_HOME) {
                 const isJDKCompatible = await this.checkJDKCompatibility(JAVA_HOME);
@@ -254,19 +303,20 @@ export class MILanguageClient {
                     args: [...args, main],
                     options: {},
                 };
-                let workspaceFolder = workspace.getWorkspaceFolder(Uri.file(this.projectUri));
 
-                if (!workspaceFolder) {
+                if (!workspace.getWorkspaceFolder(Uri.file(this.projectUri))) {
                     throw new Error("Workspace folder not found.");
                 }
-                // Options to control the language client
+                // Options to control the language client. No workspaceFolder is pinned here:
+                // vscode-languageclient then sends every workspace folder in
+                // initialize.workspaceFolders and auto-forwards didChangeWorkspaceFolders,
+                // so the single client serves all MI projects in the workspace.
                 let clientOptions: LanguageClientOptions = {
                     initializationOptions: { "settings": getXMLSettings() },
-                    workspaceFolder: workspaceFolder,
                     synchronize: {
                         //preferences starting with these will trigger didChangeConfiguration
                         configurationSection: ['xml', '[SynapseXml]'],
-                        fileEvents: workspace.createFileSystemWatcher(new RelativePattern(workspaceFolder, '**/*.zip'))
+                        fileEvents: workspace.createFileSystemWatcher('**/*.zip')
                     },
                     // Register the server for synapse xml documents
                     documentSelector: [{ scheme: 'file', language: 'SynapseXml' }],
@@ -282,13 +332,13 @@ export class MILanguageClient {
                             }
                         },
                         handleDiagnostics: (uri, diagnostics, next) => {
-                            if (!uri.fsPath.startsWith(workspaceFolder.uri.fsPath)) {
+                            if (!workspace.getWorkspaceFolder(uri)) {
                                 return;
                             }
                             return next(uri, diagnostics);
                         }
                     },
-                    outputChannel: MILanguageClient.getOrCreateOutputChannel(projectUri),
+                    outputChannel: MILanguageClient.getOrCreateOutputChannel(),
                     initializationFailedHandler: (error) => {
                         console.log(error);
                         window.showErrorMessage("Could not start the Synapse Language Server.");
@@ -328,11 +378,12 @@ export class MILanguageClient {
                 };
 
                 // Create the language client and start the client.
-                this.languageClient = new ExtendedLanguageClient('synapseXML', 'Synapse Language Server', this.projectUri,
+                this.languageClient = new ExtendedLanguageClient('synapseXML', 'Synapse Language Server',
                     serverOptions, clientOptions);
                 await this.languageClient.start();
-                await this.languageClient?.updateConnectorDependencies();
-                await loadCAppResources(this.projectUri, this.languageClient!);
+                // Dependency loading and conflict detection are deliberately NOT done here.
+                // launch() runs once per window; getInstance() -> initProject() does that
+                // work per project so every workspace folder gets it.
 
                 //Setup autoCloseTags
                 let tagProvider: (document: TextDocument, position: Position) => Thenable<AutoCloseResult> = (document: TextDocument, position: Position) => {

@@ -206,6 +206,7 @@ export interface UpdateConfigValuesRequest {
 
 export interface UpdatePropertiesRequest {
     properties: PropertyDetails[];
+    projectUri?: string;
 }
 
 export interface ConsolidatedProjectDetails {
@@ -222,6 +223,7 @@ export interface UpdateConsolidatedProjectDetailsRequest {
 }
 export interface UpdateDependenciesRequest {
     dependencies: DependencyDetails[];
+    projectUri?: string;
 }
 
 export interface UpdateConfigValuesResponse {
@@ -501,6 +503,7 @@ export interface DownloadMIRequest {
 export interface UpdateAiDependenciesRequest {
     dependencies: DependencyDetails[];
     operation: "add" | "remove";
+    projectUri?: string;
 }
 
 export interface UpdateAiDependenciesResponse {
@@ -517,6 +520,7 @@ export interface MavenDeployPluginDetails {
     serverType?: string;
     content?: string;
     range?: Range;
+    projectUri?: string;
 }
 
 export interface ProjectConfig {
@@ -533,15 +537,6 @@ export interface ConsolidatedRemoteDeployConfig {
     truststoreType?: string;
     serverType?: string;
     isEnabled: boolean;
-}
-
-export interface UpdateAiDependenciesRequest {
-    dependencies: DependencyDetails[];
-    operation: "add" | "remove";
-}
-
-export interface UpdateAiDependenciesResponse {
-    textEdits: TextEdit[];
 }
 
 export interface ReloadDependenciesRequest {

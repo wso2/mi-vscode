@@ -50,8 +50,7 @@ public class ConnectorLoaderTest {
     @BeforeAll
     public void setUp() throws IOException {
 
-        connectorHolder = ConnectorHolder.getInstance();
-        connectorHolder.clearConnectors();
+        connectorHolder = new ConnectorHolder();
         InboundConnectorHolder inboundConnectorHolder = new InboundConnectorHolder();
         SynapseLanguageClientAPI mockLanguageClient = new MockXMLLanguageClient();
         tempPath = Files.createTempDirectory("mi-language-server-test-");

@@ -14,14 +14,15 @@
 
 package org.eclipse.lemminx.customservice.synapse.resourceFinder;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
+
 public class ResourceFinderFactory {
 
-    public static AbstractResourceFinder getResourceFinder(boolean isLegacyProject) {
+    public static AbstractResourceFinder getResourceFinder(boolean isLegacyProject, ConnectorHolder connectorHolder) {
 
-        if (isLegacyProject) {
-            return new OldProjectResourceFinder();
-        } else {
-            return new NewProjectResourceFinder();
-        }
+        AbstractResourceFinder resourceFinder =
+                isLegacyProject ? new OldProjectResourceFinder() : new NewProjectResourceFinder();
+        resourceFinder.setConnectorHolder(connectorHolder);
+        return resourceFinder;
     }
 }

@@ -22,4 +22,5 @@ public class ConnectorDependencyRequest {
 
     /** Connector Maven artifactId (e.g. "mi-connector-file"). Null means "all connectors". */
     public String connectorArtifactId;
+    public String projectUri;
 }

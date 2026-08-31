@@ -17,10 +17,11 @@ package org.eclipse.lemminx.synapse.overview;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.parser.OverviewPage;
 import org.eclipse.lemminx.customservice.synapse.parser.OverviewPageDetailsResponse;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.MediatorFactoryFinder;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.utils.SyntaxTreeUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.eclipse.lsp4j.WorkspaceFolder;
-import org.mockito.MockedStatic;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -30,17 +31,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class OverviewPageTest {
 
     private OverviewPage overviewPage;
-    private static MockedStatic<ConnectorHolder> connectorHolderMock;
 
     @BeforeEach
     void setUp() {
         overviewPage = new OverviewPage();
-        connectorHolderMock = mockStatic(ConnectorHolder.class);
+        ConnectorHolder connectorHolder = mock(ConnectorHolder.class);
+        when(connectorHolder.isValidConnector(any())).thenReturn(true);
+        SyntaxTreeUtils.setMediatorFactory(new MediatorFactoryFinder(null, null, connectorHolder));
     }
 
     @Test
@@ -48,7 +51,6 @@ public class OverviewPageTest {
         String path = OverviewPageTest.class.getResource("/synapse/resource.finder/test_project").getPath();
         String projectPath = new File(path).getAbsolutePath();
         OverviewPageDetailsResponse result = OverviewPage.getDetails(projectPath);
-        connectorHolderMock.close();
 
         assertEquals("test", result.getPrimaryDetails().getProjectName().getValue());
         assertEquals(2, result.getConfigurables().size());
@@ -59,7 +61,6 @@ public class OverviewPageTest {
         String path = OverviewPageTest.class.getResource("/synapse/resource.finder").getPath();
         String projectPath = new File(path).getAbsolutePath();
         OverviewPageDetailsResponse result = OverviewPage.getDetails(projectPath);
-        connectorHolderMock.close();
 
         assertNull(result.getPrimaryDetails().getProjectName());
         assertEquals(0, result.getConfigurables().size());
@@ -69,10 +70,8 @@ public class OverviewPageTest {
     void getProjectIntegrationTypeWithValidProjectFolder() {
         String path = OverviewPageTest.class.getResource("/synapse/resource.finder/test_project").getPath();
         String projectPath = new File(path).getAbsolutePath();
-        connectorHolderMock.when(() -> ConnectorHolder.isValidConnector(any())).thenReturn(true);
         List<String> result = OverviewPage.getProjectIntegrationType(new WorkspaceFolder(projectPath));
         List<String> expectedResult = Arrays.asList("INTEGRATION_AS_API", "EVENT_INTEGRATION", "AUTOMATION");
-        connectorHolderMock.close();
 
         assertEquals(expectedResult, result);
         assertEquals(3, result.size());
@@ -82,9 +81,7 @@ public class OverviewPageTest {
     void getProjectIntegrationTypeWithInvalidProjectFolder() {
         String path = OverviewPageTest.class.getResource("/synapse/resource.finder").getPath();
         String projectPath = new File(path).getAbsolutePath();
-        connectorHolderMock.when(() -> ConnectorHolder.isValidConnector(any())).thenReturn(true);
         List<String> result = OverviewPage.getProjectIntegrationType(new WorkspaceFolder(projectPath));
-        connectorHolderMock.close();
 
         assertEquals(new ArrayList<>(), result);
         assertEquals(0, result.size());

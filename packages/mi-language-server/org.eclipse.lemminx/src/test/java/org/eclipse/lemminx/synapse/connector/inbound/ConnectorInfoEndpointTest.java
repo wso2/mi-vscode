@@ -55,8 +55,7 @@ public class ConnectorInfoEndpointTest {
 
     @BeforeEach
     void resetHolder() {
-        connectorHolder = ConnectorHolder.getInstance();
-        connectorHolder.clearConnectors();
+        connectorHolder = new ConnectorHolder();
     }
 
     @Test

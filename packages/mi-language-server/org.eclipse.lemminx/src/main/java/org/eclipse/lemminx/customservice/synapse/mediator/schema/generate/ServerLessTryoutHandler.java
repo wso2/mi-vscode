@@ -17,6 +17,7 @@ package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.customservice.synapse.InvalidConfigurationException;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.TryOutUtils;
 import org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor.SchemaVisitor;
 import org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor.SchemaVisitorFactory;
@@ -40,10 +41,12 @@ public class ServerLessTryoutHandler {
     Path TEMP_FOLDER = Path.of(System.getProperty("user.home"), ".wso2-mi", "expression-temp");
     private static final String TEMP_FILE_NAME = "temp.xml";
     private final String projectUri;
+    private final ConnectorHolder connectorHolder;
 
-    public ServerLessTryoutHandler(String projectUri) {
+    public ServerLessTryoutHandler(String projectUri, ConnectorHolder connectorHolder) {
 
         this.projectUri = projectUri;
+        this.connectorHolder = connectorHolder;
     }
 
     public MediatorTryoutInfo handle(MediatorTryoutRequest request) {
@@ -104,7 +107,7 @@ public class ServerLessTryoutHandler {
 
     private void visitNode(STNode node, MediatorTryoutRequest request, MediatorTryoutInfo mediatorTryoutInfo) {
 
-        SchemaVisitor visitor = SchemaVisitorFactory.getSchemaVisitor(node, projectUri);
+        SchemaVisitor visitor = SchemaVisitorFactory.getSchemaVisitor(node, projectUri, connectorHolder);
         if (visitor != null) {
             visitor.visit(node, mediatorTryoutInfo, request);
         }

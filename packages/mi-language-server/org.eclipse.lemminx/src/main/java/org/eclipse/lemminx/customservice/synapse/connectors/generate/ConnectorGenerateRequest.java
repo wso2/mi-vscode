@@ -18,4 +18,5 @@ public class ConnectorGenerateRequest {
 
     public String openAPIPath;
     public String connectorProjectPath;
+    public String projectUri;
 }

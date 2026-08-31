@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 
@@ -41,7 +42,7 @@ public class DependencyDownloadManager {
      * @param projectPath The path to the project directory containing the pom.xml file.
      * @return A message indicating the success or failure of the download operation.
      */
-    public static String downloadDependencies(String projectPath) {
+    public static String downloadDependencies(String projectPath, ConnectorHolder connectorHolder) {
 
         LOGGER.log(Level.INFO, "Starting dependency download for project: " + projectPath);
         OverviewPageDetailsResponse pomDetailsResponse = new OverviewPageDetailsResponse();
@@ -51,7 +52,7 @@ public class DependencyDownloadManager {
         List<DependencyDetails> integrationProjectDependencies =
                 pomDetailsResponse.getDependenciesDetails().getIntegrationProjectDependencies();
         ConnectorDependencyDownloadResult connectorResult =
-                ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies);
+                ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies, connectorHolder);
         Node isVersionedDeployment = pomDetailsResponse.getBuildDetails().getVersionedDeployment();
         boolean isVersionedDeploymentEnabled = isVersionedDeployment != null ?
                 Boolean.parseBoolean(isVersionedDeployment.getValue()) : false;

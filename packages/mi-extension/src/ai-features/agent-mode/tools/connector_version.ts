@@ -76,7 +76,7 @@ async function readPomVersion(
 ): Promise<string | null> {
     try {
         const langClient = await MILanguageClient.getInstance(projectPath);
-        const projectDetails = await langClient.getProjectDetails();
+        const projectDetails = await langClient.getProjectDetails(projectPath);
         const deps: PomDependency[] = projectDetails?.dependencies?.connectorDependencies ?? [];
         const match = deps.find(d => d.groupId === groupId && d.artifact === artifactId);
         const version = typeof match?.version === 'string' ? match.version.trim() : '';

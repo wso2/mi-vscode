@@ -20,4 +20,5 @@ public class InboundConnectorParam {
     public String connectorName;
     public String documentPath;
     public String uiSchema;
+    public String projectUri;
 }

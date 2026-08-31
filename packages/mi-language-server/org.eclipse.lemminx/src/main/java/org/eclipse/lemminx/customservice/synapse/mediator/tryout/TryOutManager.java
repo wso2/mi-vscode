@@ -25,18 +25,28 @@ import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTr
 
 public class TryOutManager {
 
+    private final String projectRoot;
     private final TryOutHandler tryOutHandler;
     private final IsolatedTryOutHandler isolatedTryOutHandler;
     private final ServerLessTryoutHandler serverLessTryoutHandler;
     private final ConnectionTester connectionTester;
 
-    public TryOutManager(String projectRoot, String miServerPath, ConnectorHolder connectorHolder,
+    public TryOutManager(String projectRoot, String miServerPath, String miVersion, ConnectorHolder connectorHolder,
                          SynapseLanguageClientAPI languageClient) {
 
+        this.projectRoot = projectRoot;
         tryOutHandler = new TryOutHandler(projectRoot, miServerPath, languageClient);
-        isolatedTryOutHandler = new IsolatedTryOutHandler(tryOutHandler, projectRoot);
-        serverLessTryoutHandler = new ServerLessTryoutHandler(projectRoot);
+        isolatedTryOutHandler = new IsolatedTryOutHandler(tryOutHandler, projectRoot, miVersion, connectorHolder);
+        serverLessTryoutHandler = new ServerLessTryoutHandler(projectRoot, connectorHolder);
         connectionTester = new ConnectionTester(projectRoot, tryOutHandler, connectorHolder);
+    }
+
+    /**
+     * The project root this manager (and its single shared MI server process) is currently bound to.
+     */
+    public String getProjectUri() {
+
+        return projectRoot;
     }
 
     public final MediatorTryoutInfo tryout(MediatorTryoutRequest request) {

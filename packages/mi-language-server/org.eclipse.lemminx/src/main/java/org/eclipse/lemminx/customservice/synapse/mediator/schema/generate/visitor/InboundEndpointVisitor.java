@@ -15,6 +15,7 @@
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutInfo;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
@@ -33,10 +34,12 @@ public class InboundEndpointVisitor implements SchemaVisitor {
 
     private static final Logger LOGGER = Logger.getLogger(InboundEndpointVisitor.class.getName());
     private String projectPath;
+    private ConnectorHolder connectorHolder;
 
-    public InboundEndpointVisitor(String projectPath) {
+    public InboundEndpointVisitor(String projectPath, ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
+        this.connectorHolder = connectorHolder;
     }
 
     @Override
@@ -51,7 +54,7 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         loadInboundVariable(inboundEndpoint, info);
 
         try {
-            Utils.visitSequenceByKey(sequence, projectPath, info, request);
+            Utils.visitSequenceByKey(sequence, projectPath, info, request, connectorHolder);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, String.format("Error occurred while visiting the sequence: %s", sequence), e);
         }

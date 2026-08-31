@@ -19,6 +19,7 @@ public class ConnectionUIParam {
     private String connectorName;
     private String connectionType;
     private String documentUri;
+    private String projectUri;
 
     public ConnectionUIParam(String connectorName, String connectionType) {
 
@@ -59,5 +60,15 @@ public class ConnectionUIParam {
     public void setDocumentUri(String documentUri) {
 
         this.documentUri = documentUri;
+    }
+
+    public String getProjectUri() {
+
+        return projectUri;
+    }
+
+    public void setProjectUri(String projectUri) {
+
+        this.projectUri = projectUri;
     }
 }

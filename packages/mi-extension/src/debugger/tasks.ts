@@ -123,6 +123,7 @@ export async function getRunTask(serverPath: string, isDebug: boolean): Promise<
         vscode.TaskScope.Workspace,
         'run',
         'mi',
+        // Strong quoting so a server path holding a space stays a single argument.
         new vscode.ShellExecution({ value: command, quoting: vscode.ShellQuoting.Strong }, args),
     );
     return runTask;

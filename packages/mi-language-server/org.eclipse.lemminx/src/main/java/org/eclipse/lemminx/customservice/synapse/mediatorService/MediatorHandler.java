@@ -77,6 +77,7 @@ public class MediatorHandler {
     private String miServerVersion;
     private AIConnectorHandler aiConnectorHandler;
     private String projectUri;
+    private MediatorFactoryFinder mediatorFactory;
 
     public void init(String projectUri, String projectServerVersion, ConnectorHolder connectorHolder) {
 
@@ -88,6 +89,7 @@ public class MediatorHandler {
             gson = new Gson();
             this.aiConnectorHandler = new AIConnectorHandler(this, projectUri);
             this.projectUri = projectUri;
+            this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE,
                     String.format("Failed to load mediators for the MI server version: %s", projectServerVersion), e);
@@ -103,6 +105,11 @@ public class MediatorHandler {
         this.uiSchemaMap = Utils.getUISchemaMap("org/eclipse/lemminx/mediators/"
                 + projectServerVersion.replace(".", "") + "/ui-schemas");
         this.isInitialized = true;
+    }
+
+    public ConnectorHolder getConnectorHolder() {
+
+        return connectorHolder;
     }
 
     public JsonObject getSupportedMediators(TextDocumentIdentifier documentIdentifier, Position position) {
@@ -527,7 +534,7 @@ public class MediatorHandler {
             return null;
         }
 
-        STNode mediator = MediatorFactoryFinder.getInstance().getMediator(node);
+        STNode mediator = mediatorFactory.getMediator(node);
         if (mediator != null && !(mediator instanceof InvalidMediator)) {
             return mediator;
         }
@@ -667,7 +674,7 @@ public class MediatorHandler {
                     uiSchemaObject.addProperty(Constant.CAN_TRY_OUT, isTryoutSupported);
                     JsonObject resultObject = new JsonObject();
                     if (isTryoutSupported && documentIdentifier != null && position != null) {
-                        resultObject.addProperty(Constant.RESPONSE_VARIABLE, generateResponseVariableDefaultValue(documentIdentifier, position, connectorName, operationName));
+                        resultObject.addProperty(Constant.RESPONSE_VARIABLE, generateResponseVariableDefaultValue(documentIdentifier, position, connectorName, operationName, connectorHolder));
                     }
                     return mapInputToUISchema(resultObject, uiSchemaObject);
                 } catch (IOException e) {
@@ -689,6 +696,7 @@ public class MediatorHandler {
         try {
             this.mediatorList = Utils.getMediatorList(projectServerVersion, connectorHolder);
             this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
+            this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Failed to reload mediators.", e);
         }

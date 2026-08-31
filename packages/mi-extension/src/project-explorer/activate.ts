@@ -79,7 +79,7 @@ export async function activateProjectExplorer(treeviewId: string, context: Exten
 	let registryExplorerDataProvider;
 	const projectTree = window.createTreeView(treeviewId, { treeDataProvider: projectExplorerDataProvider });
 
-	const projectDetailsRes = await lsClient.getProjectDetails();
+	const projectDetailsRes = await lsClient.getProjectDetails(projectUri);
 	const runtimeVersion = projectDetailsRes.primaryDetails.runtimeVersion.value;
 	const isRegistrySupported = compareVersions(runtimeVersion, RUNTIME_VERSION_440) < 0;
 

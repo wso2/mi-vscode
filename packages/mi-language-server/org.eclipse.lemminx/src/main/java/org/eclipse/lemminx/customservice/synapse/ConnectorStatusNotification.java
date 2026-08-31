@@ -19,11 +19,13 @@ public class ConnectorStatusNotification {
     String connector;
     boolean isSuccess;
     String message;
+    String projectUri;
 
-    public ConnectorStatusNotification(String connector, boolean isSuccess, String message) {
+    public ConnectorStatusNotification(String connector, boolean isSuccess, String message, String projectUri) {
 
         this.connector = connector;
         this.isSuccess = isSuccess;
         this.message = message;
+        this.projectUri = projectUri;
     }
 }

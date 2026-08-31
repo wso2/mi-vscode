@@ -25,6 +25,7 @@ public class DeployPluginDetails {
     private String password;
     private String serverType;
     private TextEdit textEdit;
+    private String projectUri;
 
     public DeployPluginDetails(TextEdit textEdit) {
         this.textEdit = textEdit;
@@ -67,5 +68,9 @@ public class DeployPluginDetails {
 
     public String getServerType() {
         return serverType;
+    }
+
+    public String getProjectUri() {
+        return projectUri;
     }
 }

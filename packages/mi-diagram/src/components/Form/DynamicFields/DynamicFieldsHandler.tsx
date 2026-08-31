@@ -638,6 +638,17 @@ export class DynamicFieldsHandler {
             let connectionType = this._getConnectionDbType(connection);
             if (!groupId || !artifactId || !version) {
                 const driverDetails = await this.rpcClient.getMiDiagramRpcClient().getDriverMavenCoordinates({ filePath: driverPath, connectionType: connectionType, connectorName: connectorName });
+                if (!driverDetails) {
+                    // No coordinates means the driver can be neither located nor downloaded, so stop
+                    // here with a message that says so — dereferencing null would land in the catch
+                    // below and report a connection failure instead, which sends you looking at the
+                    // database rather than at the driver.
+                    this.setCustomError(getNameForController(FIELD_NAMES.CONFIG_KEY),
+                        "Could not resolve the DB driver details for this connection.");
+                    this.setValue(FIELD_NAMES.ASSISTANCE_MODE, false);
+                    this.setValue(FIELD_NAMES.QUERY_TYPE, UI_MODES.OFFLINE);
+                    return undefined;
+                }
                 groupId = driverDetails.groupId;
                 artifactId = driverDetails.artifactId;
                 version = driverDetails.version;

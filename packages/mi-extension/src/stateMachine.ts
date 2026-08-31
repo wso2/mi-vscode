@@ -563,8 +563,10 @@ const stateMachine = createMachine<MachineContext>({
                                     // we need to enrich Task with the sequence model
                                     const task: Task = node.task as Task;
                                     viewLocation.view = MACHINE_VIEW.TaskView;
-                                    const sequenceName = task.property.find((p) => { return p.name === 'sequenceName' })?.value
-                                    const sequencePath = await langClient.getSequencePath(sequenceName ? sequenceName : "");
+                                    const sequenceName = task.property?.find((p) => { return p.name === 'sequenceName' })?.value
+                                    // Resolve against the project that owns this task - the shared
+                                    // language client is bound to whichever project spawned the JVM.
+                                    const sequencePath = await langClient.getSequencePath(sequenceName ? sequenceName : "", context.projectUri);
                                     if (sequencePath) {
                                         const sequence = await langClient.getSyntaxTree({ documentIdentifier: { uri: sequencePath } });
                                         task.sequence = sequence.syntaxTree.sequence;
@@ -586,7 +588,9 @@ const stateMachine = createMachine<MachineContext>({
                                     const inboundEndpoint: InboundEndpoint = node.inboundEndpoint as InboundEndpoint;
                                     viewLocation.view = MACHINE_VIEW.InboundEPView;
                                     const epSequenceName = inboundEndpoint.sequence;
-                                    const sequenceURI = await langClient.getSequencePath(epSequenceName ? epSequenceName : "");
+                                    // Resolve against the project that owns this inbound endpoint - the
+                                    // shared language client is bound to whichever project spawned the JVM.
+                                    const sequenceURI = await langClient.getSequencePath(epSequenceName ? epSequenceName : "", context.projectUri);
                                     if (sequenceURI) {
                                         const sequence = await langClient.getSyntaxTree({ documentIdentifier: { uri: sequenceURI } });
                                         inboundEndpoint.sequenceModel = sequence.syntaxTree.sequence;
@@ -857,6 +861,11 @@ function updateProjectExplorer(location: VisualizerLocation | undefined) {
     }
 }
 
+// KNOWN LIMITATION (pre-existing, not introduced by the shared-language-client migration):
+// the 'projectType'/'displayOverview' keys below are written to the single, window-global
+// `workspaceState`, so in a multi-root workspace the last-detected project's values win for
+// every project. Scoping them per project (e.g. keyed by projectUri) is a follow-up, not a
+// blocker for the shared LS client work.
 async function checkIfMiProject(projectUri: string, view: MACHINE_VIEW = MACHINE_VIEW.Overview) {
     console.log(`Detecting project in ${projectUri} - ${new Date().toLocaleTimeString()}`);
 

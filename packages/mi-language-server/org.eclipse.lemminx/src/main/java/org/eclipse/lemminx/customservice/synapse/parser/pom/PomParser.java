@@ -64,15 +64,11 @@ import java.util.logging.Logger;
 public class PomParser {
 
     private static final Logger LOGGER = Logger.getLogger(PomParser.class.getName());
-    private static OverviewPageDetailsResponse pomDetailsResponse;
     private static DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
     private static TransformerFactory transformerFactory = TransformerFactory.newInstance();
-    private static boolean hasDependencies = false;
-    private static boolean hasProperties = false;
 
     public static void getPomDetails(String projectUri, OverviewPageDetailsResponse detailsResponse) {
-        pomDetailsResponse = detailsResponse;
-        extractPomContent(projectUri);
+        extractPomContent(projectUri, detailsResponse);
     }
 
     public static UpdateResponse updateProperty(String projectUri, UpdatePropertyRequest request) {
@@ -84,8 +80,9 @@ public class PomParser {
             List<String> pomContent = readPom(projectUri);
             assert pomContent != null;
             Element propertiesElement = null;
-            Range initialRange = getPropertiesRange(pomContent);
-            if (!hasProperties) {
+            boolean[] hasProperties = new boolean[1];
+            Range initialRange = getPropertiesRange(pomContent, hasProperties);
+            if (!hasProperties[0]) {
                 propertiesElement = document.createElement(Constants.PROPERTIES);
             }
             for (PropertyDetails property : request.properties) {
@@ -124,8 +121,9 @@ public class PomParser {
             StringBuilder elementInString = new StringBuilder();
             pomContent = readPom(projectUri);
             assert pomContent != null;
-            Position initialRange = getDependenciesStartPosition(pomContent);
-            if (!hasDependencies) {
+            boolean[] hasDependencies = new boolean[1];
+            Position initialRange = getDependenciesStartPosition(pomContent, hasDependencies);
+            if (!hasDependencies[0]) {
                 dependenciesElement = document.createElement(Constants.DEPENDENCIES);
             }
             for (DependencyDetails dependency : request.dependencies) {
@@ -345,7 +343,7 @@ public class PomParser {
         }
     }
 
-    private static Range getPropertiesRange(List<String> pomContent) {
+    private static Range getPropertiesRange(List<String> pomContent, boolean[] hasPropertiesOut) {
         if (pomContent == null || pomContent.isEmpty()) {
             return null;
         }
@@ -365,7 +363,7 @@ public class PomParser {
 
                     if (Constants.PROPERTIES.equals(localName) && elementStack.size() == 2 &&
                             Constant.PROJECT.equals(elementStack.peekLast())) {
-                        hasProperties = true;
+                        hasPropertiesOut[0] = true;
                         startLine = reader.getLocation().getLineNumber();
                         startChar = reader.getLocation().getColumnNumber() + localName.length() + 2; // After <properties>
                     }
@@ -407,7 +405,7 @@ public class PomParser {
         }
     }
 
-    private static Position getDependenciesStartPosition(List<String> pomContent) {
+    private static Position getDependenciesStartPosition(List<String> pomContent, boolean[] hasDependenciesOut) {
         try {
             XMLStreamReader reader = getXMLReader(pomContent);
             int depth = 0;
@@ -425,7 +423,7 @@ public class PomParser {
                         depth++;
                         if (localName.equals(Constants.DEPENDENCIES) && depth == 2) {
                             Location location = reader.getLocation();
-                            hasDependencies = true;
+                            hasDependenciesOut[0] = true;
                             int startLine = location.getLineNumber();
                             int startColumn = location.getColumnNumber();
                             int endColumn = startColumn + localName.length() + 2;
@@ -436,7 +434,7 @@ public class PomParser {
                     String localName = reader.getLocalName();
                     if (localName.equals(Constants.PROPERTIES) && depth == 2) {
                         Location location = reader.getLocation();
-                        hasDependencies = false;
+                        hasDependenciesOut[0] = false;
                         int startLine = location.getLineNumber();
                         int startColumn = location.getColumnNumber();
                         int endColumn = startColumn + localName.length() + 4;
@@ -487,7 +485,7 @@ public class PomParser {
         return dependency;
     }
 
-    private static void extractPomContent(String projectUri) {
+    private static void extractPomContent(String projectUri, OverviewPageDetailsResponse detailsResponse) {
         try {
             File pomFile = new File(projectUri + File.separator + Constants.POM_FILE);
             if (!isPomFileExist(pomFile)) {
@@ -495,7 +493,7 @@ public class PomParser {
             }
             SAXParserFactory factory = SAXParserFactory.newInstance();
             SAXParser saxParser = factory.newSAXParser();
-            PluginHandler handler = new PluginHandler(pomDetailsResponse);
+            PluginHandler handler = new PluginHandler(detailsResponse);
             saxParser.parse(pomFile, handler);
         } catch (ParserConfigurationException e) {
             LOGGER.log(Level.SEVERE, "Error configuring the parser for the POM file: " + e.getMessage());

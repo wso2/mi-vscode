@@ -139,7 +139,7 @@ function isFilePath(input: string): boolean {
 async function getDataMapperFolder(projectPath: string, dmName: string): Promise<string> {
     try {
         const langClient = await MILanguageClient.getInstance(projectPath);
-        const projectDetails = await langClient?.getProjectDetails();
+        const projectDetails = await langClient?.getProjectDetails(projectPath);
         const runtimeVersion = projectDetails?.primaryDetails?.runtimeVersion?.value;
         const isResourceContent = compareVersions(runtimeVersion || '4.4.0', RUNTIME_VERSION_440) >= 0;
 

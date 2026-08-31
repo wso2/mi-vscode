@@ -17,4 +17,5 @@ import java.util.List;
 
 public class UpdateConfigRequest {
     public List<ConfigDetails> configs;
+    public String projectUri;
 }
