@@ -743,31 +743,64 @@ export function isADiagramView(projectUri: string): boolean {
 // The micro-integrator.bat is not supported to read java variables appended by the user in the MI 4.2.0 version.
 // As a workaround, MI team requested that we create a temporary batch file with the required java variables and run the server.
 let tempWindowsDebug;
-export function createTempDebugBatchFile(batchFilePath: string, binPath: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const destFilePath = path.join(binPath, 'micro-integrator-debug.bat');
-        fs.copyFileSync(batchFilePath, destFilePath);
-        tempWindowsDebug = destFilePath;
 
-        fs.readFile(destFilePath, 'utf8', (err, data) => {
-            if (err) {
-                logDebug(`Error reading the micro-integrator-debug.bat file: ${err}`, LogLevel.ERROR);
-                reject(`Error while reading the micro-integrator-debug.bat file: ${err}`);
-                return;
+const FILE_LOCK_RETRY_ATTEMPTS = 5;
+const FILE_LOCK_RETRY_DELAY_MS = 2000;
+
+function isTransientFileLockError(err: NodeJS.ErrnoException): boolean {
+    return err?.code === 'EBUSY' || err?.code === 'EPERM' || err?.code === 'EACCES';
+}
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withFileLockRetry<T>(operation: () => T): Promise<T> {
+    let lastError: NodeJS.ErrnoException | undefined;
+    for (let attempt = 1; attempt <= FILE_LOCK_RETRY_ATTEMPTS; attempt++) {
+        try {
+            return operation();
+        } catch (err) {
+            lastError = err as NodeJS.ErrnoException;
+            if (!isTransientFileLockError(lastError) || attempt === FILE_LOCK_RETRY_ATTEMPTS) {
+                throw lastError;
             }
+            logDebug(`File locked while preparing micro-integrator-debug.bat (attempt ${attempt}/${FILE_LOCK_RETRY_ATTEMPTS}): ${lastError}. Retrying...`, LogLevel.WARN);
+            await delay(FILE_LOCK_RETRY_DELAY_MS);
+        }
+    }
+    throw lastError;
+}
 
-            const updatedContent = data.replace('CMD_LINE_ARGS=', 'CMD_LINE_ARGS=-Desb.debug=true ');
+export async function createTempDebugBatchFile(batchFilePath: string, binPath: string): Promise<string> {
+    const destFilePath = path.join(binPath, 'micro-integrator-debug.bat');
 
-            fs.writeFile(destFilePath, updatedContent, 'utf8', (err) => {
-                if (err) {
-                    logDebug(`Error writing the micro-integrator-debug.bat file: ${err}`, LogLevel.ERROR);
-                    reject(`Error while updating the micro-integrator-debug.bat file: ${err}`);
-                    return;
-                }
-                resolve(destFilePath);
-            });
-        });
-    });
+    try {
+        await withFileLockRetry(() => fs.copyFileSync(batchFilePath, destFilePath));
+    } catch (err) {
+        logDebug(`Error copying to the micro-integrator-debug.bat file: ${err}`, LogLevel.ERROR);
+        throw `Error while creating the micro-integrator-debug.bat file: ${err}`;
+    }
+    tempWindowsDebug = destFilePath;
+
+    let data: string;
+    try {
+        data = await withFileLockRetry(() => fs.readFileSync(destFilePath, 'utf8'));
+    } catch (err) {
+        logDebug(`Error reading the micro-integrator-debug.bat file: ${err}`, LogLevel.ERROR);
+        throw `Error while reading the micro-integrator-debug.bat file: ${err}`;
+    }
+
+    const updatedContent = data.replace('CMD_LINE_ARGS=', 'CMD_LINE_ARGS=-Desb.debug=true ');
+
+    try {
+        await withFileLockRetry(() => fs.writeFileSync(destFilePath, updatedContent, 'utf8'));
+    } catch (err) {
+        logDebug(`Error writing the micro-integrator-debug.bat file: ${err}`, LogLevel.ERROR);
+        throw `Error while updating the micro-integrator-debug.bat file: ${err}`;
+    }
+
+    return destFilePath;
 }
 
 export function removeTempDebugBatchFile() {
