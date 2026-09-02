@@ -47,6 +47,17 @@ export const javaVersionCompatibilityMap: { [key: string]: { supportedRange: { m
     '4.1.0': { supportedRange: { min: '11', max: '11' }, recommended: ['11'] },
 };
 export const LATEST_MI_VERSION = "4.7.0";
+
+export async function isMiProject(projectPath: string): Promise<boolean> {
+    try {
+        const pomFilePath = path.join(projectPath, 'pom.xml');
+        const pomContent = await fs.promises.readFile(pomFilePath, 'utf-8');
+        return pomContent.includes('<projectType>integration-project</projectType>');
+    } catch {
+        return false;
+    }
+}
+
 const COMPATIBLE_JDK_VERSION = "11";
 const DEFAULT_SYNAPSE_CORE_VERSION = "4.0.0-wso2v165";
 export const synapseCoreVersionMap: { [key: string]: string } = {

@@ -26,7 +26,7 @@ import { fileURLToPath } from 'url';
 import path = require('path');
 import { activateTestExplorer } from './test-explorer/activator';
 import { DMProject } from './datamapper/DMProject';
-import { setupEnvironment, getMIVersionFromPom, compareVersions, checkSynapseCoreDependencyVersion } from './util/onboardingUtils';
+import { setupEnvironment, getMIVersionFromPom, compareVersions, checkSynapseCoreDependencyVersion, isMiProject } from './util/onboardingUtils';
 import { getPopupStateMachine } from './stateMachinePopup';
 import { askForProject } from './util/workspace';
 import { containsMultiModuleNatureInProjectFile, containsMultiModuleNatureInPomFile, findMultiModuleProjectsInWorkspaceDir } from './util/migrationUtils';
@@ -864,13 +864,9 @@ async function checkIfMiProject(projectUri: string, view: MACHINE_VIEW = MACHINE
     const customProps: any = {};
     try {
         // Check for pom.xml files excluding node_modules directory
-        const pomFilePath = path.join(projectUri, 'pom.xml');
-        if (fs.existsSync(pomFilePath)) {
-            const pomContent = await fs.promises.readFile(pomFilePath, 'utf-8');
-            isProject = pomContent.includes('<projectType>integration-project</projectType>');
-            if (isProject) {
-                console.log("MI project detected in " + projectUri);
-            }
+        isProject = await isMiProject(projectUri);
+        if (isProject) {
+            console.log("MI project detected in " + projectUri);
         }
 
         // If not found, check for .project files
