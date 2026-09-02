@@ -56,6 +56,7 @@ export function DownloadPage(props: DownloadPageProps) {
                 await rpcClient.getMiVisualizerRpcClient().updatePomValues({
                     pomValues: [{ range: d.range, value: '' }]
                 });
+                break;
             }
         }
     };
@@ -64,7 +65,9 @@ export function DownloadPage(props: DownloadPageProps) {
         return () => {
             if (failedDependencyRef.current) {
                 const { artifact, version } = failedDependencyRef.current;
-                removeFailedDependency(artifact, version);
+                removeFailedDependency(artifact, version).catch((err) => {
+                    console.error('Failed to remove connector dependency on unmount:', err);
+                });
             }
         };
     }, []);

@@ -124,8 +124,7 @@ public class InboundConnectorHolder {
                 + referenceRuntime.replace(".", StringUtils.EMPTY));
         String customConnectorsStatus = getCustomInboundConnectors(null);
         if (!Constant.SUCCESS.equals(customConnectorsStatus)) {
-            LOGGER.log(Level.WARNING, "Initializing with an empty custom inbound-endpoint list because "
-                    + "loading failed: " + customConnectorsStatus);
+            LOGGER.log(Level.WARNING, "Some custom inbound-endpoints could not be loaded");
         }
         loadInboundConnectors();
         this.localInboundEndpointsListForCopilot = generateInboundConnectorArray();

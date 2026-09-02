@@ -173,6 +173,7 @@ export function ConnectorAddPanel(props: ConnectorAddPanelProps) {
                         await rpcClient.getMiVisualizerRpcClient().updatePomValues({
                             pomValues: [{ range: d.range, value: '' }]
                         });
+                        break;
                     }
                 }
                 await rpcClient.getMiDiagramRpcClient().formatPomFile();
