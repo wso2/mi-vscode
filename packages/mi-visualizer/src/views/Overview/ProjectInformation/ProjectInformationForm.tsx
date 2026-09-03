@@ -18,6 +18,7 @@
 
 import { ProjectDetailsResponse } from "@wso2/mi-core";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
+import { compareVersions } from "@wso2/mi-diagram/lib/utils/commons";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Dropdown, Banner, FormActions, OptionProps, ProgressIndicator, TextField, Codicon, SplitView, TreeView, Typography, FormCheckBox, PasswordField, VSCodeColors } from "@wso2/ui-toolkit";
@@ -136,6 +137,7 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
         formState: { errors, dirtyFields, isSubmitting, isValid },
         handleSubmit,
         reset,
+        resetField,
         getValues,
         control,
         watch,
@@ -143,6 +145,16 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
         resolver: yupResolver(schema),
         mode: "all"
     });
+
+    const watchedRuntimeVersion = watch("primaryDetails-runtimeVersion");
+    const showFatCarAndVersionedDeployment = watchedRuntimeVersion && (compareVersions(watchedRuntimeVersion, "4.5.0") >= 0);
+
+    useEffect(() => {
+        if (!showFatCarAndVersionedDeployment) {
+            resetField("buildDetails-enableFatCar");
+            resetField("buildDetails-versionedDeployment");
+        }
+    }, [showFatCarAndVersionedDeployment, resetField]);
 
 
     const divRefs: Record<string, React.RefObject<HTMLDivElement>> = {
@@ -543,22 +555,26 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
                                     />
                                 </>
                             )}
-                            <FormCheckBox
-                                label="Enable Fat CAR"
-                                description="Enables the Fat CAR build option"
-                                descriptionSx={{ margin: "10px 0" }}
-                                control={control as any}
-                                sx={fieldStyle}
-                                {...register("buildDetails-enableFatCar")}
-                            />
-                            <FormCheckBox
-                                label="Enable Versioned Deployment"
-                                description="Enables versioned deployment of artifacts"
-                                descriptionSx={{ margin: "10px 0" }}
-                                control={control as any}
-                                sx={fieldStyle}
-                                {...register("buildDetails-versionedDeployment")}
-                            />
+                            {showFatCarAndVersionedDeployment && (
+                                <>
+                                    <FormCheckBox
+                                        label="Enable Fat CAR"
+                                        description="Enables the Fat CAR build option"
+                                        descriptionSx={{ margin: "10px 0" }}
+                                        control={control as any}
+                                        sx={fieldStyle}
+                                        {...register("buildDetails-enableFatCar")}
+                                    />
+                                    <FormCheckBox
+                                        label="Enable Versioned Deployment"
+                                        description="Enables versioned deployment of artifacts"
+                                        descriptionSx={{ margin: "10px 0" }}
+                                        control={control as any}
+                                        sx={fieldStyle}
+                                        {...register("buildDetails-versionedDeployment")}
+                                    />
+                                </>
+                            )}
                             <FormCheckBox
                                 label="Enable Cipher Tool"
                                 description="Enables the cipher tool"
