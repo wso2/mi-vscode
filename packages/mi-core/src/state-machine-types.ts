@@ -162,11 +162,13 @@ export type AIMachineEventMap = {
         region: string;
         sessionToken?: string;
         tavilyApiKey?: string;
+        inferenceProfiles?: BedrockInferenceProfileOverrides;
     } | {
         authType: 'api_key';
         apiKey: string;
         region: string;
         tavilyApiKey?: string;
+        inferenceProfiles?: BedrockInferenceProfileOverrides;
     };
     [AI_EVENT_TYPE.SIGN_IN_SUCCESS]: undefined;
     [AI_EVENT_TYPE.LOGOUT]: undefined;
@@ -226,9 +228,15 @@ export type BedrockInferenceProfileSlot = 'haiku' | 'sonnet' | 'opus';
  */
 export type BedrockInferenceProfileOverrides = Partial<Record<BedrockInferenceProfileSlot, string>>;
 
-/** Shape of a Bedrock application inference profile ARN. */
+/**
+ * Shape of a Bedrock application inference profile ARN.
+ *
+ * The partition segment is matched loosely (`aws`, `aws-us-gov`, `aws-cn`,
+ * `aws-iso`, `aws-iso-b`, ...) rather than enumerated, so ARNs from partitions
+ * we do not explicitly know about are not rejected out of hand.
+ */
 const BEDROCK_APP_INFERENCE_PROFILE_ARN =
-    /^arn:aws(?:-us-gov|-cn)?:bedrock:[a-z0-9-]+:\d{12}:application-inference-profile\/[A-Za-z0-9._-]+$/;
+    /^arn:aws(?:-[a-z0-9]+)*:bedrock:[a-z0-9-]+:\d{12}:application-inference-profile\/[A-Za-z0-9._-]+$/;
 
 /** True when `value` looks like a Bedrock application inference profile ARN. */
 export const isBedrockApplicationInferenceProfileArn = (value: string): boolean =>

@@ -19,6 +19,7 @@
 import styled from "@emotion/styled";
 import {
     AI_EVENT_TYPE,
+    AIMachineEventMap,
     LoginMethod,
     BedrockInferenceProfileSlot,
     isBedrockApplicationInferenceProfileArn,
@@ -427,15 +428,16 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
                 return;
             }
 
+            const apiKeyPayload: AIMachineEventMap[AI_EVENT_TYPE.SUBMIT_AWS_CREDENTIALS] = {
+                authType: "api_key",
+                apiKey: bedrockApiKey.trim(),
+                region: region.trim(),
+                tavilyApiKey: trimmedTavilyKey,
+                inferenceProfiles: collectedProfiles,
+            };
             rpcClient.sendAIStateEvent({
                 type: AI_EVENT_TYPE.SUBMIT_AWS_CREDENTIALS,
-                payload: {
-                    authType: "api_key",
-                    apiKey: bedrockApiKey.trim(),
-                    region: region.trim(),
-                    tavilyApiKey: trimmedTavilyKey,
-                    inferenceProfiles: collectedProfiles,
-                },
+                payload: apiKeyPayload,
             } as any);
             return;
         }
@@ -449,17 +451,18 @@ export const WaitingForLoginSection = ({ loginMethod, isValidating = false, erro
             return;
         }
 
+        const iamPayload: AIMachineEventMap[AI_EVENT_TYPE.SUBMIT_AWS_CREDENTIALS] = {
+            authType: "iam",
+            accessKeyId: accessKeyId.trim(),
+            secretAccessKey: secretAccessKey.trim(),
+            region: region.trim(),
+            sessionToken: sessionToken.trim() || undefined,
+            tavilyApiKey: trimmedTavilyKey,
+            inferenceProfiles: collectedProfiles,
+        };
         rpcClient.sendAIStateEvent({
             type: AI_EVENT_TYPE.SUBMIT_AWS_CREDENTIALS,
-            payload: {
-                authType: "iam",
-                accessKeyId: accessKeyId.trim(),
-                secretAccessKey: secretAccessKey.trim(),
-                region: region.trim(),
-                sessionToken: sessionToken.trim() || undefined,
-                tavilyApiKey: trimmedTavilyKey,
-                inferenceProfiles: collectedProfiles,
-            },
+            payload: iamPayload,
         } as any);
     };
     

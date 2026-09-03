@@ -398,15 +398,20 @@ export const getAnthropicClient = async (model: AnthropicModel): Promise<any> =>
 export const getAnthropicClientForCustomModel = async (modelId: string): Promise<any> => {
     const loginMethod = await getLoginMethod();
     if (loginMethod === LoginMethod.AWS_BEDROCK) {
-        if (!isBedrockApplicationInferenceProfileArn(modelId)) {
+        // Trim before validating AND before handing the value to the provider:
+        // the Bedrock provider URL-encodes the model reference into the request
+        // path verbatim, so surrounding whitespace would become %20 and produce
+        // a request for a profile that does not exist.
+        const profileArn = modelId.trim();
+        if (!isBedrockApplicationInferenceProfileArn(profileArn)) {
             throw new Error(
                 'Custom model IDs are not supported with AWS Bedrock. Use a standard model preset, ' +
                 'or supply an Application Inference Profile ARN.'
             );
         }
         const { provider: bedrockProvider } = await getBedrockProvider();
-        logDebug(`Using Bedrock application inference profile: ${modelId}`);
-        return bedrockProvider(modelId);
+        logDebug(`Using Bedrock application inference profile: ${profileArn}`);
+        return bedrockProvider(profileArn);
     }
     const provider = await getAnthropicProvider();
     return provider(modelId);
