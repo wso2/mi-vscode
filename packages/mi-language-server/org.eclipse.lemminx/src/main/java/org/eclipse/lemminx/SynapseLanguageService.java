@@ -66,6 +66,7 @@ import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionParam
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionCompletionsProvider;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionValidationResponse;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.HelperPanelData;
+import org.eclipse.lemminx.customservice.synapse.inbound.conector.FetchInboundConnectorsParams;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorResponse;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorParam;
@@ -621,7 +622,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     public void updateInboundConnectors() {
 
-        inboundConnectorHolder.getCustomInboundConnectors();
+        inboundConnectorHolder.getCustomInboundConnectors(null);
     }
 
     @Override
@@ -1226,9 +1227,10 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<String> fetchInboundConnectors() {
+    public CompletableFuture<String> fetchInboundConnectors(FetchInboundConnectorsParams params) {
 
-        return CompletableFuture.supplyAsync(() -> inboundConnectorHolder.getCustomInboundConnectors());
+        return CompletableFuture.supplyAsync(() -> inboundConnectorHolder.getCustomInboundConnectors(
+                params != null ? params.zipFileName : null));
     }
 
     public String getProjectUri() {

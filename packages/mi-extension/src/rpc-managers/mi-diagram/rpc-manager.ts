@@ -4201,7 +4201,7 @@ ${endpointAttributes}
                 try {
                     await fs.promises.copyFile(connectorPath, inboundDestinationPath);
 
-                    const updateResult = await langClient.updateInboundConnectors();
+                    const updateResult = await langClient.updateInboundConnectors(path.basename(connectorPath));
                     if (updateResult !== "success") {
                         deleteInboundZip();
                         return { success: false, error: updateResult || "Failed to import inbound endpoint." };

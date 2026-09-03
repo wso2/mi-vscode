@@ -15,7 +15,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { DownloadProgressData } from '@wso2/mi-core';
@@ -50,10 +50,36 @@ export function useConnectorDependency(rpcClient: any, projectPath: string) {
     const [state, setState] = useState<ConnectorDependencyState>('idle');
     const [connectorInfo, setConnectorInfo] = useState<ConnectorInfo | undefined>(undefined);
     const [downloadProgress, setDownloadProgress] = useState<DownloadProgressData | undefined>(undefined);
+    // remove the connector dependency if the download failed and the caller declines or unmounts
+    const failedDependencyRef = useRef<{ artifact: string; version: string } | null>(null);
 
     rpcClient.onDownloadProgress((data: DownloadProgressData) => {
         setDownloadProgress(data);
     });
+
+    const removeFailedDependency = async (artifact: string, version: string) => {
+        const projectDetails = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+        const connectorDependencies = projectDetails.dependencies.connectorDependencies;
+        for (const d of connectorDependencies) {
+            if (d.artifact === artifact && d.version === version) {
+                await rpcClient.getMiVisualizerRpcClient().updatePomValues({
+                    pomValues: [{ range: d.range, value: '' }]
+                });
+                break;
+            }
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (failedDependencyRef.current) {
+                const { artifact, version } = failedDependencyRef.current;
+                removeFailedDependency(artifact, version).catch((err) => {
+                    console.error('Failed to remove connector dependency on unmount:', err);
+                });
+            }
+        };
+    }, []);
 
     const requiresDownload = (info: ConnectorInfo) => {
         setConnectorInfo(info);
@@ -110,6 +136,8 @@ export function useConnectorDependency(rpcClient: any, projectPath: string) {
         if (!connectorInfo) return;
         setState('downloading');
         setDownloadProgress(undefined);
+
+        let downloadSucceeded: boolean;
         try {
             await rpcClient.getMiVisualizerRpcClient().updateDependencies({
                 dependencies: [{
@@ -121,23 +149,38 @@ export function useConnectorDependency(rpcClient: any, projectPath: string) {
             });
 
             const result: string = await rpcClient.getMiVisualizerRpcClient().updateConnectorDependencies();
-
-            const { path: projectRoot } = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path: projectPath });
-            await rpcClient.getMiDiagramRpcClient().rangeFormat({ uri: path.join(projectRoot, 'pom.xml') });
-
-            if (result === 'Success' || !result.includes(connectorInfo.mavenArtifactId)) {
-                await onSuccess?.();
-                setState('ready');
-            } else {
-                setState('download-failed');
-            }
+            downloadSucceeded = result === 'Success' || !result.includes(connectorInfo.mavenArtifactId);
         } catch (err) {
             console.error('[useConnectorDependency] Download failed:', err);
-            setState('download-failed');
+            downloadSucceeded = false;
         }
+
+        if (!downloadSucceeded) {
+            failedDependencyRef.current = { artifact: connectorInfo.mavenArtifactId, version: connectorInfo.version.tagName };
+            setState('download-failed');
+            return;
+        }
+
+        // clear failedDependencyRef as the connector was downloaded successfully
+        failedDependencyRef.current = null;
+        try {
+            const { path: projectRoot } = await rpcClient.getMiDiagramRpcClient().getProjectRoot({ path: projectPath });
+            await rpcClient.getMiDiagramRpcClient().rangeFormat({ uri: path.join(projectRoot, 'pom.xml') });
+            await onSuccess?.();
+        } catch (err) {
+            console.error('Connector post-download processing failed:', err);
+        }
+        setState('ready');
     };
 
-    const declineDownload = () => setState('ready');
+    const declineDownload = async () => {
+        if (failedDependencyRef.current) {
+            const { artifact, version } = failedDependencyRef.current;
+            failedDependencyRef.current = null;
+            await removeFailedDependency(artifact, version);
+        }
+        setState('ready');
+    };
 
     return { state, connectorInfo, downloadProgress, requiresDownload, checkConnector, acceptDownload, declineDownload };
 }

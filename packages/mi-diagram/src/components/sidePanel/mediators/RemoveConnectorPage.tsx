@@ -76,6 +76,7 @@ export function RemoveConnectorPage(props: RemoveConnectorPageProps) {
                             pomRemoveSuccess = await rpcClient.getMiVisualizerRpcClient().updatePomValues({
                                 pomValues: [{ range: d.range, value: '' }]
                             });
+                            break;
                         }
                     }
                 }

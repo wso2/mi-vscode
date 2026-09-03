@@ -85,14 +85,16 @@ const RowActions = styled.div`
 `;
 
 const LoaderContainer = styled.div`
-    position: absolute;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
     color: white;
-    justify-self: anchor-center;
-    margin-top: 200px;
+    z-index: 2001;
 `;
 
 interface ConnectorAddPanelProps {
@@ -160,7 +162,28 @@ export function ConnectorAddPanel(props: ConnectorAddPanelProps) {
                     type: 'zip'
                 }]
             });
-            await rpcClient.getMiVisualizerRpcClient().updateConnectorDependencies();
+            const response = await rpcClient.getMiVisualizerRpcClient().updateConnectorDependencies();
+            const downloadSucceeded = response === "Success" || !response.includes(connector.mavenArtifactId);
+            if (!downloadSucceeded) {
+                // remove the connector dependency as the download failed
+                const projectDetails = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+                const connectorDependencies = projectDetails.dependencies.connectorDependencies;
+                for (const d of connectorDependencies) {
+                    if (d.artifact === connector.mavenArtifactId && d.version === version) {
+                        await rpcClient.getMiVisualizerRpcClient().updatePomValues({
+                            pomValues: [{ range: d.range, value: '' }]
+                        });
+                        break;
+                    }
+                }
+                await rpcClient.getMiDiagramRpcClient().formatPomFile();
+                await onChanged();
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: `Failed to download the ${connector.connectorName ?? connector.mavenArtifactId} connector.`,
+                    type: "error"
+                });
+                return;
+            }
             await rpcClient.getMiDiagramRpcClient().formatPomFile();
             await onChanged();
             onClose();

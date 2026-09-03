@@ -173,8 +173,16 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
     }
 
     const selectStoreConnector = async (connector: any) => {
-        const connectorId = localConnectors.find((c: any) => c.name === connector.connectorName).id;
-        const response = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: connectorId });
+        const localMatch = localConnectors.find((c: any) => c.name === connector.connectorName);
+        if (!localMatch) {
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: `The "${connector.connectorName}" inbound-endpoint cannot be downloaded. Please make sure you are using the latest version of the extension.`,
+                type: "warning",
+                modal: true
+            });
+            return;
+        }
+        const response = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: localMatch.id });
 
         if (response?.uiSchema) {
             setConnectorSchema(response?.uiSchema);
@@ -224,9 +232,18 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
     };
 
     const handleAcceptDownload = () => {
-        const connectorId = localConnectors.find((c: any) => c.name === inboundOnconfirmation.connectorName).id;
+        const localMatch = localConnectors.find((c: any) => c.name === inboundOnconfirmation.connectorName);
+        if (!localMatch) {
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: `The "${inboundOnconfirmation.connectorName}" event integration is not recognized by this extension. Please make sure you are using the latest version of the extension.`,
+                type: "warning",
+                modal: true
+            });
+            declineDownload();
+            return;
+        }
         acceptDownload(async () => {
-            const schema = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: connectorId });
+            const schema = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: localMatch.id });
             setConnectorSchema(schema?.uiSchema);
         });
     };

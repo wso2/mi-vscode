@@ -480,8 +480,8 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest('synapse/getLocalInboundConnectors');
     }
 
-    async updateInboundConnectors(): Promise<string> {
-        return this.sendRequest('synapse/fetchInboundConnectors');
+    async updateInboundConnectors(zipFileName?: string): Promise<string> {
+        return this.sendRequest('synapse/fetchInboundConnectors', zipFileName ? { zipFileName } : {});
     }
 
     async getConnectionSchema(request: GetConnectionSchemaRequest): Promise<GetConnectionSchemaResponse> {
