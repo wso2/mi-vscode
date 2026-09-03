@@ -23,7 +23,7 @@ import { randomBytes } from "crypto";
 import { commands, Disposable, WebviewPanel, window, workspace } from "vscode";
 import { COMMANDS } from "../constants";
 import { MiDiagramRpcManager } from "../rpc-managers/mi-diagram/rpc-manager";
-import { getSupportedMIVersionsHigherThan } from "../util/onboardingUtils";
+import { getDefaultProjectPath, getSupportedMIVersionsHigherThan } from "../util/onboardingUtils";
 import { createMiProject } from "../util/projectCreationUtils";
 // Shared wire contract — single source of truth for both this server and the
 // webview client (`mi-visualizer` `MiWsClient`).
@@ -163,7 +163,7 @@ export class DefaultServer {
             versions: await getSupportedMIVersionsHigherThan(typeof version === "string" ? version : ""),
         }));
         this.register("getWorkspaceRoot", () => ({
-            path: workspace.workspaceFolders?.[0]?.uri.fsPath ?? "",
+            path: workspace.workspaceFolders?.[0]?.uri.fsPath ?? getDefaultProjectPath(),
         }));
         this.register("getSubFolderNames", (p) => miDiagram.getSubFolderNames(p));
         this.register("askProjectDirPath", () => miDiagram.askProjectDirPath());

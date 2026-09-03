@@ -16,122 +16,73 @@
  * under the License.
  */
 
-import React, { useEffect, useState } from "react";
-import { SampleDownloadRequest, VisualizerLocation, MACHINE_VIEW, EVENT_TYPE } from "@wso2/mi-core";
+import { useEffect, useState } from "react";
+import { MACHINE_VIEW, EVENT_TYPE, RecentProjectEntry } from "@wso2/mi-core";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
-import styled from "@emotion/styled";
-import { Button, Codicon, ComponentCard } from "@wso2/ui-toolkit";
-import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react";
+import { Codicon } from "@wso2/ui-toolkit";
 import { COMMANDS } from "../../constants";
-
-const TextWrapper = styled.div`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-`;
-
-const NavigationContainer = styled.div`
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-`;
-
-const IconWrapper = styled.div`
-    height: 20px;
-    width: 20px;
-`;
-
-const Wrapper = styled.div`
-    height: calc(100vh - 100px);
-    padding: 85px 120px;
-    overflow: auto;
-`;
-
-const TitlePanel = styled.div`
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 40px;
-`;
-
-const Pane = styled.div`
-    display: flex;
-    padding: 0px !important;
-    flex-direction: column;
-    width: 100%;
-`;
-
-const ComponentCardStyles = {
-    height: 50,
-    width: "100%",
-    marginBottom: 10,
-    display: "flex",
-    flexDirection: "row",
-    justifyContent: "flex-start",
-    paddingLeft: 30
-};
-
-const CreateBtnStyles = {
-    gap: 10,
-    display: "flex",
-    flexDirection: "row"
-};
-
-const Tab = styled.div`
-    display: flex;
-    flex-direction: column;
-    padding: 20px 0px;
-    gap: 5px;
-`;
-
-const Headline = styled.div`
-    font-size: 2.7em;
-    font-weight: 400;
-    font-size: 2.7em;
-    white-space: nowrap;
-    padding-bottom: 10px;
-`;
-
-const SubTitle = styled.div`
-    font-weight: 400;
-    margin-top: 0;
-    margin-bottom: 5px;
-    font-size: 1.5em;
-    line-height: normal;
-`;
-
-const SampleText = styled.div`
-    display: flex;
-    flex-direction: column;
-`;
-
-const Grid = styled.div({
-    display: "flex",
-    flexDirection: "row",
-    gap: 20
-})
-
-const SampleTitle = {
-    margin: "4px 0px",
-    fontSize: 14,
-    fontWeight: 500,
-    textAlign: "left",
-    display: "inline-block"
-}
+import {
+    ActionCard,
+    Caption,
+    CardDescription,
+    CardIcon,
+    CardsContainer,
+    CardsGrid,
+    CardTitle,
+    Headline,
+    Hero,
+    MoreDivider,
+    MoreToggleButton,
+    MoreToggleWrapper,
+    PrimaryCardButton,
+    ProjectItem,
+    ProjectName,
+    ProjectPath,
+    ProjectsList,
+    RecentProjectsEmptyState,
+    RecentProjectsHeader,
+    RecentProjectsSection,
+    RecentProjectsTitle,
+    SecondaryActionRow,
+    SecondaryCardButton,
+    SecondaryCardsSection,
+    SecondaryRowContent,
+    SecondaryRowDescription,
+    SecondaryRowIcon,
+    SecondaryRowTitle,
+    ViewAllButton,
+    Wrapper,
+} from "./styles";
 
 export function WelcomeView() {
     const { rpcClient } = useVisualizerContext();
-    const [machineView, setMachineView] = useState<MACHINE_VIEW>();
-    const [isConsolidatedProject, setIsConsolidatedProject] = useState(false);
+    const [isConsolidatedProject, setIsConsolidatedProject] = useState<boolean | undefined>(undefined);
+    const [showSecondary, setShowSecondary] = useState(false);
+    const [recentProjects, setRecentProjects] = useState<RecentProjectEntry[]>([]);
+    const [isRecentProjectsLoaded, setIsRecentProjectsLoaded] = useState(false);
 
     useEffect(() => {
+        if (!rpcClient) {
+            return;
+        }
+
         (async () => {
-            if (rpcClient) {
-                rpcClient.getVisualizerState().then((initialState) => {
-                    setMachineView(initialState.view);
-                });
+            try {
                 const canCreate = await rpcClient.getMiDiagramRpcClient().canCreateConsolidatedProject();
                 setIsConsolidatedProject(canCreate.isConsolidatedProject);
+            } catch (error) {
+                console.error("Failed to check consolidated project status:", error);
+            }
+        })();
+
+        (async () => {
+            try {
+                const recent = await rpcClient.getMiVisualizerRpcClient().getRecentProjects();
+                setRecentProjects(recent.projects);
+            } catch (error) {
+                console.error("Failed to fetch recent projects:", error);
+            } finally {
+                setIsRecentProjectsLoaded(true);
             }
         })();
     }, [rpcClient]);
@@ -153,7 +104,7 @@ export function WelcomeView() {
         await rpcClient.getMiDiagramRpcClient().executeCommand({ commands: [COMMANDS.IMPORT_FROM_CAPP] });
     }
 
-    const handleMoreSamples = () => {
+    const goToSamples = () => {
         rpcClient.getMiVisualizerRpcClient().openView({
             type: EVENT_TYPE.OPEN_VIEW,
             location: {
@@ -162,126 +113,107 @@ export function WelcomeView() {
         });
     }
 
-    const openTroubleshootGuide = () => {
-        rpcClient.getMiVisualizerRpcClient().openExternal({
-            uri: "https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/troubleshooting-mi-for-vscode/"
-        })
+    const openRecentProjectsPicker = () => {
+        rpcClient.getMiDiagramRpcClient().executeCommand({ commands: ["workbench.action.openRecent"] });
     }
 
-    const openGettingStartedGuide = () => {
-        rpcClient.getMiVisualizerRpcClient().openExternal({
-            uri: "https://mi.docs.wso2.com/en/latest/get-started/development-kickstart/"
-        })
-    }
-
-    function downloadSample(sampleName: string) {
-        let request: SampleDownloadRequest = {
-            zipFileName: sampleName
-        }
-        rpcClient.getMiVisualizerRpcClient().downloadSelectedSampleFromGithub(request);
+    const openRecentProject = (projectPath: string) => {
+        rpcClient.getMiVisualizerRpcClient().openRecentProject({ path: projectPath });
     }
 
     return (
-        <>
-            <Wrapper>
-                <TitlePanel>
-                    <Headline>WSO2 Integrator: MI for VS Code</Headline>
-                    <span>A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience. </span>
-                </TitlePanel>
-                <Grid>
-                    <Pane>
-                        <Tab>
-                            <SubTitle>Getting started</SubTitle>
-                            <span>Learn about the WSO2 Integrator: MI Extension in our <VSCodeLink onClick={openGettingStartedGuide}>Getting Started Guide</VSCodeLink>.</span>
-                        </Tab>
-                        <Tab>
-                            <SubTitle>Create New Project</SubTitle>
-                            <span>Create an empty project.</span>
-                            <Button appearance="primary" onClick={() => goToCreateProject()}>
-                                <div style={CreateBtnStyles}>
-                                    <IconWrapper>
-                                        <Codicon name="folder-library" iconSx={{ fontSize: 20 }} />
-                                    </IconWrapper>
-                                    <TextWrapper>Create New Project</TextWrapper>
-                                </div>
-                            </Button>
-                        </Tab>
-                        <Tab>
-                            <SubTitle>Open Project</SubTitle>
-                            <span>Open an existing integration project.</span>
-                            <Button appearance="primary" onClick={() => goToOpenProject()}>
-                                <div style={CreateBtnStyles}>
-                                    <IconWrapper>
-                                        <Codicon name="go-to-file" iconSx={{ fontSize: 20 }} />
-                                    </IconWrapper>
-                                    <TextWrapper>Open Project</TextWrapper>
-                                </div>
-                            </Button>
-                        </Tab>
-                        { !isConsolidatedProject && 
-                            <Tab>
-                                <SubTitle>Import from CApp</SubTitle>
-                                <span>Import project from a CApp file.</span>
-                                <Button appearance="primary" onClick={() => goToImportFromCApp()}>
-                                    <div style={CreateBtnStyles}>
-                                        <IconWrapper>
-                                            <Codicon name="go-to-file" iconSx={{ fontSize: 20 }} />
-                                        </IconWrapper>
-                                        <TextWrapper>Import from CApp</TextWrapper>
-                                    </div>
-                                </Button>
-                            </Tab>
-                        }
-                        <Tab>
-                            <SubTitle>Troubleshooting</SubTitle>
-                            <span>Experiencing problems? Start with our <VSCodeLink onClick={openTroubleshootGuide}>Troubleshooting Guide</VSCodeLink>.</span>
-                        </Tab>
-                    </Pane>
-                    <Pane>
-                        <Tab>
-                            <SubTitle>Explore Samples</SubTitle>
-                            <span>Have a look at some examples.</span>
-                        </Tab>
-                        <ComponentCard
-                            onClick={() => downloadSample("HelloWorldService")}
-                            sx={ComponentCardStyles}>
-                            <img src="https://raw.githubusercontent.com/wso2/integration-studio/main/SamplesForVSCode/icons/Hello_World.png" className="card-image" />
-                            <SampleText>
-                                <span style={SampleTitle}>Hello World Service</span>
-                                <span style={{ fontSize: '12px' }} >A simple HTTP service.</span>
-                            </SampleText>
-                        </ComponentCard>
-                        <ComponentCard
-                            onClick={() => downloadSample("APITesting")}
-                            sx={ComponentCardStyles}>
-                            <img src="https://raw.githubusercontent.com/wso2/integration-studio/main/SamplesForVSCode/icons/Testing_Templates.png" className="card-image" />
-                            <SampleText>
-                                <span style={SampleTitle}>API Testing</span>
-                                <span style={{ fontSize: '12px' }} >Unit testing of a REST API artifact.</span>
-                            </SampleText>
-                        </ComponentCard>
-                        <ComponentCard
-                            onClick={() => downloadSample("ContentBasedRouting")}
-                            sx={ComponentCardStyles}>
-                            <img src="https://raw.githubusercontent.com/wso2/integration-studio/main/SamplesForVSCode/icons/Routing_Templates.png" className="card-image" />
-                            <SampleText>
-                                <span style={SampleTitle}>Content Based Routing</span>
-                                <span style={{ fontSize: '12px' }} >Content-based message routing.</span>
-                            </SampleText>
-                        </ComponentCard>
-                        <ComponentCard
-                            onClick={() => downloadSample("DatabasePolling")}
-                            sx={ComponentCardStyles}>
-                            <img src="https://raw.githubusercontent.com/wso2/integration-studio/main/SamplesForVSCode/icons/Task_Templates.png" className="card-image" />
-                            <SampleText>
-                                <span style={SampleTitle}>Database Polling</span>
-                                <span style={{ fontSize: '12px' }} >A Task that polls a Database.</span>
-                            </SampleText>
-                        </ComponentCard>
-                        <span><VSCodeLink onClick={handleMoreSamples}>More...</VSCodeLink></span>
-                    </Pane>
-                </Grid>
-            </Wrapper >
-        </>
+        <Wrapper>
+            <Hero>
+                <Headline>WSO2 Integrator</Headline>
+                <Caption>
+                    Connect AI agents, APIs, data, and events across cloud, on-prem, and hybrid environments. Build any type of integration and AI agent with the 100% open source WSO2 Integrator.
+                </Caption>
+            </Hero>
+            <CardsContainer>
+                <CardsGrid>
+                    <ActionCard>
+                        <CardIcon bg="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-primary-deep) 100%)">
+                            <Codicon name="folder-library" iconSx={{ fontSize: 22 }} />
+                        </CardIcon>
+                        <CardTitle>Create New Project</CardTitle>
+                        <CardDescription>Create an empty project.</CardDescription>
+                        <PrimaryCardButton onClick={goToCreateProject}>Create</PrimaryCardButton>
+                    </ActionCard>
+                    <ActionCard>
+                        <CardIcon bg="linear-gradient(135deg, var(--wso2-brand-primary-alt) 0%, var(--wso2-brand-accent-alt) 100%)">
+                            <Codicon name="folder-opened" iconSx={{ fontSize: 22 }} />
+                        </CardIcon>
+                        <CardTitle>Open Project</CardTitle>
+                        <CardDescription>Open an existing integration project.</CardDescription>
+                        <SecondaryCardButton onClick={goToOpenProject}>Open</SecondaryCardButton>
+                    </ActionCard>
+                    <ActionCard>
+                        <CardIcon bg="linear-gradient(135deg, var(--wso2-brand-accent) 0%, var(--wso2-brand-accent-alt) 100%)">
+                            <Codicon name="lightbulb" iconSx={{ fontSize: 22 }} />
+                        </CardIcon>
+                        <CardTitle>Explore Samples</CardTitle>
+                        <CardDescription>Have a look at some examples to get started quickly.</CardDescription>
+                        <SecondaryCardButton onClick={goToSamples}>Explore</SecondaryCardButton>
+                    </ActionCard>
+                </CardsGrid>
+
+                {isConsolidatedProject === false && (
+                    <>
+                        <MoreToggleWrapper>
+                            <MoreDivider />
+                            <MoreToggleButton type="button" onClick={() => setShowSecondary(!showSecondary)}>
+                                <span>{showSecondary ? "Show less" : "More Actions"}</span>
+                                <span className={`codicon ${showSecondary ? "codicon-triangle-up" : "codicon-triangle-down"}`} />
+                            </MoreToggleButton>
+                            <MoreDivider />
+                        </MoreToggleWrapper>
+                        <SecondaryCardsSection
+                            aria-hidden={!showSecondary}
+                            style={{
+                                maxHeight: showSecondary ? "200px" : "0",
+                                opacity: showSecondary ? 1 : 0,
+                            }}
+                        >
+                            <SecondaryActionRow type="button" tabIndex={showSecondary ? 0 : -1} onClick={goToImportFromCApp}>
+                                <SecondaryRowIcon>
+                                    <Codicon name="package" iconSx={{ fontSize: 16 }} />
+                                </SecondaryRowIcon>
+                                <SecondaryRowContent>
+                                    <SecondaryRowTitle>Import a CApp</SecondaryRowTitle>
+                                    <SecondaryRowDescription>Import a CApp to create a new project.</SecondaryRowDescription>
+                                </SecondaryRowContent>
+                                <Codicon name="chevron-right" iconSx={{ fontSize: 14, opacity: 0.6 }} />
+                            </SecondaryActionRow>
+                        </SecondaryCardsSection>
+                    </>
+                )}
+
+                {isRecentProjectsLoaded && (
+                    <RecentProjectsSection>
+                        <RecentProjectsHeader>
+                            <RecentProjectsTitle>Recent Projects</RecentProjectsTitle>
+                            <ViewAllButton type="button" onClick={openRecentProjectsPicker}>See more</ViewAllButton>
+                        </RecentProjectsHeader>
+                        {recentProjects.length > 0 ? (
+                            <ProjectsList>
+                                {recentProjects.map((project) => (
+                                    <ProjectItem
+                                        key={project.path}
+                                        type="button"
+                                        onClick={() => openRecentProject(project.path)}
+                                        title={project.description || project.path}
+                                    >
+                                        <ProjectName>{project.label}</ProjectName>
+                                        <ProjectPath>{project.description || project.path}</ProjectPath>
+                                    </ProjectItem>
+                                ))}
+                            </ProjectsList>
+                        ) : (
+                            <RecentProjectsEmptyState>No recent projects found.</RecentProjectsEmptyState>
+                        )}
+                    </RecentProjectsSection>
+                )}
+            </CardsContainer>
+        </Wrapper>
     );
 }

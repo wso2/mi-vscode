@@ -65,9 +65,12 @@ import {
     McpToolSuggestionResponse,
     ConsolidatedProjectDetails,
     UpdateConsolidatedProjectDetailsRequest,
-    ConsolidatedRemoteDeployConfig
+    ConsolidatedRemoteDeployConfig,
+    GettingStartedData,
+    SampleDownloadRequest,
+    RecentProjectsResponse,
+    OpenRecentProjectRequest
 } from "./types";
-import { GettingStartedData, SampleDownloadRequest } from "./types";
 import { RequestType, NotificationType } from "vscode-messenger-common";
 
 const _preFix = "mi-visualizer";
@@ -84,6 +87,8 @@ export const reloadWindow: RequestType<void, void> = { method: `${_preFix}/reloa
 export const goBack: NotificationType<void> = { method: `${_preFix}/goBack` };
 export const fetchSamplesFromGithub: RequestType<void, GettingStartedData> = { method: `${_preFix}/fetchSamplesFromGithub` };
 export const downloadSelectedSampleFromGithub: NotificationType<SampleDownloadRequest> = { method: `${_preFix}/downloadSelectedSampleFromGithub` };
+export const getRecentProjects: RequestType<void, RecentProjectsResponse> = { method: `${_preFix}/getRecentProjects` };
+export const openRecentProject: NotificationType<OpenRecentProjectRequest> = { method: `${_preFix}/openRecentProject` };
 export const addConfigurable: RequestType<AddConfigurableRequest, void> = { method: `${_preFix}/addConfigurable` };
 export const getHistory: RequestType<void, HistoryEntryResponse> = { method: `${_preFix}/getHistory` };
 export const addToHistory: NotificationType<HistoryEntry> = { method: `${_preFix}/addToHistory` };

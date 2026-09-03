@@ -47,6 +47,9 @@ import {
     RetrieveContextResponse,
     RuntimeServicesResponse,
     SampleDownloadRequest,
+    RecentProjectsResponse,
+    RecentProjectEntry,
+    OpenRecentProjectRequest,
     AddConfigurableRequest,
     SwaggerProxyRequest,
     SwaggerProxyResponse,
@@ -100,7 +103,7 @@ import { copy } from 'fs-extra';
 
 const fs = require('fs');
 import { TextEdit } from "vscode-languageclient";
-import { downloadJavaFromMI, downloadMI, getProjectSetupDetails, getSupportedMIVersionsHigherThan, setPathsInWorkSpace, updateRuntimeVersionsInPom, getMIVersionFromPom, isConsolidatedProject } from '../../util/onboardingUtils';
+import { downloadJavaFromMI, downloadMI, getProjectSetupDetails, getSupportedMIVersionsHigherThan, setPathsInWorkSpace, updateRuntimeVersionsInPom, getMIVersionFromPom, isConsolidatedProject, isMiProject } from '../../util/onboardingUtils';
 import { extractCAppDependenciesAsProjects, loadCAppResources } from "../../visualizer/activate";
 import { findMultiModuleProjectsInWorkspaceDir, getProjectDetails as getPomProjectDetails } from "../../util/migrationUtils";
 import {
@@ -633,6 +636,63 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
     downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
         const url = 'https://mi-connectors.wso2.com/samples/samples/';
         handleOpenFile(this.projectUri, params.zipFileName, url);
+    }
+
+    async getRecentProjects(): Promise<RecentProjectsResponse> {
+        try {
+            const recentlyOpened = await commands.executeCommand<any>("_workbench.getRecentlyOpened");
+            const workspaceItems: any[] = [
+                ...(Array.isArray(recentlyOpened?.workspaces) ? recentlyOpened.workspaces : []),
+                ...(Array.isArray(recentlyOpened?.folders) ? recentlyOpened.folders : []),
+            ];
+            const openPaths = new Set((workspace.workspaceFolders ?? []).map(folder => folder.uri.fsPath));
+            const seenPaths = new Set<string>();
+            const candidates: RecentProjectEntry[] = [];
+
+            for (const item of workspaceItems) {
+                const project = this.normalizeRecentProject(item);
+                if (!project || project.isWorkspace || seenPaths.has(project.path) || openPaths.has(project.path)) {
+                    continue;
+                }
+                seenPaths.add(project.path);
+                candidates.push(project);
+            }
+
+            const miProjectFlags = await Promise.all(candidates.map(project => isMiProject(project.path)));
+            const projects = candidates.filter((_, index) => miProjectFlags[index]).slice(0, 8);
+
+            return { projects };
+        } catch {
+            return { projects: [] };
+        }
+    }
+
+    async openRecentProject(params: OpenRecentProjectRequest): Promise<void> {
+        if (!params.path) {
+            return;
+        }
+
+        if (!fs.existsSync(params.path)) {
+            window.showErrorMessage(`Project not found: ${params.path}`);
+            return;
+        }
+
+        const selection = await window.showInformationMessage('Where would you like to open the project?',
+                { modal: true },
+                'Current Window',
+                'New Window'
+        );
+
+        if (!selection) {
+            return;
+        }
+
+        if (selection === "New Window") {
+            commands.executeCommand('vscode.openFolder', Uri.file(params.path), true);
+        } else {
+            const folders = workspace.workspaceFolders ?? [];
+            workspace.updateWorkspaceFolders(folders.length, 0, { uri: Uri.file(params.path) });
+        }
     }
 
     async addConfigurable(params: AddConfigurableRequest): Promise<void> {
@@ -1221,5 +1281,55 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
     async getMcpToolSuggestion(params: McpToolSuggestionRequest): Promise<McpToolSuggestionResponse> {
         const aiManager = new MIAIPanelRpcManager(this.projectUri);
         return aiManager.getMcpToolSuggestion(params);
+    }
+
+    private normalizeRecentProject(item: any): RecentProjectEntry | undefined {
+        const folderPath = this.extractFsPath(item?.folderUri);
+        const workspacePath = this.extractFsPath(item?.workspace?.configPath ?? item?.workspace?.uri);
+        const resolvedPath = folderPath ?? workspacePath;
+        if (!resolvedPath) {
+            return undefined;
+        }
+
+        const label = typeof item?.label === "string" && item.label.trim().length > 0
+            ? item.label.trim()
+            : path.basename(resolvedPath);
+
+        return {
+            path: resolvedPath,
+            label: label || resolvedPath,
+            description: resolvedPath,
+            isWorkspace: !folderPath && !!workspacePath,
+        };
+    }
+
+    private extractFsPath(uri: any): string | undefined {
+        if (!uri) {
+            return undefined;
+        }
+        if (uri instanceof Uri) {
+            return uri.fsPath;
+        }
+        if (typeof uri === "string") {
+            if (uri.startsWith("file:")) {
+                return Uri.parse(uri).fsPath;
+            }
+            return uri;
+        }
+        if (typeof uri === "object") {
+            if (typeof uri.fsPath === "string" && uri.fsPath.length > 0) {
+                return uri.fsPath;
+            }
+            if (typeof uri.path === "string" && uri.path.length > 0) {
+                if (uri.scheme === "file") {
+                    return Uri.from({ scheme: "file", path: uri.path }).fsPath;
+                }
+                return uri.path;
+            }
+            if (typeof uri.external === "string" && uri.external.startsWith("file:")) {
+                return Uri.parse(uri.external).fsPath;
+            }
+        }
+        return undefined;
     }
 }
