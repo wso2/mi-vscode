@@ -28,7 +28,18 @@
  */
 
 import axios from 'axios';
-import { AIUserToken, AuthCredentials, LoginMethod, AwsBedrockSecrets } from '@wso2/mi-core';
+import {
+    AIUserToken,
+    AuthCredentials,
+    LoginMethod,
+    AwsBedrockSecrets,
+    BedrockInferenceProfileOverrides,
+    isBedrockApplicationInferenceProfileArn,
+    getRegionFromInferenceProfileArn,
+    normalizeInferenceProfileOverrides,
+    BEDROCK_INFERENCE_PROFILE_SLOTS,
+    findMissingRequiredInferenceProfiles
+} from '@wso2/mi-core';
 import { extension } from '../MIExtensionContext';
 import * as vscode from 'vscode';
 import { createAnthropic } from '@ai-sdk/anthropic';
@@ -581,9 +592,11 @@ interface AwsBedrockValidationInput {
     apiKey?: string;
     /** Optional Tavily key bundled with Bedrock credentials so users can opt into web tools. */
     tavilyApiKey?: string;
+    /** Optional Application Inference Profile ARNs for accounts that mandate them. */
+    inferenceProfiles?: BedrockInferenceProfileOverrides;
 }
 
-const validateBedrockRegion = (region: string): void => {
+const validateBedrockRegion = (region: string, hasExplicitInferenceProfiles = false): void => {
     if (!region) {
         throw new Error('AWS region is required.');
     }
@@ -596,7 +609,11 @@ const validateBedrockRegion = (region: string): void => {
     // / getBedrockRegionalPrefix in connection.ts) is only published in the
     // commercial AWS partition. GovCloud (`us-gov-*`) and China (`cn-*`) regions
     // would silently fail at runtime with "model not found", so reject up front.
-    if (region.startsWith('us-gov-') || region.startsWith('cn-')) {
+    //
+    // This only constrains the built-in default. When the caller supplies explicit
+    // Application Inference Profile ARNs the `global.` profile is never used, so
+    // the partition restriction no longer applies and the guard is skipped.
+    if (!hasExplicitInferenceProfiles && (region.startsWith('us-gov-') || region.startsWith('cn-'))) {
         throw new Error(
             `AWS region "${region}" is not supported. The Anthropic models on Bedrock ` +
             `(Haiku 4.5, Sonnet 4.6, Opus 4.8) are only available via the global. ` +
@@ -606,9 +623,89 @@ const validateBedrockRegion = (region: string): void => {
     }
 };
 
-const getBedrockValidationModelId = async (region: string): Promise<string> => {
+const getBedrockValidationModelId = async (
+    region: string,
+    overrides?: BedrockInferenceProfileOverrides
+): Promise<string> => {
     const { getBedrockValidationModelId: resolveValidationModelId } = await import('./connection');
-    return resolveValidationModelId(region);
+    return resolveValidationModelId(region, overrides);
+};
+
+/**
+ * Reject malformed Application Inference Profile ARNs before we spend a Bedrock
+ * call on them, and warn when an ARN's region disagrees with the chosen region
+ * (Bedrock resolves the profile in its own region, which silently bills and
+ * routes elsewhere).
+ */
+const validateInferenceProfileOverrides = (
+    overrides: BedrockInferenceProfileOverrides | undefined,
+    region: string
+): void => {
+    if (!overrides) {
+        return;
+    }
+
+    const missing = findMissingRequiredInferenceProfiles(overrides);
+    if (missing.length) {
+        throw new Error(
+            `An Application Inference Profile ARN is also required for: ${missing.join(', ')}. ` +
+            `Accounts that mandate application profiles cannot use the default profiles for the ` +
+            `remaining models, so Copilot would fail on its first request.`
+        );
+    }
+
+    for (const slot of BEDROCK_INFERENCE_PROFILE_SLOTS) {
+        const arn = overrides[slot];
+        if (!arn) {
+            continue;
+        }
+        if (!isBedrockApplicationInferenceProfileArn(arn)) {
+            throw new Error(
+                `The ${slot} inference profile is not a valid Application Inference Profile ARN. ` +
+                `Expected the form arn:aws:bedrock:<region>:<account-id>:application-inference-profile/<id>.`
+            );
+        }
+        const arnRegion = getRegionFromInferenceProfileArn(arn);
+        if (arnRegion && arnRegion !== region) {
+            logWarn(
+                `Bedrock ${slot} inference profile is in ${arnRegion} but the configured region is ${region}. ` +
+                `Requests will be served from ${arnRegion}.`
+            );
+        }
+    }
+};
+
+/**
+ * Turn a Bedrock authorization failure into a message that names the actual
+ * cause. A denial on a `foundation-model` or system `inference-profile` resource
+ * means the account's policy forbids that route — typically because it requires
+ * Application Inference Profiles — not that the credentials are wrong.
+ */
+const describeBedrockValidationFailure = (
+    detail: string,
+    hasExplicitInferenceProfiles: boolean
+): string => {
+    const isAuthorizationFailure = /AccessDenied|not authorized|explicit deny/i.test(detail);
+    const mentionsUnroutableResource = /foundation-model|inference-profile/i.test(detail);
+
+    if (isAuthorizationFailure && mentionsUnroutableResource && !hasExplicitInferenceProfiles) {
+        return (
+            'Your credentials are valid, but this AWS account does not allow invoking the model directly. ' +
+            'Accounts that require Amazon Bedrock Application Inference Profiles must supply the profile ARNs ' +
+            'under "Advanced: Application Inference Profiles" on this form. ' +
+            `(${detail})`
+        );
+    }
+
+    if (isAuthorizationFailure && hasExplicitInferenceProfiles) {
+        return (
+            'Your credentials are valid, but the supplied Application Inference Profile could not be invoked. ' +
+            'Check that the ARN is correct, is in the selected region, and that this principal is allowed to ' +
+            `invoke it. (${detail})`
+        );
+    }
+
+    return `Validation failed. Please check your AWS Bedrock authentication details and model access. (${detail})`;
 };
 
 /**
@@ -618,8 +715,11 @@ export const validateAwsCredentials = async (credentials: AwsBedrockValidationIn
     const authType = credentials.authType === 'api_key' ? 'api_key' : 'iam';
     const region = credentials.region?.trim() ?? '';
     const tavilyApiKey = credentials.tavilyApiKey?.trim() || undefined;
+    const inferenceProfiles = normalizeInferenceProfileOverrides(credentials.inferenceProfiles);
+    const hasExplicitInferenceProfiles = Boolean(inferenceProfiles);
 
-    validateBedrockRegion(region);
+    validateBedrockRegion(region, hasExplicitInferenceProfiles);
+    validateInferenceProfileOverrides(inferenceProfiles, region);
 
     try {
         logInfo(`Validating AWS Bedrock ${authType === 'api_key' ? 'API key' : 'IAM credentials'}...`);
@@ -634,7 +734,7 @@ export const validateAwsCredentials = async (credentials: AwsBedrockValidationIn
                 region,
                 apiKey,
             });
-            const bedrockClient = bedrock(await getBedrockValidationModelId(region));
+            const bedrockClient = bedrock(await getBedrockValidationModelId(region, inferenceProfiles));
 
             await generateText({
                 model: bedrockClient,
@@ -649,6 +749,7 @@ export const validateAwsCredentials = async (credentials: AwsBedrockValidationIn
                     apiKey,
                     region,
                     tavilyApiKey,
+                    inferenceProfiles,
                 }
             };
             await storeAuthCredentials(authCredentials);
@@ -679,7 +780,7 @@ export const validateAwsCredentials = async (credentials: AwsBedrockValidationIn
             secretAccessKey,
             sessionToken,
         });
-        const bedrockClient = bedrock(await getBedrockValidationModelId(region));
+        const bedrockClient = bedrock(await getBedrockValidationModelId(region, inferenceProfiles));
 
         await generateText({
             model: bedrockClient,
@@ -696,6 +797,7 @@ export const validateAwsCredentials = async (credentials: AwsBedrockValidationIn
                 region,
                 sessionToken,
                 tavilyApiKey,
+                inferenceProfiles,
             }
         };
         await storeAuthCredentials(authCredentials);
@@ -706,7 +808,7 @@ export const validateAwsCredentials = async (credentials: AwsBedrockValidationIn
     } catch (error) {
         logError('AWS Bedrock credential validation failed', error);
         const detail = error instanceof Error ? error.message : String(error);
-        throw new Error(`Validation failed. Please check your AWS Bedrock authentication details and model access. (${detail})`);
+        throw new Error(describeBedrockValidationFailure(detail, hasExplicitInferenceProfiles));
     }
 };
 
