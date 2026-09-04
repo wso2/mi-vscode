@@ -49,7 +49,6 @@ export const LATEST_MI_VERSION = "4.6.0";
 const COMPATIBLE_JDK_VERSION = "11";
 const DEFAULT_SYNAPSE_CORE_VERSION = "4.0.0-wso2v165";
 export const synapseCoreVersionMap: { [key: string]: string } = {
-    '4.7.0': '4.1.0-wso2v48',
     '4.6.0': '4.1.0-wso2v48'
 };
 

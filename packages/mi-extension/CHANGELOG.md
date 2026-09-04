@@ -2,6 +2,21 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.   
 
+## [4.1.5] - 2026-09-09          
+
+### Fixed   
+
+Fixed: Copilot Bedrock sign-in with Application Inference Profiles            
+
+## [4.1.4] - 2026-07-30      
+
+### Fixed   
+
+Fixed: Shell arguments handling inconsistencies      
+Fixed: Gaps in query parameters support for APIs via the OpenAPI specification     
+Fixed: Class mediator build issues with JDK 25          
+Fixed: Input-variable suggestion support for inbound endpoints ([#1539](https://github.com/wso2/mi-vscode/issues/1539))     
+
 ## [4.1.3] - 2026-07-15   
 
 ### Fixed   
@@ -32,15 +47,6 @@ Fixed: Improve Query UI in dataservices ([#721](https://github.com/wso2/mi-vscod
 Fixed: Datasource is not marked as required in Data Service create form ([#708](https://github.com/wso2/mi-vscode/issues/708))    
 Fixed: Update unit test page artifact select dropdowns don't work properly  ([#487](https://github.com/wso2/mi-vscode/issues/487))    
 Fixed: Improvements to the MI Copilot ([#1640](https://github.com/wso2/product-integrator/issues/1640))    
-
-## [4.1.4] - 2026-07-30      
-
-### Fixed   
-
-Fixed: Shell arguments handling inconsistencies      
-Fixed: Gaps in query parameters support for APIs via the OpenAPI specification     
-Fixed: Class mediator build issues with JDK 25          
-Fixed: Input-variable suggestion support for inbound endpoints ([#1539](https://github.com/wso2/mi-vscode/issues/1539))     
 
 ## [4.1.0] - 2026-06-11   
 
