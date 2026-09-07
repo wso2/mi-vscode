@@ -95,7 +95,20 @@ export class Welcome {
 
     public async createNewProjectFromSample(projectName: string, path: string) {
         console.log('Creating new project from sample');
-        await this.container.getByText(projectName).click({ force: true });
+        const exploreSamplesBtn = this.container.getByRole('button', { name: 'Explore', exact: true });
+        await exploreSamplesBtn.waitFor({ timeout: 30000 });
+        await exploreSamplesBtn.click();
+
+        const samplesWebview = await switchToIFrame('Samples', this.page.page, 30000);
+        if (!samplesWebview) {
+            throw new Error('Failed to switch to Samples page iframe');
+        }
+        const samplesContainer = samplesWebview.locator('div#root');
+        const sampleTitle = samplesContainer.getByText(projectName, { exact: true });
+        await sampleTitle.waitFor({ timeout: 30000 });
+        const downloadBtn = sampleTitle.locator('xpath=..').locator('vscode-button:has-text("Download")');
+        await downloadBtn.click({ force: true });
+
         const fileInput = await this.page.page?.waitForSelector('.quick-input-header');
         const textInput = await fileInput?.waitForSelector('input[type="text"]');
         await textInput?.fill(path);
