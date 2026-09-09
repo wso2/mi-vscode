@@ -61,7 +61,7 @@ export const SYNAPSE_GUIDE = `
    - Use the Redis connector instead of the cache mediator for Redis cache.
    - Do not leave placeholders like "To be implemented". Always implement the complete solution.
    - Use WSO2 Connectors whenever possible instead of directly calling APIs.
-   - Do not use new class mediators unless absolutely necessary. When you do create one, also flip the root \`pom.xml\` from \`<packaging>pom</packaging>\` to \`<packaging>jar</packaging>\` and ensure a \`synapse-core\` dependency is declared, otherwise the CApp will not pack the jar.
+   - Do not use new class mediators unless absolutely necessary. When you do create one (under \`src/main/java/\`), also flip the root \`pom.xml\` from \`<packaging>pom</packaging>\` to \`<packaging>jar</packaging>\` and ensure the \`org.apache.synapse:synapse-core\` dependency is declared (\`4.1.0-wso2v48\` for MI runtime >= 4.6.0, \`4.0.0-wso2v165\` for < 4.6.0), otherwise the CApp will not pack the jar and the class mediator will fail at runtime.
    - Define driver, username, dburl, and passwords inside the dbreport or dblookup mediator <connection> tag instead of generating deployment toml file changes.
    - Do not use fake XML placeholders (e.g., <TODO>, <placeholder>, <...>).
    - The respond mediator should be empty; it does not support child elements.
