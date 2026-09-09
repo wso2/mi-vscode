@@ -216,6 +216,37 @@ suite('Class Mediator POM Reminder Tests', () => {
         assert.strictEqual(status.isConfigured, false);
     });
 
+    test('checkClassMediatorPomStatus ignores synapse-core declared only in dependencyManagement', () => {
+        const pomContent = `<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.example</groupId>
+    <artifactId>sample-project</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+    <properties>
+        <project.runtime.version>4.6.0</project.runtime.version>
+    </properties>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.synapse</groupId>
+                <artifactId>synapse-core</artifactId>
+                <version>4.1.0-wso2v48</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+    <dependencies>
+    </dependencies>
+</project>`;
+
+        const status = checkClassMediatorPomStatus(pomContent);
+        assert.strictEqual(status.isJarPackaging, true);
+        assert.strictEqual(status.hasSynapseCore, false);
+        assert.strictEqual(status.currentSynapseCoreVersion, undefined);
+        assert.strictEqual(status.isConfigured, false);
+    });
+
     test('buildClassMediatorPomReminder returns empty string when fully configured', () => {
         const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-test-cm-'));
         try {

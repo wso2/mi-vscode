@@ -53,7 +53,11 @@ import {
 } from './ripgrep_runner';
 import { isSensitiveTokenName } from './shell_sandbox';
 import { stripAnsiAndControl } from '../../utils/sanitize-text';
-import { compareVersions } from '../../../util/onboardingUtils';
+import {
+    getSynapseCoreVersionForRuntime,
+    SYNAPSE_CORE_VERSION_460_AND_ABOVE,
+    SYNAPSE_CORE_VERSION_BELOW_460,
+} from '../../../util/onboardingUtils';
 
 // ============================================================================
 // Validation Functions
@@ -642,20 +646,19 @@ function trackModifiedFile(modifiedFiles: string[] | undefined, filePath: string
 
 export const SYNAPSE_CORE_GROUP_ID = 'org.apache.synapse';
 export const SYNAPSE_CORE_ARTIFACT_ID = 'synapse-core';
-export const SYNAPSE_CORE_VERSION_GE_460 = '4.1.0-wso2v48';
-export const SYNAPSE_CORE_VERSION_LT_460 = '4.0.0-wso2v165';
+
+// Sourced from onboardingUtils so the class mediator reminder and the onboarding
+// pom updater share a single source of truth for synapse-core versions.
+export const SYNAPSE_CORE_VERSION_GE_460 = SYNAPSE_CORE_VERSION_460_AND_ABOVE;
+export const SYNAPSE_CORE_VERSION_LT_460 = SYNAPSE_CORE_VERSION_BELOW_460;
 
 /**
  * Returns the expected synapse-core version based on the MI runtime version.
- * - Runtime >= 4.6.0: 4.1.0-wso2v48
+ * - Runtime >= 4.6.0 (or unknown): 4.1.0-wso2v48
  * - Runtime < 4.6.0: 4.0.0-wso2v165
+ * Delegates to the shared onboardingUtils version selection.
  */
-export function getExpectedSynapseCoreVersion(runtimeVersion?: string | null): string {
-    if (!runtimeVersion || compareVersions(runtimeVersion, '4.6.0') >= 0) {
-        return SYNAPSE_CORE_VERSION_GE_460;
-    }
-    return SYNAPSE_CORE_VERSION_LT_460;
-}
+export const getExpectedSynapseCoreVersion = getSynapseCoreVersionForRuntime;
 
 /**
  * Returns true for class mediator java sources under src/main/java/.
@@ -681,6 +684,13 @@ export interface ClassMediatorPomStatus {
  */
 export function checkClassMediatorPomStatus(pomContent: string): ClassMediatorPomStatus {
     const cleanPom = pomContent.replace(/<!--[\s\S]*?-->/g, '');
+    // Strip <dependencyManagement>: its entries pin versions but do not add
+    // synapse-core to the project's actual dependencies, so they must not be
+    // treated as a declared dependency when deciding if the reminder is needed.
+    const projectDependencies = cleanPom.replace(
+        /<dependencyManagement\b[^>]*>[\s\S]*?<\/dependencyManagement>/gi,
+        ''
+    );
     const packagingMatch = cleanPom.match(/<packaging>\s*([^<\s]+)\s*<\/packaging>/i);
     const currentPackaging = packagingMatch?.[1]?.toLowerCase();
     const isJarPackaging = currentPackaging === 'jar';
@@ -691,7 +701,7 @@ export function checkClassMediatorPomStatus(pomContent: string): ClassMediatorPo
 
     let hasSynapseCore = false;
     let currentSynapseCoreVersion: string | undefined;
-    for (const match of cleanPom.matchAll(/<dependency\b[^>]*>([\s\S]*?)<\/dependency>/gi)) {
+    for (const match of projectDependencies.matchAll(/<dependency\b[^>]*>([\s\S]*?)<\/dependency>/gi)) {
         const block = match[1];
         const groupId = block.match(/<groupId>\s*([^<\s]+)\s*<\/groupId>/i)?.[1]?.trim();
         const artifactId = block.match(/<artifactId>\s*([^<\s]+)\s*<\/artifactId>/i)?.[1]?.trim();
