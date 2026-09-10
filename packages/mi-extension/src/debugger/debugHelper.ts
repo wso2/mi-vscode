@@ -912,3 +912,9 @@ async function compareFilesByMD5(file1: string, file2: string): Promise<boolean>
         }
     });
 }
+
+export async function getConfigurableEntries(projectUri: string): Promise<{key: string; type: string; value: string; range: any; }[]> {
+    const langClient = await MILanguageClient.getInstance(projectUri);
+    const res = await langClient.getConfigurableList();
+    return res;
+}
