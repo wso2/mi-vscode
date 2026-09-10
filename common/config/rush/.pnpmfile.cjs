@@ -22,7 +22,7 @@ module.exports = {
         if (deps['xmldom']) deps['xmldom'] = 'npm:@xmldom/xmldom@0.8.10';
         if (deps['braces']) deps['braces'] = '3.0.3';
         if (deps['micromatch']) deps['micromatch'] = '4.0.8';
-        if (deps['js-yaml']) deps['js-yaml'] = '4.3.1';
+        if (deps['js-yaml']) deps['js-yaml'] = '4.3.2';
         if (deps['diff']) deps['diff'] = '8.0.3';
         if (deps['eslint']) deps['eslint'] = '^9.27.0';
         if (deps['fast-xml-parser']) deps['fast-xml-parser'] = '5.7.0';
@@ -163,9 +163,10 @@ module.exports = {
           }
           deps['picomatch'] = newVersion;
         }
+        if (deps['@ai-sdk/provider-utils']) deps['@ai-sdk/provider-utils'] = '4.0.33';
         if (deps['linkify-it']) deps['linkify-it'] = '5.0.2';
         if (deps['shell-quote']) deps['shell-quote'] = '1.9.0';
-        if (deps['svgo']) deps['svgo'] = '4.0.2';
+        if (deps['svgo']) deps['svgo'] = '4.1.0';
         if (deps['yaml']) {
           const currentVersion = deps['yaml'];
           let newVersion;
