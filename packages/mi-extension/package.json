@@ -664,6 +664,14 @@
     "menus": {
       "commandPalette": [
         {
+          "command": "MI.project-explorer.create-project",
+          "when": "false"
+        },
+        {
+          "command": "MI.openWelcome",
+          "when": "false"
+        },
+        {
           "command": "MI.project-explorer.add-api",
           "when": "false"
         },
