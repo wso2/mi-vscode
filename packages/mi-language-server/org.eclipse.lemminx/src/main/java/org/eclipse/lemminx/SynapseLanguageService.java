@@ -400,6 +400,31 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
+     * Resolves a {@link ProjectContext} from a file path, falling back to the project root the
+     * request names when that path belongs to no registered project.
+     *
+     * <p>Unlike {@link #resolveByUriOrProjectUri}, this widens on an <em>unmatched</em> path and not
+     * only on a blank one. A try-out request can legitimately name a file that sits outside every
+     * project root - an artifact extracted from a {@code .car} dependency, for instance - while still
+     * carrying the project whose panel issued it. Without the fallback those requests fail with
+     * {@link #tryOutUnavailableMessage()} even though the project was named correctly.
+     *
+     * <p>The path still wins whenever it matches, so this can never answer from a project other than
+     * the one that owns the file; the named project is consulted only when no project owns it.
+     *
+     * @return the resolved project, or {@code null} if neither field identifies one
+     */
+    private ProjectContext resolveByPathOrNamedProject(String filePath, String projectUri) {
+        ProjectContext context = resolveByPath(filePath);
+        if (context == null && StringUtils.isNotBlank(projectUri)) {
+            log.log(Level.INFO, "File is outside every registered project: " + filePath
+                    + " — falling back to the project the request names: " + projectUri);
+            context = resolveByProjectUri(projectUri);
+        }
+        return context;
+    }
+
+    /**
      * The {@link #resolveByPath} counterpart of {@link #resolveByUriOrProjectUri}: prefers a
      * filesystem path field when the request carries one, and falls back to an explicit project root.
      *
@@ -1158,7 +1183,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<MediatorTryoutInfo> tryOutMediator(MediatorTryoutRequest request) {
 
-        ProjectContext ctx = resolveByPath(request.getFile());
+        ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request.getProjectUri());
         return CompletableFuture.supplyAsync(() -> {
             TryOutManager manager = bindTryOutManager(ctx, request.getServerPath());
             if (manager == null) {
@@ -1211,7 +1236,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         // Schema generation here is a lightweight, stateless read (no shared MI server involved), so it
         // is served directly from the resolved project rather than going through the single rebindable
         // TryOutManager — it should never be blocked by another project's active try-out session.
-        ProjectContext ctx = resolveByPath(request.getFile());
+        ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request.getProjectUri());
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? new ServerLessTryoutHandler(ctx.getProjectUri(), ctx.getConnectorHolder()).handle(request)
                 : new MediatorTryoutInfo("Project is not initialized"));

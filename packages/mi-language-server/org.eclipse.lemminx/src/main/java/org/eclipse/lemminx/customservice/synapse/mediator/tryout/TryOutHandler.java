@@ -137,6 +137,14 @@ public class TryOutHandler {
         if (isFault) {
             return new MediatorTryoutInfo(TryOutConstants.TRYOUT_NOT_ACTIVATED_ERROR);
         }
+        if (isSessionMismatch(request)) {
+            LOGGER.log(Level.INFO, String.format(
+                    "Try-out request names session %s while session %s is active; rebuilding the "
+                            + "requested one instead of resuming the active session with its data.",
+                    request.getTryoutId(), currentTryoutID));
+            resumeTryOutAndDiscard();
+            return handleLostSession(request);
+        }
         if (isCompleteTryOut(request)) {
             if (currentInvocationInfo == null) {
                 return handleLostSession(request);
@@ -152,6 +160,26 @@ public class TryOutHandler {
     private boolean isCompleteTryOut(MediatorTryoutRequest request) {
 
         return request.getMediatorInfo() != null && currentTryoutID == null;
+    }
+
+    /**
+     * Whether the request belongs to a try-out session other than the one currently paused here.
+     * <p>
+     * This handler holds a single session at a time ({@code currentTryoutID},
+     * {@code currentInvocationInfo}, the registered breakpoints), so a request carrying a different
+     * id - a second panel, or a stale click from a session that has since ended - matches neither
+     * {@link #isCompleteTryOut} nor {@link #isNewTryOut} and would fall through to
+     * {@link #resumeTryOut}, injecting its edited properties into the active session's breakpoint
+     * state. The requested session is rebuilt instead, the same way a session lost to a server
+     * handover is.
+     *
+     * @param request the incoming try-out request
+     * @return true if the request names a session this handler does not currently hold
+     */
+    private boolean isSessionMismatch(MediatorTryoutRequest request) {
+
+        return request.getTryoutId() != null && currentTryoutID != null
+                && !currentTryoutID.equals(request.getTryoutId());
     }
 
     private boolean isNewTryOut(MediatorTryoutRequest request) {
