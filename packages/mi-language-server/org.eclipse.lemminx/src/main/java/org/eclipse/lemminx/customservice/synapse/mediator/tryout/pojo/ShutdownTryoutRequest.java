@@ -14,12 +14,14 @@
 
 package org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
 /**
  * Carries the initiating project's URI so {@code shutDownTryoutServer} only tears down the single
  * shared {@code TryOutManager} when it is still bound to that same project, instead of letting an
  * unrelated project's request kill another project's active try-out session.
  */
-public class ShutdownTryoutRequest {
+public class ShutdownTryoutRequest implements HasProjectUri {
 
     private String projectUri;
 

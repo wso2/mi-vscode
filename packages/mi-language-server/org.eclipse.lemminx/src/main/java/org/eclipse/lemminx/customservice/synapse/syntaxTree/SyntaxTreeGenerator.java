@@ -19,6 +19,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.APIFactory;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.utils.SyntaxTreeUtils;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.AbstractFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.DataServiceConfigFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.DataSourceConfigFactory;
@@ -100,6 +101,13 @@ public class SyntaxTreeGenerator {
     }
 
     public static STNode buildTree(DOMElement xmlNode) {
+
+        // One scope for the whole tree: every mediator below resolves its project through
+        // SyntaxTreeUtils, which would otherwise repeat the same registry lookup per element.
+        return SyntaxTreeUtils.inParseScope(() -> buildTreeInScope(xmlNode));
+    }
+
+    private static STNode buildTreeInScope(DOMElement xmlNode) {
 
         AbstractFactory factory = null;
         STNode root = null;

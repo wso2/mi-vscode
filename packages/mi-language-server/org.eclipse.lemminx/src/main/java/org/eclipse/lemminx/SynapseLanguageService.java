@@ -22,6 +22,7 @@ import org.eclipse.lemminx.customservice.SynapseLanguageClientAPI;
 import org.eclipse.lemminx.customservice.synapse.CodeDiagnosticRequest;
 import org.eclipse.lemminx.customservice.synapse.ProjectContext;
 import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 import org.eclipse.lemminx.customservice.synapse.pojo.ProjectUriRequest;
 import org.eclipse.lemminx.customservice.synapse.api.generator.pojo.IsEqualSwaggersParam;
 import org.eclipse.lemminx.customservice.synapse.api.generator.pojo.GenerateAPIResponse;
@@ -286,21 +287,45 @@ public class SynapseLanguageService implements ISynapseLanguageService {
      * empty result rather than another project's data. See the class javadoc.
      */
     private ProjectContext resolveByUri(String documentUri) {
-        if (StringUtils.isBlank(documentUri)) {
-            log.log(Level.FINE, "Request carried no document URI; resolving to no project.");
+        return resolve(documentUri, "document URI", WorkspaceManager::getProjectForDocument);
+    }
+
+    /**
+     * Shared body of the {@code resolveBy*} family, which differ only in which
+     * {@link WorkspaceManager} lookup they run and what the field is called in the log.
+     *
+     * <p>A blank value and an unmatched one are logged at different levels on purpose: the first
+     * means the request never named anything, the second that what it named belongs to no open
+     * project. Both resolve to no project, so the RPC answers empty rather than with another
+     * project's data.
+     *
+     * @param value     the request field to resolve from
+     * @param fieldName what that field is, for the log
+     * @param lookup    the registry lookup to run
+     * @return the resolved project, or {@code null} if the field is blank or matches none
+     */
+    private ProjectContext resolve(String value, String fieldName, ProjectLookup lookup) {
+        if (StringUtils.isBlank(value)) {
+            log.log(Level.FINE, "Request carried no " + fieldName + "; resolving to no project.");
             return null;
         }
         if (xmlLanguageServer == null) {
             return null;
         }
-        ProjectContext context = xmlLanguageServer.getWorkspaceManager().getProjectForDocument(documentUri);
+        ProjectContext context = lookup.find(xmlLanguageServer.getWorkspaceManager(), value);
         if (context == null) {
-            // getProjectForDocument already logs the miss; add the facade-level consequence so the
-            // pair reads as one story in the log.
-            log.log(Level.WARNING, "No registered project for document: " + documentUri
+            // The lookup already logs the miss; this adds the facade-level consequence so the pair
+            // reads as one story in the log.
+            log.log(Level.WARNING, "No registered project for " + fieldName + ": " + value
                     + " — request will be answered with an empty result, not another project's data.");
         }
         return context;
+    }
+
+    /** A {@link WorkspaceManager} lookup, as used by {@link #resolve}. */
+    @FunctionalInterface
+    private interface ProjectLookup {
+        ProjectContext find(WorkspaceManager manager, String value);
     }
 
     private ProjectContext resolve(TextDocumentIdentifier document) {
@@ -336,21 +361,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
      *         registered project
      */
     private ProjectContext resolveByPath(String filePath) {
-        if (StringUtils.isBlank(filePath)) {
-            log.log(Level.FINE, "Request carried no file path; resolving to no project.");
-            return null;
-        }
-        if (xmlLanguageServer == null) {
-            return null;
-        }
-        ProjectContext context = xmlLanguageServer.getWorkspaceManager().getProjectForFile(filePath);
-        if (context == null) {
-            // getProjectForFile already logs the miss; add the facade-level consequence so the pair
-            // reads as one story in the log.
-            log.log(Level.WARNING, "No registered project for file: " + filePath
-                    + " — request will be answered with an empty result, not another project's data.");
-        }
-        return context;
+        return resolve(filePath, "file path", WorkspaceManager::getProjectForFile);
     }
 
     /**
@@ -366,19 +377,22 @@ public class SynapseLanguageService implements ISynapseLanguageService {
      *         registered project
      */
     private ProjectContext resolveByProjectUri(String projectUri) {
-        if (StringUtils.isBlank(projectUri)) {
-            log.log(Level.FINE, "Request carried no projectUri; resolving to no project.");
-            return null;
-        }
-        if (xmlLanguageServer == null) {
-            return null;
-        }
-        ProjectContext context = xmlLanguageServer.getWorkspaceManager().getProjectByPath(projectUri);
-        if (context == null) {
-            log.log(Level.WARNING, "No registered project matches projectUri: " + projectUri
-                    + " — request will be answered with an empty result, not another project's data.");
-        }
-        return context;
+        return resolve(projectUri, "projectUri", WorkspaceManager::getProjectByPath);
+    }
+
+    /**
+     * Null-safe overload for the many RPCs whose only project hint is the request's own
+     * {@code projectUri}.
+     *
+     * <p>Call sites used to disagree about whether to guard the request object first - some passed
+     * {@code request != null ? request.projectUri : null}, others dereferenced it directly, for
+     * structurally identical params. Guarding here once makes every call site read the same.
+     *
+     * @param request the request naming the project, may be null
+     * @return the named project, or {@code null} if the request or its field names none
+     */
+    private ProjectContext resolveByProjectUri(HasProjectUri request) {
+        return resolveByProjectUri(request != null ? request.getProjectUri() : null);
     }
 
     /**
@@ -399,12 +413,18 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return resolveByProjectUri(projectUri);
     }
 
+    /** Null-safe overload of {@link #resolveByUriOrProjectUri(String, String)}. */
+    private ProjectContext resolveByUriOrProjectUri(String documentUri, HasProjectUri request) {
+        return resolveByUriOrProjectUri(documentUri, request != null ? request.getProjectUri() : null);
+    }
+
     /**
      * Resolves a {@link ProjectContext} from a file path, falling back to the project root the
      * request names when that path belongs to no registered project.
      *
-     * <p>Unlike {@link #resolveByUriOrProjectUri}, this widens on an <em>unmatched</em> path and not
-     * only on a blank one. A try-out request can legitimately name a file that sits outside every
+     * <p>Unlike {@link #resolveByPathOrProjectUri(String, String)}, which falls back only when the
+     * path is blank, this widens on an <em>unmatched</em> path too. A try-out request can name a
+     * file that sits outside every
      * project root - an artifact extracted from a {@code .car} dependency, for instance - while still
      * carrying the project whose panel issued it. Without the fallback those requests fail with
      * {@link #tryOutUnavailableMessage()} even though the project was named correctly.
@@ -424,6 +444,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return context;
     }
 
+    /** Null-safe overload of {@link #resolveByPathOrNamedProject(String, String)}. */
+    private ProjectContext resolveByPathOrNamedProject(String filePath, HasProjectUri request) {
+        return resolveByPathOrNamedProject(filePath, request != null ? request.getProjectUri() : null);
+    }
+
     /**
      * The {@link #resolveByPath} counterpart of {@link #resolveByUriOrProjectUri}: prefers a
      * filesystem path field when the request carries one, and falls back to an explicit project root.
@@ -439,6 +464,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             return resolveByPath(filePath);
         }
         return resolveByProjectUri(projectUri);
+    }
+
+    /** Null-safe overload of {@link #resolveByPathOrProjectUri(String, String)}. */
+    private ProjectContext resolveByPathOrProjectUri(String filePath, HasProjectUri request) {
+        return resolveByPathOrProjectUri(filePath, request != null ? request.getProjectUri() : null);
     }
 
     /**
@@ -512,7 +542,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DBConnectionTestResponse> testDBConnection(DBConnectionTestParams dbConnectionTestParams) {
 
-        ProjectContext ctx = resolveByProjectUri(dbConnectionTestParams.projectUri);
+        ProjectContext ctx = resolveByProjectUri(dbConnectionTestParams);
         if (ctx == null) {
             return CompletableFuture.completedFuture(new DBConnectionTestResponse(false));
         }
@@ -528,7 +558,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<DBConnectionTestResponse> loadDriverAndTestConnection(DBConnectionTestParams request){
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         if (ctx == null) {
             return CompletableFuture.completedFuture(new DBConnectionTestResponse(false));
         }
@@ -648,7 +678,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
         ProjectContext ctx = StringUtils.isNotBlank(param.customProjectUri)
                 ? resolveByProjectUri(param.customProjectUri)
-                : resolveByUriOrProjectUri(param.getDocumentUri(), param.projectUri);
+                : resolveByUriOrProjectUri(param.getDocumentUri(), param);
         String effectivePath = StringUtils.isNotBlank(param.projectPath) ? param.projectPath
                 : StringUtils.isNotBlank(param.customProjectUri) ? param.customProjectUri
                 : ctx != null ? ctx.getProjectUri() : null;
@@ -687,7 +717,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             if (StringUtils.isAnyBlank(request.groupId, request.artifactId, request.version)) {
                 return Either.forRight("groupId, artifactId, and version are required");
             }
-            ProjectContext ctx = resolveByProjectUri(request.projectUri);
+            ProjectContext ctx = resolveByProjectUri(request);
             if (ctx == null) {
                 return Either.forRight("Project is not initialized");
             }
@@ -726,7 +756,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<Either<InboundEndpointInfo, String>> getInboundInfo(InboundInfoRequest request) {
 
         return CompletableFuture.supplyAsync(() -> {
-            ProjectContext ctx = resolveByProjectUri(request.projectUri);
+            ProjectContext ctx = resolveByProjectUri(request);
             InboundConnectorHolder inboundConnectorHolder = ctx != null ? ctx.getInboundConnectorHolder() : null;
             // Bundled lookup first — no download needed.
             if (StringUtils.isNotBlank(request.id)) {
@@ -878,7 +908,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<List<String>> getResourceFiles(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         List<String> resourceFiles = ctx != null
                 ? ResourceFileScanner.scanResourceFiles(ctx.getProjectUri()) : Collections.emptyList();
         return CompletableFuture.supplyAsync(() -> resourceFiles);
@@ -887,7 +917,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<List<ConfigurableEntry>> getConfigurableEntries(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         if (ctx == null) {
             return CompletableFuture.supplyAsync(ArrayList::new);
         }
@@ -1005,7 +1035,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> saveInboundConnectorSchema(InboundConnectorParam param) {
 
-        ProjectContext ctx = resolveByUriOrProjectUri(param.documentPath, param.projectUri);
+        ProjectContext ctx = resolveByUriOrProjectUri(param.documentPath, param);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 && ctx.getInboundConnectorHolder().saveInboundConnector(param.connectorName, param.uiSchema));
     }
@@ -1018,7 +1048,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         // event integration sends connectorId alone, so routing on documentPath alone resolved every
         // "pick a connector" click to no project: the handler returned null and the form silently
         // stayed on the connector list. Fall back to the project the caller named.
-        ProjectContext ctx = resolveByPathOrProjectUri(param.documentPath, param.projectUri);
+        ProjectContext ctx = resolveByPathOrProjectUri(param.documentPath, param);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return null;
@@ -1034,7 +1064,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<JsonObject> getLocalInboundConnectors(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getInboundConnectorHolder().getLocalInboundConnectorList() : new JsonObject());
     }
@@ -1042,7 +1072,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<JsonObject> getConnectionUISchema(ConnectionUIParam param) {
 
-        ProjectContext ctx = resolveByUriOrProjectUri(param.getDocumentUri(), param.getProjectUri());
+        ProjectContext ctx = resolveByUriOrProjectUri(param.getDocumentUri(), param);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getConnectionHandler().getConnectionUISchema(param) : new JsonObject());
     }
@@ -1063,7 +1093,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<OverviewModel> getOverviewModel(ProjectUriRequest request) {
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         OverviewModel overviewModel = ctx != null
                 ? OverviewModelGenerator.getOverviewModel(ctx.getProjectUri()) : null;
         return CompletableFuture.supplyAsync(() -> overviewModel);
@@ -1071,7 +1101,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<CheckDBDriverResponseParams> checkDBDriver(CheckDBDriverRequestParams requestParams) {
-        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        ProjectContext ctx = resolveByProjectUri(requestParams);
         CheckDBDriverResponseParams response = QueryGenerator.isDriverAvailableInClassPath(requestParams.className,
                 ctx != null ? ctx.getProjectUri() : null);
         return CompletableFuture.supplyAsync(() -> response);
@@ -1083,7 +1113,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     // phantom entry instead of failing. Resolving first turns that into an honest false.
     @Override
     public CompletableFuture<Boolean> addDBDriver(ModifyDriverRequestParams requestParams) {
-        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        ProjectContext ctx = resolveByProjectUri(requestParams);
         if (ctx == null) {
             return CompletableFuture.completedFuture(Boolean.FALSE);
         }
@@ -1094,7 +1124,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<Boolean> removeDBDriver(ModifyDriverRequestParams requestParams) {
-        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        ProjectContext ctx = resolveByProjectUri(requestParams);
         if (ctx == null) {
             return CompletableFuture.completedFuture(Boolean.FALSE);
         }
@@ -1105,7 +1135,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<Boolean> modifyDBDriver(ModifyDriverRequestParams requestParams) {
-        ProjectContext ctx = resolveByProjectUri(requestParams.projectUri);
+        ProjectContext ctx = resolveByProjectUri(requestParams);
         if (ctx == null) {
             return CompletableFuture.completedFuture(Boolean.FALSE);
         }
@@ -1183,7 +1213,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<MediatorTryoutInfo> tryOutMediator(MediatorTryoutRequest request) {
 
-        ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request.getProjectUri());
+        ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request);
         return CompletableFuture.supplyAsync(() -> {
             TryOutManager manager = bindTryOutManager(ctx, request.getServerPath());
             if (manager == null) {
@@ -1236,7 +1266,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         // Schema generation here is a lightweight, stateless read (no shared MI server involved), so it
         // is served directly from the resolved project rather than going through the single rebindable
         // TryOutManager — it should never be blocked by another project's active try-out session.
-        ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request.getProjectUri());
+        ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? new ServerLessTryoutHandler(ctx.getProjectUri(), ctx.getConnectorHolder()).handle(request)
                 : new MediatorTryoutInfo("Project is not initialized"));
@@ -1245,7 +1275,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<TestConnectionResponse> testConnectorConnection(TestConnectionRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.getProjectUri());
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> {
             TryOutManager manager = bindTryOutManager(ctx, null);
             if (manager == null) {
@@ -1257,7 +1287,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<OverviewPageDetailsResponse> getOverviewPageDetails(ProjectUriRequest request) {
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         OverviewPageDetailsResponse response = ctx != null
                 ? OverviewPage.getDetails(ctx.getProjectUri()) : null;
         return CompletableFuture.supplyAsync(() -> response);
@@ -1282,7 +1312,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<UpdateResponse> updateProperty(UpdatePropertyRequest request) {
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         UpdateResponse response = ctx != null
                 ? PomParser.updateProperty(ctx.getProjectUri(), request) : new UpdateResponse();
         return CompletableFuture.supplyAsync(() -> response);
@@ -1290,7 +1320,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<UpdateResponse> updateDependency(UpdateDependencyRequest request) {
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         UpdateResponse response = ctx != null
                 ? PomParser.updateDependency(ctx.getProjectUri(), request) : new UpdateResponse();
         return CompletableFuture.supplyAsync(() -> response);
@@ -1308,7 +1338,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<UpdateResponse> updateConfigFile(UpdateConfigRequest request) {
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         UpdateResponse response = ctx != null
                 ? ConfigParser.updateConfigFile(ctx.getProjectUri(), request) : new UpdateResponse();
         return CompletableFuture.supplyAsync(() -> response);
@@ -1316,7 +1346,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
 
     @Override
     public CompletableFuture<String> updateConnectorDependencies(ProjectUriRequest request) {
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         if (ctx == null) {
             return CompletableFuture.supplyAsync(() -> "Project is not initialized");
         }
@@ -1329,7 +1359,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<String> refetchIntegrationProjectDependencies(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         if (ctx == null) {
             return CompletableFuture.supplyAsync(() -> "Project is not initialized");
         }
@@ -1341,7 +1371,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DependencyStatusResponse> getDependencyStatusList(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? DependencyDownloadManager.getDependencyStatusList(ctx.getProjectUri()) : null);
     }
@@ -1350,7 +1380,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<ConnectorDependencyResponse> getConnectorDependencies(
             ConnectorDependencyRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ConnectorConfigService.buildDependencyResponse(ctx.getProjectUri(),
                         request.connectorArtifactId, ctx.getConnectorHolder())
@@ -1361,7 +1391,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<Boolean> updateConnectorDependencyOverride(
             UpdateConnectorDependencyRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return false;
@@ -1384,7 +1414,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<Boolean> resetConnectorDependencyOverrides(
             ResetConnectorDependencyRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return false;
@@ -1405,7 +1435,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> updateConnectorFlags(UpdateConnectorFlagsRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return false;
@@ -1427,7 +1457,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> updateGlobalConnectorFlags(UpdateGlobalConnectorFlagsRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.projectUri);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return false;
@@ -1448,7 +1478,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public void initConnectorConfig(ConnectorDependencyRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         if (ctx != null) {
             ConnectorConfigService.initIfAbsent(ctx.getProjectUri());
         }
@@ -1457,7 +1487,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<LoadDependentResourcesResponse> loadDependentResources(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
                 return new LoadDependentResourcesResponse(LoadDependentResourcesResponse.STATUS_ERROR,
@@ -1476,7 +1506,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     public CompletableFuture<ConnectorGeneratorResponse> generateConnector(ConnectorGenerateRequest connectorGenReq) {
         String filePath = null;
         try {
-            ProjectContext ctx = resolveByProjectUri(connectorGenReq.projectUri);
+            ProjectContext ctx = resolveByProjectUri(connectorGenReq);
             if (ctx != null) {
                 String projectUri = ctx.getProjectUri();
                 String projectServerVersion = ctx.getProjectServerVersion();
@@ -1522,7 +1552,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<String> downloadDriverForConnector(DriverDownloadRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request.getProjectUri());
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ConnectorDownloadManager.downloadDriverForConnector(
                         ctx.getProjectUri(),
@@ -1542,7 +1572,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         // connection carries neither a driverPath nor stored coordinates, to no project: the handler
         // returned null and the caller's whole connection-validation step failed, leaving the DB
         // operation form's table and query fields empty. Fall back to the project the caller named.
-        ProjectContext ctx = resolveByPathOrProjectUri(request.getFilePath(), request.getProjectUri());
+        ProjectContext ctx = resolveByPathOrProjectUri(request.getFilePath(), request);
         return CompletableFuture.supplyAsync(() -> ctx != null ? ConnectorDownloadManager.getDriverMavenCoordinates(
                 request.getFilePath(),
                 request.getConnectorName(),
@@ -1554,7 +1584,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DeployPluginDetails> updateMavenDeployPlugin(DeployPluginDetails pluginDetails) {
 
-        ProjectContext ctx = resolveByProjectUri(pluginDetails.getProjectUri());
+        ProjectContext ctx = resolveByProjectUri(pluginDetails);
         return CompletableFuture.supplyAsync(() -> ctx != null ? PomParser.addCarDeployPluginToPom(
                 new File(ctx.getProjectUri() + File.separator + Constants.POM_FILE), pluginDetails) : null);
     }
@@ -1562,7 +1592,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DeployPluginDetails> getMavenDeployPluginDetails(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null ? PomParser.extractCarDeployPluginFields(
                 new File(ctx.getProjectUri() + File.separator + Constants.POM_FILE)) : null);
     }
@@ -1570,7 +1600,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<TextEdit> removeMavenDeployPlugin(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null ? PomParser.removeDeployPlugin(
                 new File(ctx.getProjectUri() + File.separator + Constants.POM_FILE)) : null);
     }
@@ -1578,7 +1608,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<List<ConfigDetails>> getConfigurableList(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ConfigParser.getConfigDetails(ctx.getProjectUri()) : Collections.emptyList());
     }
@@ -1586,7 +1616,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<String> getLocalInboundEndpointsListForCopilot(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getInboundConnectorHolder().getLocalInboundEndpointsListForCopilot() : null);
     }
@@ -1637,7 +1667,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             if (request.dependencies == null || request.dependencies.isEmpty()) {
                 return Either.forRight("At least one dependency is required");
             }
-            ProjectContext ctx = resolveByProjectUri(request.projectUri);
+            ProjectContext ctx = resolveByProjectUri(request);
             if (ctx == null) {
                 return Either.forRight("Project is not initialized");
             }
@@ -1685,7 +1715,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<String> fetchInboundConnectors(ProjectUriRequest request) {
 
-        ProjectContext ctx = resolveByProjectUri(request != null ? request.projectUri : null);
+        ProjectContext ctx = resolveByProjectUri(request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getInboundConnectorHolder().getCustomInboundConnectors() : null);
     }

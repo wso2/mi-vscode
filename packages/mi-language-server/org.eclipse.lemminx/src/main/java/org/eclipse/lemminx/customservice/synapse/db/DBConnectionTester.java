@@ -121,9 +121,11 @@ public class DBConnectionTester {
             LOGGER.log(Level.INFO,
                     "Get connection with Class name: " + className + "  and Driver path : " + driverPath);
 
-            Path jarPath = Paths.get(driverPath);
+            // The call above already rebuilt this project's shared loader with the jar in it, so use
+            // that one. Building a second loader for the same jar here left an extra, never-closed
+            // URLClassLoader behind on every connection test.
             DynamicClassLoader.updateJarInClassLoader(projectUri, new File(driverPath), true);
-            URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{jarPath.toUri().toURL()});
+            URLClassLoader urlClassLoader = DynamicClassLoader.getClassLoader(projectUri);
             Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
                     .newInstance();
             Properties props = buildConnectionProperties(connectionUrl, username, password);

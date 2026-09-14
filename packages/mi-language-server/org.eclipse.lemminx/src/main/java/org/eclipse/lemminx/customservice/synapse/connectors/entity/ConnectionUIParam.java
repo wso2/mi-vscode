@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
-public class ConnectionUIParam {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class ConnectionUIParam implements HasProjectUri {
 
     private String connectorName;
     private String connectionType;

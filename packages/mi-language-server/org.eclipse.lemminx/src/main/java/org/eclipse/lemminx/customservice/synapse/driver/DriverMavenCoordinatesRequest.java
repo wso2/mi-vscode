@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.driver;
 
-public class DriverMavenCoordinatesRequest {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class DriverMavenCoordinatesRequest implements HasProjectUri {
 
     private String filePath;
     private String connectorName;

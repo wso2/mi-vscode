@@ -14,10 +14,12 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
 /**
  * Request to update global connector flags in connector-config.json.
  */
-public class UpdateGlobalConnectorFlagsRequest {
+public class UpdateGlobalConnectorFlagsRequest implements HasProjectUri {
 
     /** When non-null, sets whether all driver JARs are omitted globally. */
     public Boolean omitAllDrivers;
@@ -26,4 +28,10 @@ public class UpdateGlobalConnectorFlagsRequest {
     public Boolean omitAllConnectors;
 
     public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

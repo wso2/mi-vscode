@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class QueryGenRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class QueryGenRequestParams implements HasProjectUri {
 
     String className;
     String username;

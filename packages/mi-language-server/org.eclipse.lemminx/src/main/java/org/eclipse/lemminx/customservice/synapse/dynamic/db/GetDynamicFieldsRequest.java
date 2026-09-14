@@ -15,8 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.dynamic.db;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class GetDynamicFieldsRequest {
+public class GetDynamicFieldsRequest implements HasProjectUri {
     private String connectorName;
     private String operationName;
     private String fieldName;

@@ -14,10 +14,12 @@
 
 package org.eclipse.lemminx.customservice.synapse.driver;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
 /**
  * Request data for downloading a JDBC driver for a specific connector and connection type.
  */
-public class DriverDownloadRequest {
+public class DriverDownloadRequest implements HasProjectUri {
 
     private String connectorName;
     private String connectionType;

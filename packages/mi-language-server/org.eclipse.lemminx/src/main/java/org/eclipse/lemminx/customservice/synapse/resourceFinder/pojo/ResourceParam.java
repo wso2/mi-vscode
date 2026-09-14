@@ -15,12 +15,13 @@
 package org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
 import java.util.List;
 
-public class ResourceParam {
+public class ResourceParam implements HasProjectUri {
 
     public Either<String, List<RequestedResource>> resourceType;
     public String projectPath = StringUtils.EMPTY;
@@ -42,4 +43,10 @@ public class ResourceParam {
 
 		return documentIdentifier != null ? documentIdentifier.getUri() : null;
 	}
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

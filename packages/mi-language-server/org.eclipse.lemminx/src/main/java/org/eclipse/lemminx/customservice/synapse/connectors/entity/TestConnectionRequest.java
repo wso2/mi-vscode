@@ -15,8 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
 import java.util.Map;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class TestConnectionRequest {
+public class TestConnectionRequest implements HasProjectUri {
 
     private String connectorName;
     private String connectionType;

@@ -14,10 +14,12 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
 /**
  * Request to update connector-level flags (omit, omitAllDrivers) for a specific connector.
  */
-public class UpdateConnectorFlagsRequest {
+public class UpdateConnectorFlagsRequest implements HasProjectUri {
 
     /** The connector Maven artifactId (e.g. "mi-connector-file"). */
     public String connectorArtifactId;
@@ -29,4 +31,10 @@ public class UpdateConnectorFlagsRequest {
     public Boolean omitAllDrivers;
 
     public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

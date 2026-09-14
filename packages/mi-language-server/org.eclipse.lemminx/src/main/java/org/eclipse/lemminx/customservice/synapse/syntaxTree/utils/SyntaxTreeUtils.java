@@ -38,7 +38,9 @@ import org.eclipse.lemminx.dom.DOMElement;
 import org.eclipse.lemminx.dom.DOMNode;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -74,6 +76,55 @@ public class SyntaxTreeUtils {
      * @param <T>         the parse result type
      * @return whatever {@code action} returns
      */
+    // Projects already resolved during the current parse. Resolving walks the project registry and
+    // normalizes a path per entry, and a tree build asks for the same document once per mediator
+    // element, so without this the same answer is recomputed hundreds of times for one document.
+    // inParseScope always clears the map, so a project registered or removed later is never stale.
+    private static final ThreadLocal<Map<String, ProjectContext>> PARSE_SCOPE_PROJECTS = new ThreadLocal<>();
+
+    /**
+     * Runs {@code action} as a single parse, reusing each document's resolved project within it.
+     * Nested calls join the scope already open rather than starting another.
+     *
+     * @param action the parse to run
+     * @param <T>    the parse result type
+     * @return whatever {@code action} returns
+     */
+    public static <T> T inParseScope(Supplier<T> action) {
+
+        if (PARSE_SCOPE_PROJECTS.get() != null) {
+            return action.get();
+        }
+        PARSE_SCOPE_PROJECTS.set(new HashMap<>());
+        try {
+            return action.get();
+        } finally {
+            PARSE_SCOPE_PROJECTS.remove();
+        }
+    }
+
+    /**
+     * Resolves the project owning {@code documentUri}, reusing the answer for the rest of the parse
+     * when called inside {@link #inParseScope}. Outside one it simply resolves.
+     *
+     * @param documentUri the document to resolve, may be null
+     * @return the owning project, or null if the document belongs to none
+     */
+    public static ProjectContext resolveProject(String documentUri) {
+
+        Map<String, ProjectContext> scope = PARSE_SCOPE_PROJECTS.get();
+        if (scope == null) {
+            return SynapseLanguageService.resolveProjectContext(documentUri);
+        }
+        String key = documentUri != null ? documentUri : "";
+        if (scope.containsKey(key)) {
+            return scope.get(key);
+        }
+        ProjectContext context = SynapseLanguageService.resolveProjectContext(documentUri);
+        scope.put(key, context);
+        return context;
+    }
+
     public static <T> T withProjectPath(String projectPath, Supplier<T> action) {
 
         String previous = PROJECT_PATH_OVERRIDE.get();
@@ -100,12 +151,12 @@ public class SyntaxTreeUtils {
         if (node != null && node.getOwnerDocument() != null) {
             documentUri = node.getOwnerDocument().getDocumentURI();
         }
-        ProjectContext ctx = SynapseLanguageService.resolveProjectContext(documentUri);
+        ProjectContext ctx = resolveProject(documentUri);
         if (ctx == null) {
             // The document URI belongs to no project - fall back to the project the caller declared.
             String overriddenProjectPath = PROJECT_PATH_OVERRIDE.get();
             if (overriddenProjectPath != null) {
-                ctx = SynapseLanguageService.resolveProjectContext(overriddenProjectPath);
+                ctx = resolveProject(overriddenProjectPath);
             }
         }
         if (ctx != null) {

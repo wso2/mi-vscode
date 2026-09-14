@@ -97,7 +97,8 @@ public class ExpressionCompletionUtils {
     private static MediatorFactoryFinder getMediatorFactory(String documentUri) {
 
         org.eclipse.lemminx.customservice.synapse.ProjectContext ctx =
-                org.eclipse.lemminx.SynapseLanguageService.resolveProjectContext(documentUri);
+                org.eclipse.lemminx.customservice.synapse.syntaxTree.utils.SyntaxTreeUtils
+                        .resolveProject(documentUri);
         if (ctx != null) {
             return ctx.getMediatorFactory();
         }
