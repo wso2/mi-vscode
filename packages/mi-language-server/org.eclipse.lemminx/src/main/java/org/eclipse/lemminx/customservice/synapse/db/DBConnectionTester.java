@@ -95,14 +95,7 @@ public class DBConnectionTester {
             // per-project isolation DynamicClassLoader exists to provide.
             Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
                     .newInstance();
-            Properties props = new Properties();
-
-            // Check username and password are empty due to Derby db can connect without username and password
-            if (!connectionUrl.contains(DBConstant.DBTypes.DB_TYPE_DERBY_CONN) || !username.equals(
-                    Constant.EMPTY_STRING) || !password.equals(Constant.EMPTY_STRING)) {
-                props.setProperty(Constant.USER, username);
-                props.setProperty(Constant.PASSWORD, password);
-            }
+            Properties props = buildConnectionProperties(connectionUrl, username, password);
             connection = driver.connect(connectionUrl, props);
             if (connection == null) {
                 // Driver.connect returns null rather than throwing when it does not recognise the URL,
@@ -133,14 +126,7 @@ public class DBConnectionTester {
             URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{jarPath.toUri().toURL()});
             Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
                     .newInstance();
-            Properties props = new Properties();
-
-            // Check username and password are empty due to Derby db can connect without username and password
-            if (!connectionUrl.contains(DBConstant.DBTypes.DB_TYPE_DERBY_CONN) || !username.equals(
-                    Constant.EMPTY_STRING) || !password.equals(Constant.EMPTY_STRING)) {
-                props.setProperty(Constant.USER, username);
-                props.setProperty(Constant.PASSWORD, password);
-            }
+            Properties props = buildConnectionProperties(connectionUrl, username, password);
             connection = driver.connect(connectionUrl, props);
 
         } catch (SQLException e) {
@@ -149,6 +135,35 @@ public class DBConnectionTester {
             LOGGER.log(Level.SEVERE, "Error occurred while accessing the DB driver class", e);
         }
         return connection;
+    }
+
+    /**
+     * Builds the properties passed to {@link Driver#connect}.
+     * <p>
+     * Mirrors what {@code DriverManager.getConnection(url, user, password)} used to do for us: a null
+     * credential is left out of the properties rather than passed through, since {@link Properties}
+     * rejects null values. Derby can connect without credentials, so empty ones are omitted for Derby
+     * URLs as well.
+     *
+     * @param connectionUrl Connection URL
+     * @param username      Username, may be null or empty
+     * @param password      Password, may be null or empty
+     * @return Connection properties
+     */
+    private static Properties buildConnectionProperties(String connectionUrl, String username, String password) {
+
+        Properties props = new Properties();
+        boolean derbyWithoutCredentials = connectionUrl.contains(DBConstant.DBTypes.DB_TYPE_DERBY_CONN)
+                && StringUtils.isEmpty(username) && StringUtils.isEmpty(password);
+        if (!derbyWithoutCredentials) {
+            if (username != null) {
+                props.setProperty(Constant.USER, username);
+            }
+            if (password != null) {
+                props.setProperty(Constant.PASSWORD, password);
+            }
+        }
+        return props;
     }
 
     private List<URL> getDBDriverUrl(String dbType, String dbDriverFolder, String version) {

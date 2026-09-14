@@ -81,21 +81,26 @@ public class MediatorHandler {
 
     public void init(String projectUri, String projectServerVersion, ConnectorHolder connectorHolder) {
 
+        // Assigned before the mediator-list load below, which is the only step here that can fail.
+        // None of these throw, and callers dereference them (mediatorFactory in particular) without a
+        // null check once isInitialized is set - so they must hold on the fallback path too.
+        this.miServerVersion = projectServerVersion;
+        this.connectorHolder = connectorHolder;
+        this.projectUri = projectUri;
+        this.gson = new Gson();
+        this.aiConnectorHandler = new AIConnectorHandler(this, projectUri);
+        this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
+
         try {
-            this.miServerVersion = projectServerVersion;
-            this.connectorHolder = connectorHolder;
             this.mediatorList = Utils.getMediatorList(projectServerVersion, connectorHolder);
             this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
-            gson = new Gson();
-            this.aiConnectorHandler = new AIConnectorHandler(this, projectUri);
-            this.projectUri = projectUri;
-            this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE,
                     String.format("Failed to load mediators for the MI server version: %s", projectServerVersion), e);
             LOGGER.warning(String.format("Falling back to default mediators (MI %s).", Constant.DEFAULT_MI_VERSION));
             try {
                 this.mediatorList = Utils.getMediatorList(Constant.DEFAULT_MI_VERSION, connectorHolder);
+                this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
             } catch (IOException ex) {
                 // This should not happen
             }

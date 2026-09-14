@@ -235,7 +235,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 
 	/**
 	 * Creates and registers a single {@link ProjectContext}, skipping folders that aren't MI
-	 * projects (no {@code pom.xml}/{@code src}).
+	 * projects (no {@code pom.xml}/{@code src}, and not a legacy multi-module root).
 	 *
 	 * @param registryUri    the URI to key this project by in {@link WorkspaceManager} (matches the
 	 *                       format of document URIs, for longest-prefix resolution)
@@ -245,24 +245,36 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	 *                       associations (may be {@code null}, in which case the context extracts its
 	 *                       own copy)
 	 * @return the created {@link ProjectContext}, or {@code null} if {@code projectPath} isn't an MI
-	 *         project or initialization failed
+	 *         project. A context whose initialization failed part-way is still registered and
+	 *         returned, so the project stays visible to the server.
 	 */
 	private ProjectContext addProjectContext(String registryUri, String projectPath, String miServerPath,
 			Path synapseXsdPath) {
-		if (!Utils.isValidProject(projectPath)) {
+		boolean isLegacyProject = Utils.isLegacyProject(projectPath);
+		// A legacy multi-module root keeps its sources in submodules, so it never satisfies
+		// isValidProject's pom.xml-plus-src check while still being a project the server must serve.
+		if (!isLegacyProject && !Utils.isValidProject(projectPath)) {
 			return null;
 		}
+		ProjectContext context;
 		try {
-			boolean isLegacyProject = Utils.isLegacyProject(projectPath);
 			String projectServerVersion = Utils.getServerVersion(projectPath, Constant.DEFAULT_MI_VERSION);
-			ProjectContext context = new ProjectContext(projectPath, isLegacyProject, projectServerVersion);
+			context = new ProjectContext(projectPath, isLegacyProject, projectServerVersion);
+		} catch (Exception e) {
+			LOGGER.log(Level.SEVERE, "Failed to create ProjectContext for: " + projectPath, e);
+			return null;
+		}
+		// Registered before initializing: one failing init step (an unreadable connector zip, an XSD
+		// extraction error) must not leave the project unknown to the server, which would make every
+		// lookup for it return null and silently empty its syntax tree, diagnostics and tryout. A
+		// partly initialized context still answers with whatever did load.
+		workspaceManager.addProject(registryUri, context);
+		try {
 			context.initProject(miServerPath, languageClient, synapseXsdPath);
-			workspaceManager.addProject(registryUri, context);
-			return context;
 		} catch (Exception e) {
 			LOGGER.log(Level.SEVERE, "Failed to initialize ProjectContext for: " + projectPath, e);
-			return null;
 		}
+		return context;
 	}
 
 	public WorkspaceManager getWorkspaceManager() {

@@ -126,6 +126,8 @@ import javax.xml.transform.stream.StreamResult;
 public class Utils {
 
     private static final Logger logger = Logger.getLogger(Utils.class.getName());
+    private static final String FILE_ASSOCIATIONS = "fileAssociations";
+    private static final String PATTERN = "pattern";
     private static final MustacheFactory mustacheFactory = new SynapseMustacheFactory();
 
     /**
@@ -1257,20 +1259,61 @@ public class Utils {
             }
 
             JsonObject association = new JsonObject();
-            association.addProperty("pattern", patternBase + "/**/*.xml");
+            association.addProperty(PATTERN, patternBase + "/**/*.xml");
             association.addProperty("systemId", xsdPath.toUri().toString());
             fileAssociationsArray.add(association);
         }
 
         if (settings != null && settings.isJsonObject() && settings.has(Constant.XML)) {
             JsonObject xmlObj = settings.getAsJsonObject(Constant.XML);
-            xmlObj.add("fileAssociations", fileAssociationsArray);
+            // Merge with, rather than replace, the associations the client forwarded from the user's
+            // xml.fileAssociations. Theirs stay first so a more specific association they configured
+            // still wins over the project-wide synapse pattern appended here, and re-running this on a
+            // settings refresh does not accumulate duplicates of our own entries.
+            JsonArray mergedAssociations = new JsonArray();
+            JsonElement existingAssociations = xmlObj.get(FILE_ASSOCIATIONS);
+            if (existingAssociations != null && existingAssociations.isJsonArray()) {
+                for (JsonElement association : existingAssociations.getAsJsonArray()) {
+                    mergedAssociations.add(association);
+                }
+            }
+            for (JsonElement association : fileAssociationsArray) {
+                if (!containsAssociation(mergedAssociations, association)) {
+                    mergedAssociations.add(association);
+                }
+            }
+            xmlObj.add(FILE_ASSOCIATIONS, mergedAssociations);
+            // Unlike fileAssociations, this entry is not user configuration: the extension overwrites
+            // xml.catalogs with its own synapse catalog before sending the settings. A single shared
+            // catalog would apply one project's XSD to every open project, which is exactly what the
+            // per-project associations above replace, so drop it.
             if (xmlObj.has(Constant.CATALOGS)) {
                 xmlObj.remove(Constant.CATALOGS);
             }
         }
 
         return settings;
+    }
+
+    /**
+     * Checks whether {@code associations} already holds an entry for the same {@code pattern}.
+     *
+     * @param associations the associations collected so far
+     * @param association  the association to look for
+     * @return true if an entry with the same pattern is already present
+     */
+    private static boolean containsAssociation(JsonArray associations, JsonElement association) {
+
+        if (!association.isJsonObject() || !association.getAsJsonObject().has(PATTERN)) {
+            return false;
+        }
+        JsonElement pattern = association.getAsJsonObject().get(PATTERN);
+        for (JsonElement existing : associations) {
+            if (existing.isJsonObject() && pattern.equals(existing.getAsJsonObject().get(PATTERN))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static Path updateSynapseCatalogSettings(InitializeParams params) throws IOException, URISyntaxException {

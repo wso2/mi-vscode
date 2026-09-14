@@ -27,6 +27,7 @@ import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTr
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.inbound.InboundEndpoint;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.utils.SyntaxTreeUtils;
 import org.eclipse.lemminx.customservice.synapse.utils.ConfigFinder;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
@@ -74,7 +75,7 @@ public class ServerLessTryoutHandler {
                         request.getInputPayload(), null);
             }
             DOMDocument domDocument = Utils.getDOMDocument(new File(visitFilePath));
-            STNode node = SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
+            STNode node = buildTree(domDocument);
             MediatorTryoutInfo mediatorTryoutInfo = createInitialMediatorTryoutInfo(request);
             if (node != null) {
                 visitNode(node, request, mediatorTryoutInfo);
@@ -91,7 +92,23 @@ public class ServerLessTryoutHandler {
             throw new IllegalArgumentException("FilePath is null");
         }
         DOMDocument domDocument = Utils.getDOMDocument(new File(filePath));
-        return SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
+        return buildTree(domDocument);
+    }
+
+    /**
+     * Builds the syntax tree for {@code domDocument} as belonging to this handler's project.
+     * <p>
+     * The document is often the working copy under {@link #TEMP_FOLDER} rather than the artifact in
+     * the project, and that path resolves to no project - which would leave every connector mediator
+     * in it parsed as an invalid one, against an empty connector set.
+     *
+     * @param domDocument the document to parse
+     * @return the root node, or null if the document has no recognised root element
+     */
+    private STNode buildTree(DOMDocument domDocument) {
+
+        return SyntaxTreeUtils.withProjectPath(projectUri,
+                () -> SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement()));
     }
 
     private MediatorTryoutInfo createInitialMediatorTryoutInfo(MediatorTryoutRequest request) {

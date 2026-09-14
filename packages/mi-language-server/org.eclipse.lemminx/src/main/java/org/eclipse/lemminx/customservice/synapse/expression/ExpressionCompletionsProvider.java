@@ -17,7 +17,9 @@ package org.eclipse.lemminx.customservice.synapse.expression;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.SynapseLanguageService;
 import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionContext;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionRequest;
@@ -123,12 +125,16 @@ public class ExpressionCompletionsProvider {
             return null;
         }
         String projectPath = getProjectPath(request.getXMLDocument().getDocumentURI());
-        // TODO(multi-project): resolve this project's real ConnectorHolder once WorkspaceManager can
-        // map a document URI to its owning ProjectContext (Phase 3). Until then, connector response/
-        // target-variable schema enrichment is unavailable from this static completion path.
-        ServerLessTryoutHandler serverLessTryoutHandler = new ServerLessTryoutHandler(projectPath, new ConnectorHolder());
-
         String documentUri = Utils.getAbsolutePath(request.getXMLDocument().getDocumentURI());
+
+        // Use the ConnectorHolder of the project that owns this document, so connector response and
+        // target variables (e.g. the variable named by <http.get responseVariable="..."/>) contribute
+        // their schema to the completions. An empty holder leaves every connector mediator unresolved.
+        ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(documentUri);
+        ConnectorHolder connectorHolder =
+                projectContext != null ? projectContext.getConnectorHolder() : new ConnectorHolder();
+        ServerLessTryoutHandler serverLessTryoutHandler =
+                new ServerLessTryoutHandler(projectPath, connectorHolder);
         String payload = ExpressionCompletionUtils.getInputPayload(projectPath, documentUri, request.getPosition());
 
         // Add a dummy mediator if the current mediator is a new mediator

@@ -40,6 +40,7 @@ import org.eclipse.lemminx.dom.DOMNode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 public class SyntaxTreeUtils {
 
@@ -53,9 +54,39 @@ public class SyntaxTreeUtils {
     private static final MediatorFactoryFinder DEFAULT_MEDIATOR_FACTORY =
             new MediatorFactoryFinder(null, null, new ConnectorHolder());
 
+    // Project of the document currently being built, for documents whose URI cannot resolve to one
+    // on its own - a Try-Out session parses a copy of the artifact under ~/.wso2-mi/expression-temp,
+    // which sits outside every project root. Scoped to the calling thread and always cleared again
+    // by withProjectPath, so it never leaks one project's factory into another's parse.
+    private static final ThreadLocal<String> PROJECT_PATH_OVERRIDE = new ThreadLocal<>();
+
     public static void setMediatorFactory(MediatorFactoryFinder finder) {
 
         testMediatorFactory = finder;
+    }
+
+    /**
+     * Runs {@code action} with {@code projectPath} standing in as the owning project for any document
+     * parsed inside it that does not resolve to a project by its own URI.
+     *
+     * @param projectPath the project root to fall back to
+     * @param action      the parse to run
+     * @param <T>         the parse result type
+     * @return whatever {@code action} returns
+     */
+    public static <T> T withProjectPath(String projectPath, Supplier<T> action) {
+
+        String previous = PROJECT_PATH_OVERRIDE.get();
+        PROJECT_PATH_OVERRIDE.set(projectPath);
+        try {
+            return action.get();
+        } finally {
+            if (previous != null) {
+                PROJECT_PATH_OVERRIDE.set(previous);
+            } else {
+                PROJECT_PATH_OVERRIDE.remove();
+            }
+        }
     }
 
     /**
@@ -70,6 +101,13 @@ public class SyntaxTreeUtils {
             documentUri = node.getOwnerDocument().getDocumentURI();
         }
         ProjectContext ctx = SynapseLanguageService.resolveProjectContext(documentUri);
+        if (ctx == null) {
+            // The document URI belongs to no project - fall back to the project the caller declared.
+            String overriddenProjectPath = PROJECT_PATH_OVERRIDE.get();
+            if (overriddenProjectPath != null) {
+                ctx = SynapseLanguageService.resolveProjectContext(overriddenProjectPath);
+            }
+        }
         if (ctx != null) {
             return ctx.getMediatorFactory();
         }

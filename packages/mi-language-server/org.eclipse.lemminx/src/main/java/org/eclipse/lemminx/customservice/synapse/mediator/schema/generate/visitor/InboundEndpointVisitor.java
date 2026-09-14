@@ -15,6 +15,8 @@
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.SynapseLanguageService;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
 import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutInfo;
@@ -72,10 +74,8 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         if (StringUtils.isEmpty(inboundVariableName)) {
             return;
         }
-        InboundConnectorHolder holder;
-        try {
-            holder = InboundConnectorHolder.getInstance();
-        } catch (IllegalStateException e) {
+        InboundConnectorHolder holder = resolveInboundConnectorHolder();
+        if (holder == null) {
             LOGGER.severe("Inbound connector holder is not initialized");
             return;
         }
@@ -90,6 +90,29 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         }
         inputSchema.setKey(inboundVariableName);
         info.addOutputVariable(inputSchema);
+    }
+
+    /**
+     * Resolves the {@link InboundConnectorHolder} of the project this visitor is bound to.
+     * <p>
+     * {@link InboundConnectorHolder#getInstance()} is process-wide and is overwritten every time a
+     * project initialises, so in a multi-root workspace it answers with whichever project happened to
+     * load last - the same cross-project leak the per-project {@link ConnectorHolder} above avoids. It
+     * is used only as a fallback, for callers whose project path is not a registered project.
+     *
+     * @return the holder to read inbound connector schemas from, or null if none is available
+     */
+    private InboundConnectorHolder resolveInboundConnectorHolder() {
+
+        ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(projectPath);
+        if (projectContext != null && projectContext.getInboundConnectorHolder() != null) {
+            return projectContext.getInboundConnectorHolder();
+        }
+        try {
+            return InboundConnectorHolder.getInstance();
+        } catch (IllegalStateException e) {
+            return null;
+        }
     }
 
     private String getParameterValue(InboundEndpoint inboundEndpoint, String parameterName) {
