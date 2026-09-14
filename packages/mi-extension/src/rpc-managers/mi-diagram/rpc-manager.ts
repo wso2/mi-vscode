@@ -4180,6 +4180,7 @@ ${endpointAttributes}
     async copyConnectorZip(params: CopyConnectorZipRequest): Promise<CopyConnectorZipResponse> {
         const { connectorPath, isInbound } = params;
         const langClient = await MILanguageClient.getInstance(this.projectUri);
+        const rpcClient = new MiVisualizerRpcManager(this.projectUri);
         try {
             if (isInbound) {
                 const inboundConnectorDirectory = path.join(this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'inbound-endpoints');
@@ -4227,7 +4228,6 @@ ${endpointAttributes}
                     'Yes'
                 );
                 if (overwrite === 'Yes') {
-                    const rpcClient = new MiVisualizerRpcManager(this.projectUri);
                     if (isDuplicate?.connectorPath) {
                         await this.removeConnector({ connectorPath: isDuplicate.connectorPath });
                     } else {
@@ -4261,12 +4261,10 @@ ${endpointAttributes}
             }
 
             await fs.promises.copyFile(connectorPath, destinationPath);
+            await rpcClient.updateConnectorDependencies();
             commands.executeCommand(COMMANDS.REFRESH_COMMAND);
 
-
-            return new Promise((resolve, reject) => {
-                resolve({ success: true, connectorPath: destinationPath });
-            });
+            return { success: true, connectorPath: destinationPath };
         } catch (error) {
             console.error('Error downloading connector:', error);
             throw new Error('Failed to download connector');
