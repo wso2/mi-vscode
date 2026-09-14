@@ -123,7 +123,7 @@ public class MIServer {
         }
         try {
             serverProcess = startServerProcess();
-            String content = Utils.getHash(projectUri) + " - " + serverProcess.pid();
+            String content = TryOutUtils.getProjectHash(projectUri) + " - " + serverProcess.pid();
             Files.createDirectories(TryOutConstants.TRYOUT_HISTORY_LOG_FILE.getParent());
             Files.writeString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE, content);
 
@@ -271,7 +271,7 @@ public class MIServer {
             if (!isAlive) {
                 isStarted = false;
             }
-            if (Utils.getHash(projectUri).equals(TryOutUtils.getProjectPathHash())) {
+            if (TryOutUtils.getProjectHash(projectUri).equals(TryOutUtils.getProjectPathHash())) {
                 Files.createDirectories(TryOutConstants.TRYOUT_HISTORY_LOG_FILE.getParent());
                 Files.writeString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE, StringUtils.EMPTY);
             }

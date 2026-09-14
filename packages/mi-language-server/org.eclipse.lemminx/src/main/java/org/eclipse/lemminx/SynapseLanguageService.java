@@ -443,7 +443,10 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             return null;
         }
         synchronized (tryOutBindLock) {
-            if (tryOutManager != null && ctx.getProjectUri().equals(tryOutManager.getProjectUri())) {
+            // Same project-root comparison as every other ownership check (shutDownTryoutServer,
+            // TryOutHandler): a raw equals would read two spellings of one folder as two projects.
+            if (tryOutManager != null
+                    && WorkspaceManager.isSameProjectPath(ctx.getProjectUri(), tryOutManager.getProjectUri())) {
                 return tryOutManager;
             }
             if (tryOutManager != null) {
@@ -1186,8 +1189,15 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                     return true;
                 }
                 String requestProjectUri = request != null ? request.getProjectUri() : null;
-                if (StringUtils.isNotBlank(requestProjectUri)
-                        && !WorkspaceManager.isSameProjectPath(requestProjectUri, tryOutManager.getProjectUri())) {
+                if (StringUtils.isBlank(requestProjectUri)) {
+                    // Older clients send no project, so the ownership check cannot run and this stops
+                    // whichever project currently holds the server. Logged because it is the one path
+                    // where a request can stop another project's try-out.
+                    log.log(Level.INFO, String.format(
+                            "Shutdown request carries no project; stopping the try-out server of '%s'.",
+                            tryOutManager.getProjectUri()));
+                } else if (!WorkspaceManager.isSameProjectPath(requestProjectUri,
+                        tryOutManager.getProjectUri())) {
                     return true;
                 }
                 return tryOutManager.shutdown();

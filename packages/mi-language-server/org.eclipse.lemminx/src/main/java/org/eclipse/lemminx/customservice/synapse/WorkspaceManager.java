@@ -125,17 +125,6 @@ public class WorkspaceManager {
     // -------------------------------------------------------------------------
 
     /**
-     * Returns the {@link ProjectContext} for an exact project root URI match.
-     *
-     * @param projectUri the normalized root URI of the project
-     * @return the registered {@link ProjectContext}, or {@code null} if not found
-     */
-    public ProjectContext getProject(String projectUri) {
-
-        return projects.get(projectUri);
-    }
-
-    /**
      * Resolves a {@link ProjectContext} by matching {@code projectPath} against each registered
      * context's own {@link ProjectContext#getProjectUri()} (an absolute filesystem path), rather
      * than the {@code file://} URI this registry is keyed by internally.
@@ -143,7 +132,7 @@ public class WorkspaceManager {
      * <p>RPCs that carry a bare {@code projectUri} field (as opposed to a document URI) receive it
      * from the VS Code extension as {@code WorkspaceFolder.uri.fsPath} — an OS filesystem path, not
      * a URI — which will never match a key in {@link #projects}. Callers resolving from that field
-     * must use this method instead of {@link #getProject(String)}.
+     * must use this method rather than looking the raw value up as a registry key.
      *
      * @param projectPath the project root as an absolute filesystem path (or a {@code file://} URI,
      *                     which is normalized the same way)
@@ -179,16 +168,23 @@ public class WorkspaceManager {
         if (pathA == null || pathB == null) {
             return false;
         }
-        String normalizedA = normalizePath(pathA);
-        String normalizedB = normalizePath(pathB);
+        String normalizedA = normalizeProjectPath(pathA);
+        String normalizedB = normalizeProjectPath(pathB);
         return normalizedA != null && normalizedA.equalsIgnoreCase(normalizedB);
     }
 
     /**
      * Normalizes a project root — whether given as an absolute filesystem path or a {@code file://}
      * URI — to an absolute, normalized path string suitable for cross-format comparison.
+     *
+     * <p>This is the one canonical spelling of a project root in the server. Anything that keys,
+     * hashes or compares projects should derive its value from here, so that two components can
+     * never disagree about whether two spellings name the same project.
+     *
+     * @param path the project root, as a filesystem path or a {@code file://} URI
+     * @return the normalized absolute path, or {@code path} itself if it cannot be parsed
      */
-    private static String normalizePath(String path) {
+    public static String normalizeProjectPath(String path) {
 
         if (path == null) {
             return null;
@@ -291,35 +287,19 @@ public class WorkspaceManager {
      *     → returns ContextB  (longest match)
      * </pre>
      *
-     * @param documentUri the normalized URI of the document being processed
+     * <p>This is the same lookup as {@link #getProjectForFile(String)} and delegates to it, rather
+     * than matching raw URI strings against the registry keys: those keys are the workspace-folder
+     * URIs exactly as the client sent them, and a document URI lemminx produced itself does not
+     * always use the same spelling (on Windows, {@code c%3A} vs. {@code c:}), which made every
+     * document in every project miss.
+     *
+     * @param documentUri the URI of the document being processed
      * @return the best-matching {@link ProjectContext}, or {@code null} if no
      *         registered project contains the document
      */
     public ProjectContext getProjectForDocument(String documentUri) {
 
-        if (documentUri == null) {
-            log.log(Level.WARNING, "getProjectForDocument called with null documentUri \u2014 returning null.");
-            return null;
-        }
-
-        ProjectContext bestMatch = null;
-        int longestPrefixLength = -1;
-
-        for (Map.Entry<String, ProjectContext> entry : projects.entrySet()) {
-            String projectUri = entry.getKey();
-            // Use separator check to avoid false matches (e.g. "project" matching "project2").
-            if ((documentUri.startsWith(projectUri + "/") || documentUri.equals(projectUri))
-                    && projectUri.length() > longestPrefixLength) {
-                longestPrefixLength = projectUri.length();
-                bestMatch = entry.getValue();
-            }
-        }
-
-        if (bestMatch == null) {
-            log.log(Level.WARNING,
-                    "getProjectForDocument: no registered project contains document: " + documentUri);
-        }
-        return bestMatch;
+        return getProjectForFile(documentUri);
     }
 
     /**
@@ -339,25 +319,4 @@ public class WorkspaceManager {
         return Collections.unmodifiableCollection(new ArrayList<>(projects.values()));
     }
 
-    /**
-     * Returns {@code true} if a {@link ProjectContext} is registered for the
-     * given project root URI.
-     *
-     * @param projectUri the normalized root URI to query
-     * @return {@code true} if the project is registered, {@code false} otherwise
-     */
-    public boolean hasProject(String projectUri) {
-
-        return projects.containsKey(projectUri);
-    }
-
-    /**
-     * Returns the number of {@link ProjectContext} instances currently registered.
-     *
-     * @return the project count (0 if no projects are registered)
-     */
-    public int getProjectCount() {
-
-        return projects.size();
-    }
 }

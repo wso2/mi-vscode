@@ -727,7 +727,7 @@ public class TryOutHandler {
             return;
         }
         String projectHash = TryOutUtils.getProjectPathHash();
-        if (StringUtils.isBlank(projectHash) || projectHash.equals(Utils.getHash(projectUri))) {
+        if (StringUtils.isBlank(projectHash) || projectHash.equals(TryOutUtils.getProjectHash(projectUri))) {
             // No server recorded, or the recorded one is this project's own: there is nothing to take over.
             return;
         }

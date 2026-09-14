@@ -14,9 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
+import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+
 import java.io.File;
-import java.io.IOException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Path;
@@ -176,26 +176,17 @@ public class DynamicClassLoader {
     /**
      * Normalizes a project key so the same project always maps to the same registry entry
      * regardless of whether callers pass a {@code file://} URI or a plain OS path.
+     *
+     * <p>Delegates to {@link WorkspaceManager#normalizeProjectPath(String)} rather than
+     * canonicalizing independently. A second strategy here used to resolve symlinks through
+     * {@code toRealPath()} while {@code WorkspaceManager} did not, so for a project root that is a
+     * symlink the two derived different keys for the same directory - and a driver registered under
+     * one was invisible to a lookup made through the other.
      */
     static String normalize(String projectKey) {
         if (projectKey == null) {
             return "";
         }
-        try {
-            Path path = looksLikeUri(projectKey) ? Paths.get(URI.create(projectKey)) : Paths.get(projectKey);
-            try {
-                return path.toRealPath().toString();
-            } catch (IOException e) {
-                // Path may not exist yet (e.g. in tests, or a project root not yet materialized on
-                // disk) - fall back to a normalized absolute path so repeat calls still agree.
-                return path.toAbsolutePath().normalize().toString();
-            }
-        } catch (Exception e) {
-            return projectKey;
-        }
-    }
-
-    private static boolean looksLikeUri(String key) {
-        return key.startsWith("file:") || key.matches("^[a-zA-Z][a-zA-Z0-9+.-]*://.*");
+        return WorkspaceManager.normalizeProjectPath(projectKey);
     }
 }

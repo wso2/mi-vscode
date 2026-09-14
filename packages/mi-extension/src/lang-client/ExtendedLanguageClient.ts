@@ -108,6 +108,8 @@ import { CompletionParams, LanguageClient, LanguageClientOptions, ServerOptions,
 import { TextDocumentIdentifier, CodeAction, CodeActionParams } from "vscode-languageserver-protocol";
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import * as path from "path";
+import { Messenger } from "vscode-messenger";
 import { RPCLayer } from "../RPCLayer";
 import { VisualizerWebview } from "../visualizer/webview";
 import { Range } from "../../../syntax-tree/lib/src";
@@ -192,6 +194,34 @@ export interface LoadDependentResourcesResponse {
     conflictingDependencies?: ConflictingDependency[];
 }
 
+/**
+ * Finds the messenger for a project root the server named.
+ *
+ * The server computes that path itself, while the messengers are keyed by the workspace folder's
+ * fsPath, so the two spellings do not always match exactly (on Windows the drive-letter case is the
+ * usual difference). An exact hit is used when there is one; otherwise the paths are compared
+ * normalized. Returning undefined lets the caller fall back to broadcasting rather than silently
+ * dropping the notification.
+ */
+function findMessenger(projectPath: string): Messenger | undefined {
+    const exactMatch = RPCLayer._messengers.get(projectPath);
+    if (exactMatch) {
+        return exactMatch;
+    }
+    const isCaseInsensitiveFs = process.platform === 'win32';
+    const normalize = (value: string) => {
+        const resolved = path.resolve(value);
+        return isCaseInsensitiveFs ? resolved.toLowerCase() : resolved;
+    };
+    const target = normalize(projectPath);
+    for (const [key, messenger] of RPCLayer._messengers.entries()) {
+        if (normalize(key) === target) {
+            return messenger;
+        }
+    }
+    return undefined;
+}
+
 export class ExtendedLanguageClient extends LanguageClient {
 
     constructor(id: string, name: string, serverOptions: ServerOptions, clientOptions: LanguageClientOptions) {
@@ -203,8 +233,9 @@ export class ExtendedLanguageClient extends LanguageClient {
             // includes in the payload. Fall back to broadcasting to every open project
             // webview if an older server hasn't started sending it yet.
             const targetProjectUri: string | undefined = connectorStatus?.projectUri;
-            if (targetProjectUri) {
-                RPCLayer._messengers.get(targetProjectUri)?.sendNotification(onConnectorStatusUpdate, { type: 'webview', webviewType: VisualizerWebview.viewType }, connectorStatus);
+            const targetMessenger = targetProjectUri ? findMessenger(targetProjectUri) : undefined;
+            if (targetMessenger) {
+                targetMessenger.sendNotification(onConnectorStatusUpdate, { type: 'webview', webviewType: VisualizerWebview.viewType }, connectorStatus);
                 return;
             }
             for (const messenger of RPCLayer._messengers.values()) {
