@@ -90,6 +90,7 @@ public abstract class AbstractConnectorLoader {
         try (ZipFile zipFile = new ZipFile(connectorPath)) {
             String connectorName = connectorReader.getConnectorName(zipFile);
             ConnectorDetails details = new ConnectorDetails();
+            details.parsedConnectorName = connectorName;
             if (StringUtils.isNotBlank(connectorName) && connectorHolder.exists(connectorName)) {
                 Connector existingConnector = connectorHolder.getConnector(connectorName);
                 details.connectorName = connectorName;

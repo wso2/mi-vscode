@@ -57,6 +57,7 @@ import {
     CreateLocalEntryRequest,
     CreateLocalEntryResponse,
     FileDirResponse,
+    FileDirRequest,
     CreateInboundEndpointRequest,
     CreateInboundEndpointResponse,
     UndoRedoParams,
@@ -371,7 +372,7 @@ export const getWorkspaceRoot: RequestType<boolean | undefined, ProjectRootRespo
 export const getProjectRoot: RequestType<GetProjectRootRequest, ProjectRootResponse> = { method: `${_preFix}/getProjectRoot` };
 export const askProjectDirPath: RequestType<void, ProjectDirResponse> = { method: `${_preFix}/askProjectDirPath` };
 export const askProjectImportDirPath: RequestType<void, ProjectDirResponse> = { method: `${_preFix}/askProjectImportDirPath` };
-export const askFileDirPath: RequestType<void, FileDirResponse> = { method: `${_preFix}/askFileDirPath` };
+export const askFileDirPath: RequestType<FileDirRequest, FileDirResponse> = { method: `${_preFix}/askFileDirPath` };
 export const askOpenAPIDirPath: RequestType<void, FileDirResponse> = { method: `${_preFix}/askOpenAPIDirPath` };
 export const createProject: RequestType<CreateProjectRequest, CreateProjectResponse> = { method: `${_preFix}/createProject` };
 export const importProject: RequestType<ImportProjectRequest, ImportProjectResponse> = { method: `${_preFix}/importProject` };

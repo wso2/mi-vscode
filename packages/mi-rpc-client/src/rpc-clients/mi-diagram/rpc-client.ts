@@ -75,6 +75,7 @@ import {
     ExpressionCompletionsRequest,
     ExpressionCompletionsResponse,
     FileDirResponse,
+    FileDirRequest,
     GetAllArtifactsRequest,
     GetAllArtifactsResponse,
     GetAllDependenciesResponse,
@@ -764,8 +765,8 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
         return this._messenger.sendRequest(askProjectImportDirPath, HOST_EXTENSION);
     }
 
-    askFileDirPath(): Promise<FileDirResponse> {
-        return this._messenger.sendRequest(askFileDirPath, HOST_EXTENSION);
+    askFileDirPath(params?: FileDirRequest): Promise<FileDirResponse> {
+        return this._messenger.sendRequest(askFileDirPath, HOST_EXTENSION, params);
     }
 
     askOpenAPIDirPath(): Promise<FileDirResponse> {
