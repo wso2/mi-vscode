@@ -96,6 +96,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.logging.Level;
@@ -128,6 +129,9 @@ public class Utils {
     private static final Logger logger = Logger.getLogger(Utils.class.getName());
     private static final String FILE_ASSOCIATIONS = "fileAssociations";
     private static final String PATTERN = "pattern";
+
+    private static final Map<String, Map<String, JsonObject>> UI_SCHEMA_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String, Mustache>> TEMPLATE_CACHE = new ConcurrentHashMap<>();
     private static final MustacheFactory mustacheFactory = new SynapseMustacheFactory();
 
     /**
@@ -886,7 +890,30 @@ public class Utils {
         return false;
     }
 
+    /**
+     * Loads the UI schemas in {@code resourceFolderName}, reading the jar only the first time.
+     *
+     * <p>Schemas are copied per caller: {@link JsonObject} is mutable and some are returned
+     * directly as RPC responses, so one project must not be able to alter what another reads.
+     *
+     * @param resourceFolderName the jar resource folder to read
+     * @return this caller's own map of schema name to schema
+     */
     public static Map<String, JsonObject> getUISchemaMap(String resourceFolderName) {
+
+        Map<String, JsonObject> cached = UI_SCHEMA_CACHE.get(resourceFolderName);
+        if (cached == null) {
+            cached = loadUISchemaMap(resourceFolderName);
+            if (!cached.isEmpty()) {
+                UI_SCHEMA_CACHE.put(resourceFolderName, cached);
+            }
+        }
+        Map<String, JsonObject> schemas = new HashMap<>();
+        cached.forEach((name, schema) -> schemas.put(name, schema.deepCopy()));
+        return schemas;
+    }
+
+    private static Map<String, JsonObject> loadUISchemaMap(String resourceFolderName) {
         Map<String, JsonObject> jsonMap = new HashMap<>();
         try {
             URI resourceURI = Utils.class.getClassLoader().getResource(resourceFolderName).toURI();
@@ -1117,7 +1144,28 @@ public class Utils {
         return false;
     }
 
+    /**
+     * Loads the mustache templates in {@code resourceFolderName}, reading the jar only the first
+     * time.
+     *
+     * <p>Compiled templates are shared, since callers only execute them; the map is per-caller.
+     *
+     * @param resourceFolderName the jar resource folder to read
+     * @return this caller's own map of template name to compiled template
+     */
     public static Map<String, Mustache> getTemplateMap(String resourceFolderName) {
+
+        Map<String, Mustache> cached = TEMPLATE_CACHE.get(resourceFolderName);
+        if (cached == null) {
+            cached = loadTemplateMap(resourceFolderName);
+            if (!cached.isEmpty()) {
+                TEMPLATE_CACHE.put(resourceFolderName, cached);
+            }
+        }
+        return new HashMap<>(cached);
+    }
+
+    private static Map<String, Mustache> loadTemplateMap(String resourceFolderName) {
         Map<String, Mustache> templateMap = new HashMap<>();
         try {
             URI resourceURI = Utils.class.getClassLoader().getResource(resourceFolderName).toURI();
