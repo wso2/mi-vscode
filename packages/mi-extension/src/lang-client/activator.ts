@@ -127,20 +127,32 @@ export class MILanguageClient {
             // The promise itself is the lock: concurrent callers (e.g. several
             // workspace folders activating at once) await it below instead of
             // each finding an empty map and launching their own JVM.
-            this._launchPromise = (async () => {
+            const attempt = (async () => {
                 const instance = new MILanguageClient(projectUri);
                 await instance.launch(projectUri);
+                if (!instance.languageClient) {
+                    throw new Error("Language client failed to initialize");
+                }
                 this._instances.set(this.SHARED_KEY, instance);
                 return instance;
             })();
+            // A failed launch is not cached, so the next getInstance() retries.
+            const launch = attempt.catch(error => {
+                if (this._launchPromise === launch) {
+                    this._launchPromise = undefined;
+                }
+                throw error;
+            });
+            this._launchPromise = launch;
         }
-        const instance = await this._launchPromise;
-        const languageClient = instance.languageClient;
-        if (!languageClient) {
-            const errorMessage = "Language client failed to initialize";
-            window.showErrorMessage(errorMessage);
-            throw new Error(errorMessage);
+        let instance: MILanguageClient;
+        try {
+            instance = await this._launchPromise;
+        } catch (error) {
+            window.showErrorMessage("Language client failed to initialize");
+            throw error;
         }
+        const languageClient = instance.languageClient!;
         // Every project initializes itself here, including the one that spawned the JVM
         // and the ones that arrived while it was still spawning. Doing this outside
         // launch() is what makes it run for all of them: launch() runs exactly once.
