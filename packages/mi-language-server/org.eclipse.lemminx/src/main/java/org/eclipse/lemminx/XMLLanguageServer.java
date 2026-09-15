@@ -18,6 +18,7 @@ import static org.eclipse.lsp4j.jsonrpc.CompletableFutures.computeAsync;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -25,7 +26,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -222,14 +226,59 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		String miServerPath = synapseLanguageService.getMiServerPath();
 		List<WorkspaceFolder> folders = params.getWorkspaceFolders();
 		if (folders != null && !folders.isEmpty()) {
-			for (WorkspaceFolder folder : folders) {
-				addProjectContext(folder.getUri(), Utils.getAbsolutePath(folder.getUri()),
-						miServerPath, workspaceSchemas.get(folder.getUri()));
-			}
+			initProjects(folders, miServerPath);
 		} else if (params.getRootPath() != null) {
 			String rootPath = params.getRootPath();
 			String rootUri = toRegistryUri(rootPath);
 			addProjectContext(rootUri, rootPath, miServerPath, workspaceSchemas.get(rootUri));
+		}
+	}
+
+	/**
+	 * Initializes and registers every workspace folder's project, several folders at a time.
+	 *
+	 * <p>{@link ProjectContext#initProject} is mostly disk I/O, so run one folder after another its
+	 * cost is the sum over every open project, paid before {@code initialize} can answer the client.
+	 *
+	 * <p>Still waits for all of them before returning: most {@link ProjectContext} getters throw
+	 * until {@code initProject} completes, so nothing downstream handles a registered-but-unready
+	 * project.
+	 *
+	 * @param folders      the workspace folders the client sent
+	 * @param miServerPath the local MI server installation path
+	 */
+	private void initProjects(List<WorkspaceFolder> folders, String miServerPath) {
+		if (folders.size() == 1) {
+			WorkspaceFolder folder = folders.get(0);
+			addProjectContext(folder.getUri(), Utils.getAbsolutePath(folder.getUri()), miServerPath,
+					workspaceSchemas.get(folder.getUri()));
+			return;
+		}
+		int threads = Math.min(folders.size(), Runtime.getRuntime().availableProcessors());
+		ExecutorService executor = Executors.newFixedThreadPool(threads, runnable -> {
+			Thread thread = new Thread(runnable, "mi-project-init");
+			thread.setDaemon(true);
+			return thread;
+		});
+		try {
+			List<Future<?>> pending = new ArrayList<>(folders.size());
+			for (WorkspaceFolder folder : folders) {
+				pending.add(executor.submit(() -> addProjectContext(folder.getUri(),
+						Utils.getAbsolutePath(folder.getUri()), miServerPath,
+						workspaceSchemas.get(folder.getUri()))));
+			}
+			for (Future<?> pendingProject : pending) {
+				try {
+					pendingProject.get();
+				} catch (ExecutionException e) {
+					LOGGER.log(Level.SEVERE, "Failed to register a workspace project", e.getCause());
+				}
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			LOGGER.log(Level.WARNING, "Interrupted while initializing workspace projects", e);
+		} finally {
+			executor.shutdown();
 		}
 	}
 
