@@ -36,6 +36,11 @@ export type DependencyType = "zip" | "jar" | "car" | "inbound";
 // Inbound endpoint modules follow the "mi-inbound-*" Maven artifact naming convention
 const isInboundArtifact = (artifact: string | undefined) => !!artifact?.toLowerCase().startsWith('mi-inbound');
 
+const parseArtifactId = (zipBaseName: string): string => {
+    const match = zipBaseName.match(/^(.+)-(\d+\.\d+\.\d+(?:-[A-Za-z0-9]+)*)$/);
+    return match ? match[1] : zipBaseName;
+};
+
 const LoaderContainer = styled.div`
     position: fixed;
     top: 50%;
@@ -72,38 +77,6 @@ const SectionTitle = styled.div`
     font-weight: 600;
     color: var(--vscode-settings-headerForeground);
     margin-bottom: 12px;
-`;
-
-const FolderConnectorRow = styled.div`
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 14px;
-    border: 1.5px solid var(--vscode-dropdown-border);
-    border-radius: 8px;
-    background-color: var(--vscode-menu-background);
-    margin-bottom: 8px;
-
-    &:hover {
-        border-color: var(--vscode-button-background);
-    }
-`;
-
-const FolderConnectorInfo = styled.div`
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-`;
-
-const FolderConnectorName = styled.span`
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--vscode-settings-headerForeground);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 `;
 
 type AddMode = "list" | "manual" | "add";
@@ -526,22 +499,19 @@ export function DependencyTab(props: DependencyTabProps) {
                 <div>
                     <SectionDivider />
                     <SectionTitle>{type === 'inbound' ? 'Imported Inbound Endpoints' : 'Imported Connectors'}</SectionTitle>
-                    {visibleFolderConnectors.map((connector) => (
-                        <FolderConnectorRow key={connector.path}>
-                            <FolderConnectorInfo>
-                                <Codicon name="package" sx={{ color: 'var(--vscode-badge-background)' }} iconSx={{ fontSize: 18 }} />
-                                <FolderConnectorName>{connector.name}</FolderConnectorName>
-                            </FolderConnectorInfo>
-                            <Button
-                                appearance="icon"
-                                onClick={() => handleDeleteFolderConnector(connector)}
-                                tooltip="Delete connector"
-                                buttonSx={{ color: 'var(--vscode-charts-red)' }}
-                            >
-                                <Codicon name="trash" />
-                            </Button>
-                        </FolderConnectorRow>
-                    ))}
+                    {visibleFolderConnectors.map((connector) => {
+                        const artifactId = parseArtifactId(connector.name);
+                        return (
+                            <DependencyItem
+                                key={connector.path}
+                                dependency={{ groupId: '', artifact: artifactId, version: '' }}
+                                onDelete={() => handleDeleteFolderConnector(connector)}
+                                onClose={() => { /* no edit form is ever opened for imported zips */ }}
+                                driverData={supportsDriverManagement ? allConnectorDrivers[artifactId] : undefined}
+                                onDriverUpdated={supportsDriverManagement ? fetchDriverDependencies : undefined}
+                            />
+                        );
+                    })}
                 </div>
             )}
 
