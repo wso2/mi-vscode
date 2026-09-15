@@ -76,7 +76,8 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         }
         InboundConnectorHolder holder = resolveInboundConnectorHolder();
         if (holder == null) {
-            LOGGER.severe("Inbound connector holder is not initialized");
+            LOGGER.warning("No registered project for " + projectPath
+                    + "; inbound connector schema is unavailable for this endpoint.");
             return;
         }
         String id = inboundEndpoint.getProtocol() != null ? inboundEndpoint.getProtocol()
@@ -95,24 +96,14 @@ public class InboundEndpointVisitor implements SchemaVisitor {
     /**
      * Resolves the {@link InboundConnectorHolder} of the project this visitor is bound to.
      * <p>
-     * {@link InboundConnectorHolder#getInstance()} is process-wide and is overwritten every time a
-     * project initialises, so in a multi-root workspace it answers with whichever project happened to
-     * load last - the same cross-project leak the per-project {@link ConnectorHolder} above avoids. It
-     * is used only as a fallback, for callers whose project path is not a registered project.
+     * Returns null for an unregistered path rather than falling back to another project's holder.
      *
-     * @return the holder to read inbound connector schemas from, or null if none is available
+     * @return the holder to read inbound connector schemas from, or null if the project is unknown
      */
     private InboundConnectorHolder resolveInboundConnectorHolder() {
 
         ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(projectPath);
-        if (projectContext != null && projectContext.getInboundConnectorHolder() != null) {
-            return projectContext.getInboundConnectorHolder();
-        }
-        try {
-            return InboundConnectorHolder.getInstance();
-        } catch (IllegalStateException e) {
-            return null;
-        }
+        return projectContext != null ? projectContext.getInboundConnectorHolder() : null;
     }
 
     private String getParameterValue(InboundEndpoint inboundEndpoint, String parameterName) {

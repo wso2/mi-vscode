@@ -60,7 +60,6 @@ public class InboundConnectorHolder {
 
     private static final Logger LOGGER = Logger.getLogger(InboundConnectorHolder.class.getName());
     public static final String INPUT_SCHEMA_FILE_SUFFIX = "_inputschema.json";
-    private static InboundConnectorHolder instance;
     private String projectId;
     private String projectPath;
     private String tempFolderPath;
@@ -86,14 +85,6 @@ public class InboundConnectorHolder {
         this.inboundConnectors = new HashMap<>();
         this.connectorIdMap = new HashMap<>();
         this.inboundConnectorInputSchemas = new HashMap<>();
-    }
-
-    public static InboundConnectorHolder getInstance() {
-
-        if (instance == null) {
-            throw new IllegalStateException("InboundConnectorHolder has not yet been initialized");
-        }
-        return instance;
     }
 
     public void init(String projectPath, String projectRuntimeVersion) {
@@ -123,7 +114,6 @@ public class InboundConnectorHolder {
         getCustomInboundConnectors();
         loadInboundConnectors();
         this.localInboundEndpointsListForCopilot = generateInboundConnectorArray();
-        instance = this;
     }
 
     private void loadInboundConnectors() {
