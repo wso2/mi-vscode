@@ -126,37 +126,33 @@ const QueryForm = (props: AddMediatorProps) => {
             waitForEdits: true
         });
 
-        let isInResource = false;
         if (edits.status) {
             const st = await rpcClient.getMiDiagramRpcClient().getSyntaxTree({ documentUri: props.documentUri });
-            let resourceData: any = {};
-            if (st.syntaxTree.data.resources) {
-                st.syntaxTree.data.resources.forEach((resource: any) => {
-                    if (resource.callQuery.href === initialQueryName) {
-                        resourceData.resourceRange = resource.callQuery.range;
-                        resourceData.selfClosed = resource.callQuery.selfClosed;
-                        isInResource = true;
-                    }
-                });
-            }
-            if (!isInResource && st.syntaxTree.data.operations) {
-                st.syntaxTree.data.operations.forEach((operation: any) => {
-                    if (operation.callQuery.href === initialQueryName) {
-                        resourceData.resourceRange = operation.callQuery.range;
-                        resourceData.selfClosed = operation.callQuery.selfClosed;
-                    }
-                });
-            }
-
-            if (Object.keys(resourceData).length !== 0) {
-                if (resourceData.selfClosed) {
-                    xml = getDssResourceSelfClosingXml({ query: values.queryId });
-                } else {
-                    xml = getDssResourceXml({ query: values.queryId });
+            const callQueryMatches: { resourceRange: any; selfClosed: boolean }[] = [];
+            st.syntaxTree.data.resources?.forEach((resource: any) => {
+                if (resource.callQuery.href === initialQueryName) {
+                    callQueryMatches.push({ resourceRange: resource.callQuery.range, selfClosed: resource.callQuery.selfClosed });
                 }
+            });
+            st.syntaxTree.data.operations?.forEach((operation: any) => {
+                if (operation.callQuery.href === initialQueryName) {
+                    callQueryMatches.push({ resourceRange: operation.callQuery.range, selfClosed: operation.callQuery.selfClosed });
+                }
+            });
+
+            // Applying changes from the bottom of the document upward so an earlier edit doesn't shift the
+            // positions of a match that appears later in the file.
+            callQueryMatches.sort((a, b) => {
+                const posA = a.resourceRange.startTagRange.start;
+                const posB = b.resourceRange.startTagRange.start;
+                return posA.line !== posB.line ? posB.line - posA.line : posB.character - posA.character;
+            });
+
+            for (const match of callQueryMatches) {
+                xml = match.selfClosed ? getDssResourceSelfClosingXml({ query: values.queryId }) : getDssResourceXml({ query: values.queryId });
                 await rpcClient.getMiDiagramRpcClient().applyEdit({
                     text: xml, documentUri: props.documentUri,
-                    range: { start: resourceData.resourceRange.startTagRange.start, end: resourceData.resourceRange.startTagRange.end },
+                    range: { start: match.resourceRange.startTagRange.start, end: match.resourceRange.startTagRange.end },
                     waitForEdits: true
                 });
             }
