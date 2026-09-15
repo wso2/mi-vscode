@@ -124,7 +124,6 @@ public class ExpressionCompletionsProvider {
         if (request.getXMLDocument() == null) {
             return null;
         }
-        String projectPath = getProjectPath(request.getXMLDocument().getDocumentURI());
         String documentUri = Utils.getAbsolutePath(request.getXMLDocument().getDocumentURI());
 
         // Use the ConnectorHolder of the project that owns this document, so connector response and
@@ -133,6 +132,8 @@ public class ExpressionCompletionsProvider {
         ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(documentUri);
         ConnectorHolder connectorHolder =
                 projectContext != null ? projectContext.getConnectorHolder() : new ConnectorHolder();
+        String projectPath = projectContext != null ? projectContext.getProjectUri()
+                : getProjectPath(request.getXMLDocument().getDocumentURI());
         ServerLessTryoutHandler serverLessTryoutHandler =
                 new ServerLessTryoutHandler(projectPath, connectorHolder);
         String payload = ExpressionCompletionUtils.getInputPayload(projectPath, documentUri, request.getPosition());
