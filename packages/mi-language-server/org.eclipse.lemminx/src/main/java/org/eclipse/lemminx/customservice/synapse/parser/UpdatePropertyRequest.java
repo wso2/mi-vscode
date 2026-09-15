@@ -15,8 +15,16 @@
 package org.eclipse.lemminx.customservice.synapse.parser;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class UpdatePropertyRequest {
+public class UpdatePropertyRequest implements HasProjectUri {
 
     public List<PropertyDetails> properties;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

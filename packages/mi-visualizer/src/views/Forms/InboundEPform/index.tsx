@@ -169,12 +169,30 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
             connectorName: connector.id
         });
 
-        setConnectorSchema(response?.uiSchema);
+        if (!response?.uiSchema) {
+            // Without this the card just looks unresponsive: the form stays on the connector list
+            // with nothing to explain why.
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: `Could not load the ${connector.name} inbound endpoint configuration`,
+                type: "error"
+            });
+            return;
+        }
+
+        setConnectorSchema(response.uiSchema);
     }
 
     const selectStoreConnector = async (connector: any) => {
-        const connectorId = localConnectors.find((c: any) => c.name === connector.connectorName).id;
-        const response = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: connectorId });
+        // A store connector that was never downloaded has no local entry at all — the normal case in
+        // a fresh project. Reading `.id` off that missing entry threw, and the rejected promise left
+        // the card looking inert; ask for the download instead.
+        const localConnector = localConnectors?.find((c: any) => c.name === connector.connectorName);
+        if (!localConnector) {
+            requiresDownload(connector);
+            return;
+        }
+
+        const response = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: localConnector.id });
 
         if (response?.uiSchema) {
             setConnectorSchema(response?.uiSchema);
@@ -224,9 +242,24 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
     };
 
     const handleAcceptDownload = () => {
-        const connectorId = localConnectors.find((c: any) => c.name === inboundOnconfirmation.connectorName).id;
         acceptDownload(async () => {
-            const schema = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: connectorId });
+            // The connector only becomes local as a result of this download, so its id has to come
+            // from a list fetched afterwards — the one rendered before never had an entry for it.
+            const response = await rpcClient.getMiDiagramRpcClient().getLocalInboundConnectors();
+            const connectors = response["inbound-connector-data"]?.filter(
+                (connector: any) => !HIDDEN_INBOUND_CONNECTORS.test(connector.name)) ?? [];
+            setLocalConnectors(connectors);
+
+            const downloaded = connectors.find((c: any) => c.name === inboundOnconfirmation.connectorName);
+            if (!downloaded) {
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: `Could not load the downloaded ${inboundOnconfirmation.connectorName} inbound endpoint`,
+                    type: "error"
+                });
+                return;
+            }
+
+            const schema = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: downloaded.id });
             setConnectorSchema(schema?.uiSchema);
         });
     };

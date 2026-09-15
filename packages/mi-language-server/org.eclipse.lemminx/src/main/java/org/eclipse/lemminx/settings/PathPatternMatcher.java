@@ -54,7 +54,8 @@ public class PathPatternMatcher {
 		if (pathMatcher == null) {
 			char c = pattern.charAt(0);
 			String glob = pattern;
-			if (c != '*' && c != '?' && c != '/') {
+			boolean absolute = c == '/' || pattern.matches("^[A-Za-z]:/.*");
+			if (c != '*' && c != '?' && !absolute) {
 				// in case of pattern like this pattern="myFile*.xml", we must add '**/' before
 				glob = "**/" + glob;
 			}

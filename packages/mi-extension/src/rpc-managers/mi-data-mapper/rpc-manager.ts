@@ -333,7 +333,7 @@ export class MiDataMapperRpcManager implements MIDataMapperAPI {
                 let miDiagramRpcManager: MiDiagramRpcManager = new MiDiagramRpcManager(this.projectUri);
 
                 const langClient = await MILanguageClient.getInstance(this.projectUri);
-                const projectDetailsRes = await langClient?.getProjectDetails();
+                const projectDetailsRes = await langClient?.getProjectDetails(this.projectUri);
                 const runtimeVersion = projectDetailsRes.primaryDetails.runtimeVersion.value;
                 const isResourceContentUsed = compareVersions(runtimeVersion, RUNTIME_VERSION_440) >= 0;
 

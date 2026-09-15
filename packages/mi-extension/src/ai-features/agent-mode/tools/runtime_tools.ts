@@ -729,7 +729,7 @@ async function startServer(
                 getRunActionTimeoutMessage('initializing language client')
             );
             const isTerminated = await withServerStartTimeout(
-                langClient.shutdownTryoutServer(),
+                langClient.shutdownTryoutServer(projectPath),
                 Math.min(SERVER_START_STEP_TIMEOUT_MS, Math.max(1, getRemainingRunActionTime())),
                 getRunActionTimeoutMessage('shutting down tryout server')
             );

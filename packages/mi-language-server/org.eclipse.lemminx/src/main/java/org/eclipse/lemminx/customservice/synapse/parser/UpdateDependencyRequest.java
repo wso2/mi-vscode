@@ -14,8 +14,16 @@
 package org.eclipse.lemminx.customservice.synapse.parser;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class UpdateDependencyRequest {
+public class UpdateDependencyRequest implements HasProjectUri {
 
     public List<DependencyDetails> dependencies;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

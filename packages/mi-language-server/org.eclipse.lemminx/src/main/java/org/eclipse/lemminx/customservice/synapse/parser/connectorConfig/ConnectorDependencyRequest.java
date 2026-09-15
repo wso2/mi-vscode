@@ -14,12 +14,21 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
 /**
  * Request to retrieve effective connector dependencies.
  * When {@code connectorArtifactId} is null, all connectors in the project are returned.
  */
-public class ConnectorDependencyRequest {
+public class ConnectorDependencyRequest implements HasProjectUri {
 
     /** Connector Maven artifactId (e.g. "mi-connector-file"). Null means "all connectors". */
     public String connectorArtifactId;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

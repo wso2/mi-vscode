@@ -14,8 +14,17 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors.generate;
 
-public class ConnectorGenerateRequest {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class ConnectorGenerateRequest implements HasProjectUri {
 
     public String openAPIPath;
     public String connectorProjectPath;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

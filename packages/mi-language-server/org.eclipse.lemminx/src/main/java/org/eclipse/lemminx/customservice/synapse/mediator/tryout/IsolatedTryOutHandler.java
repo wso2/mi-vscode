@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.mediator.tryout;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.dependency.tree.DependencyLookUp;
 import org.eclipse.lemminx.customservice.synapse.dependency.tree.pojo.Dependency;
 import org.eclipse.lemminx.customservice.synapse.dependency.tree.visitor.MediatorDependencyVisitor;
@@ -42,11 +43,14 @@ public class IsolatedTryOutHandler {
     private static final Logger LOGGER = Logger.getLogger(IsolatedTryOutHandler.class.getName());
     private String projectRoot;
     private final TryOutHandler tryOutHandler;
+    private final MediatorFactoryFinder mediatorFactory;
 
-    public IsolatedTryOutHandler(TryOutHandler tryOutHandler, String projectRoot) {
+    public IsolatedTryOutHandler(TryOutHandler tryOutHandler, String projectRoot, String miVersion,
+                                 ConnectorHolder connectorHolder) {
 
         this.tryOutHandler = tryOutHandler;
         this.projectRoot = projectRoot;
+        this.mediatorFactory = new MediatorFactoryFinder(miVersion, projectRoot, connectorHolder);
     }
 
     public MediatorTryoutInfo tryOut(MediatorTryoutRequest request) {
@@ -57,7 +61,7 @@ public class IsolatedTryOutHandler {
             return new MediatorTryoutInfo("Invalid mediator content");
         }
 
-        Mediator mediator = MediatorFactoryFinder.getInstance().getMediator(dom.getDocumentElement());
+        Mediator mediator = mediatorFactory.getMediator(dom.getDocumentElement());
         if (mediator == null) {
             return new MediatorTryoutInfo("Invalid mediator content");
         }

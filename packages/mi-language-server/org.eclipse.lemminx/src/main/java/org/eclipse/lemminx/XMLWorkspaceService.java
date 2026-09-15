@@ -12,15 +12,21 @@
  */
 package org.eclipse.lemminx;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.eclipse.lemminx.commons.WorkspaceFolders;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.dataService.DynamicClassLoader;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
+import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.extensions.synapse.SynapseDiagnosticsParticipant;
 import org.eclipse.lemminx.services.extensions.commands.IXMLCommandService;
 import org.eclipse.lsp4j.DidChangeConfigurationParams;
@@ -28,6 +34,7 @@ import org.eclipse.lsp4j.DidChangeWatchedFilesParams;
 import org.eclipse.lsp4j.DidChangeWorkspaceFoldersParams;
 import org.eclipse.lsp4j.ExecuteCommandParams;
 import org.eclipse.lsp4j.FileEvent;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.eclipse.lsp4j.jsonrpc.CompletableFutures;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
@@ -39,6 +46,8 @@ import org.eclipse.lsp4j.services.WorkspaceService;
  *
  */
 public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService {
+
+	private static final Logger log = Logger.getLogger(XMLWorkspaceService.class.getName());
 
 	private final XMLLanguageServer xmlLanguageServer;
 	private final WorkspaceFolders workspaceFolders;
@@ -86,7 +95,37 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 		xmlLanguageServer.getXMLLanguageService().getWorkspaceServiceParticipants()
 				.forEach(participant -> participant.didChangeWorkspaceFolders(params));
 
-//		workspaceFolders.didChangeWorkspaceFolders(params);
+		boolean hasSchemaChanges = false;
+		if (params.getEvent().getRemoved() != null) {
+			for (WorkspaceFolder folder : params.getEvent().getRemoved()) {
+				if (log.isLoggable(Level.FINE)) {
+					log.fine("Removing workspace folder: " + folder.getUri());
+				}
+				xmlLanguageServer.removeWorkspaceSchema(folder.getUri());
+				xmlLanguageServer.removeWorkspaceProjectContext(folder.getUri());
+				DynamicClassLoader.removeProject(folder.getUri());
+				hasSchemaChanges = true;
+			}
+		}
+		if (params.getEvent().getAdded() != null) {
+			for (WorkspaceFolder folder : params.getEvent().getAdded()) {
+				try {
+					// copyXSDFiles() reads the project's pom.xml to pick the MI-version schema set, so it
+					// needs the filesystem path — handing it the file:// URI makes the pom lookup fail and
+					// silently falls back to DEFAULT_MI_VERSION's XSDs (the initialize path passes a path too).
+					String projectPath = Utils.getAbsolutePath(folder.getUri());
+					Path schemaDir = Utils.copyXSDFiles(projectPath);
+					xmlLanguageServer.addWorkspaceSchema(folder.getUri(), schemaDir);
+					hasSchemaChanges = true;
+					xmlLanguageServer.addWorkspaceProjectContext(folder.getUri(), projectPath, schemaDir);
+				} catch (Exception e) {
+					log.log(Level.SEVERE, "Failed to copy XSD files for workspace folder: " + folder.getUri() + ". Error: " + e.getMessage());
+				}
+			}
+		}
+		if (hasSchemaChanges) {
+			xmlLanguageServer.triggerSettingsRefresh();
+		}
 	}
 
 	@Override
@@ -97,9 +136,29 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 		for (FileEvent change : changes) {
 			if ((change.getUri().contains(Constant.INBOUND_ENDPOINTS)
 					|| change.getUri().contains(Constant.INBOUND_CONNECTORS_DIR)) && change.getUri().contains(".zip")) {
-				((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateInboundConnectors();
+				ProjectContext context = xmlLanguageServer
+						.getWorkspaceManager().getProjectForDocument(change.getUri());
+				if (context != null) {
+					context.updateInboundConnectors();
+				} else {
+					// TODO(unrouted-request): a watched .zip that belongs to no registered MI project.
+					// This previously reloaded the *default* project's inbound connectors, refreshing a
+					// project with nothing to do with the changed file. Ignoring it is correct for the
+					// known cause (a zip in a non-MI workspace folder); if a zip inside a real MI
+					// project ever lands here, that project failed to register — which this log surfaces.
+					log.warning("Watched inbound connector zip belongs to no registered project, ignoring: "
+							+ change.getUri());
+				}
 			} else if (change.getUri().contains(Constant.CONNECTORS) && change.getUri().contains(".zip")) {
-				((SynapseLanguageService) xmlLanguageServer.getSynapseLanguageService()).updateConnectors();
+				ProjectContext context = xmlLanguageServer
+						.getWorkspaceManager().getProjectForDocument(change.getUri());
+				if (context != null) {
+					context.updateConnectors();
+				} else {
+					// TODO(unrouted-request): see the inbound branch above — same reasoning.
+					log.warning("Watched connector zip belongs to no registered project, ignoring: "
+							+ change.getUri());
+				}
 			} else {
 				// LSP URIs use '/', but normalize defensively so a backslash path also matches on Windows.
 				if (change.getUri().replace('\\', '/').contains("src/main/wso2mi")) {

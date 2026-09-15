@@ -14,7 +14,16 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class CheckDBDriverRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class CheckDBDriverRequestParams implements HasProjectUri {
 
     public String className;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

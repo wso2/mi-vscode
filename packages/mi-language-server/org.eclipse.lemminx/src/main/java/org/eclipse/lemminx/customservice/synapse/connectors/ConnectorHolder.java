@@ -23,23 +23,19 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Holds the connectors discovered for a single project. Not a process-wide singleton —
+ * one instance is owned per project (see {@code ProjectContext}) so that connector lists
+ * from different projects in a multi-root workspace never leak into one another.
+ */
 public class ConnectorHolder {
 
-    private static List<Connector> connectors;
+    private final List<Connector> connectors;
     private List<File> connectorZips;
-    private static ConnectorHolder instance;
 
-    private ConnectorHolder() {
+    public ConnectorHolder() {
 
         this.connectors = new ArrayList<>();
-    }
-
-    public static synchronized ConnectorHolder getInstance() {
-
-        if (instance == null) {
-            instance = new ConnectorHolder();
-        }
-        return instance;
     }
 
     public void addConnector(Connector connector) {
@@ -98,7 +94,7 @@ public class ConnectorHolder {
                 (connector.getDisplayName() != null && connector.getDisplayName().equalsIgnoreCase(name));
     }
 
-    public static Boolean isValidConnector(String name) {
+    public Boolean isValidConnector(String name) {
 
         String connectorName = name.split("\\.")[0];
         for (Connector connector : connectors) {

@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class MappingsGenRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class MappingsGenRequestParams implements HasProjectUri {
 
     public String query;
     public String className;
@@ -22,4 +24,11 @@ public class MappingsGenRequestParams {
     public String password;
     public String url;
     public String type;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

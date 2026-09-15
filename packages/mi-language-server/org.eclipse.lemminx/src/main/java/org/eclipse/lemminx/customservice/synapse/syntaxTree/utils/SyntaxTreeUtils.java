@@ -14,6 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.syntaxTree.utils;
 
+import org.eclipse.lemminx.SynapseLanguageService;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.AbstractFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.endpoint.EndpointFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.mediators.MediatorFactoryFinder;
@@ -35,12 +38,132 @@ import org.eclipse.lemminx.dom.DOMElement;
 import org.eclipse.lemminx.dom.DOMNode;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 public class SyntaxTreeUtils {
 
-    private static MediatorFactoryFinder mediatorFactory = MediatorFactoryFinder.getInstance();
+    // Test-injection seam only (see setMediatorFactory) - production resolves the finder per-project
+    // from the node's owning document via getMediatorFactory(DOMNode), so no project's data is ever
+    // stuck here.
+    private static MediatorFactoryFinder testMediatorFactory;
+
+    // Immutable, project-invariant fallback (null MI version, empty connector set) for callers with
+    // no resolvable document URI (e.g. tests that exercise this class directly without a running server).
+    private static final MediatorFactoryFinder DEFAULT_MEDIATOR_FACTORY =
+            new MediatorFactoryFinder(null, null, new ConnectorHolder());
+
+    // Project of the document currently being built, for documents whose URI cannot resolve to one
+    // on its own - a Try-Out session parses a copy of the artifact under ~/.wso2-mi/expression-temp,
+    // which sits outside every project root. Scoped to the calling thread and always cleared again
+    // by withProjectPath, so it never leaks one project's factory into another's parse.
+    private static final ThreadLocal<String> PROJECT_PATH_OVERRIDE = new ThreadLocal<>();
+
+    public static void setMediatorFactory(MediatorFactoryFinder finder) {
+
+        testMediatorFactory = finder;
+    }
+
+    /**
+     * Runs {@code action} with {@code projectPath} standing in as the owning project for any document
+     * parsed inside it that does not resolve to a project by its own URI.
+     *
+     * @param projectPath the project root to fall back to
+     * @param action      the parse to run
+     * @param <T>         the parse result type
+     * @return whatever {@code action} returns
+     */
+    // Projects already resolved during the current parse. Resolving walks the project registry and
+    // normalizes a path per entry, and a tree build asks for the same document once per mediator
+    // element, so without this the same answer is recomputed hundreds of times for one document.
+    // inParseScope always clears the map, so a project registered or removed later is never stale.
+    private static final ThreadLocal<Map<String, ProjectContext>> PARSE_SCOPE_PROJECTS = new ThreadLocal<>();
+
+    /**
+     * Runs {@code action} as a single parse, reusing each document's resolved project within it.
+     * Nested calls join the scope already open rather than starting another.
+     *
+     * @param action the parse to run
+     * @param <T>    the parse result type
+     * @return whatever {@code action} returns
+     */
+    public static <T> T inParseScope(Supplier<T> action) {
+
+        if (PARSE_SCOPE_PROJECTS.get() != null) {
+            return action.get();
+        }
+        PARSE_SCOPE_PROJECTS.set(new HashMap<>());
+        try {
+            return action.get();
+        } finally {
+            PARSE_SCOPE_PROJECTS.remove();
+        }
+    }
+
+    /**
+     * Resolves the project owning {@code documentUri}, reusing the answer for the rest of the parse
+     * when called inside {@link #inParseScope}. Outside one it simply resolves.
+     *
+     * @param documentUri the document to resolve, may be null
+     * @return the owning project, or null if the document belongs to none
+     */
+    public static ProjectContext resolveProject(String documentUri) {
+
+        Map<String, ProjectContext> scope = PARSE_SCOPE_PROJECTS.get();
+        if (scope == null) {
+            return SynapseLanguageService.resolveProjectContext(documentUri);
+        }
+        String key = documentUri != null ? documentUri : "";
+        if (scope.containsKey(key)) {
+            return scope.get(key);
+        }
+        ProjectContext context = SynapseLanguageService.resolveProjectContext(documentUri);
+        scope.put(key, context);
+        return context;
+    }
+
+    public static <T> T withProjectPath(String projectPath, Supplier<T> action) {
+
+        String previous = PROJECT_PATH_OVERRIDE.get();
+        PROJECT_PATH_OVERRIDE.set(projectPath);
+        try {
+            return action.get();
+        } finally {
+            if (previous != null) {
+                PROJECT_PATH_OVERRIDE.set(previous);
+            } else {
+                PROJECT_PATH_OVERRIDE.remove();
+            }
+        }
+    }
+
+    /**
+     * Resolves the {@link MediatorFactoryFinder} scoped to the project that owns {@code node}'s
+     * document, so its MI version and connector set match that project rather than a shared/incorrect
+     * one.
+     */
+    private static MediatorFactoryFinder getMediatorFactory(DOMNode node) {
+
+        String documentUri = null;
+        if (node != null && node.getOwnerDocument() != null) {
+            documentUri = node.getOwnerDocument().getDocumentURI();
+        }
+        ProjectContext ctx = resolveProject(documentUri);
+        if (ctx == null) {
+            // The document URI belongs to no project - fall back to the project the caller declared.
+            String overriddenProjectPath = PROJECT_PATH_OVERRIDE.get();
+            if (overriddenProjectPath != null) {
+                ctx = resolveProject(overriddenProjectPath);
+            }
+        }
+        if (ctx != null) {
+            return ctx.getMediatorFactory();
+        }
+        return testMediatorFactory != null ? testMediatorFactory : DEFAULT_MEDIATOR_FACTORY;
+    }
 
     public static Sequence createSequence(DOMNode node) {
 
@@ -63,7 +186,7 @@ public class SyntaxTreeUtils {
 
     public static Mediator createMediator(DOMNode node) {
 
-        Mediator mediators = mediatorFactory.getMediator(node);
+        Mediator mediators = getMediatorFactory(node).getMediator(node);
         return mediators;
     }
 

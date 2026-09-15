@@ -73,7 +73,7 @@ public class QueryGenerator {
         DBConnectionTester dbConnectionTester = new DBConnectionTester();
         DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
         try (Connection connection = dbConnectionTester.getConnection(requestParams.url, requestParams.username,
-                requestParams.password, requestParams.className)) {
+                requestParams.password, requestParams.className, requestParams.projectUri)) {
             DocumentBuilder docBuilder = docFactory.newDocumentBuilder();
 
             Document doc = docBuilder.newDocument();
@@ -129,10 +129,11 @@ public class QueryGenerator {
         try {
             if (StringUtils.isBlank(requestParams.driverPath)) {
                 connection = dbConnectionTester.getConnection(requestParams.url, requestParams.username,
-                        requestParams.password, requestParams.className);
+                        requestParams.password, requestParams.className, requestParams.projectUri);
             } else {
                 connection = dbConnectionTester.getConnection(requestParams.url, requestParams.username,
-                        requestParams.password, requestParams.className, requestParams.driverPath);
+                        requestParams.password, requestParams.className, requestParams.driverPath,
+                        requestParams.projectUri);
             }
 
             Map<String, List<Boolean>> tablesMap = new HashMap<String, List<Boolean>>();
@@ -180,8 +181,8 @@ public class QueryGenerator {
     public static CheckDBDriverResponseParams isDriverAvailableInClassPath(String className, String projectPath) {
         try {
             File libFolder = Paths.get(projectPath, "deployment","libs").toFile();
-            Class.forName(className, true, DynamicClassLoader.getClassLoader());
-            return new CheckDBDriverResponseParams(true, getDriverVersion(className),
+            Class.forName(className, true, DynamicClassLoader.getClassLoader(projectPath));
+            return new CheckDBDriverResponseParams(true, getDriverVersion(className, projectPath),
                     getJarForClass(className, libFolder));
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error occurred while loading the DB driver class.", e);
@@ -194,9 +195,11 @@ public class QueryGenerator {
      *
      * @param driverPath folder path of the DB driver
      * @param className  DB connector class name in the driver
+     * @param projectUri the requesting project's root, so the driver is only visible to that
+     *                   project's classloader
      * @return Whether the DB driver was successfully added to the class path
      */
-    public static boolean addDriverToClassPath(String driverPath, String className) {
+    public static boolean addDriverToClassPath(String driverPath, String className, String projectUri) {
         try {
             if (!Files.exists(Paths.get(driverPath))) {
                 LOGGER.log(Level.SEVERE, "Driver not found in the given folder path.");
@@ -205,7 +208,7 @@ public class QueryGenerator {
             Path jarPath = Paths.get(driverPath);
             URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{jarPath.toUri().toURL()});
             Class.forName(className, true, urlClassLoader).newInstance();
-            DynamicClassLoader.updateJarInClassLoader(new File(driverPath), true);
+            DynamicClassLoader.updateJarInClassLoader(projectUri, new File(driverPath), true);
             return true;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error occurred while loading the DB driver class.", e);
@@ -217,15 +220,16 @@ public class QueryGenerator {
      * Remove a DB driver from the class path
      *
      * @param driverPath folder path of the DB driver
+     * @param projectUri the requesting project's root
      * @return Whether the DB driver was successfully removed from the class path
      */
-    public static boolean removeDriverFromClassPath(String driverPath) {
+    public static boolean removeDriverFromClassPath(String driverPath, String projectUri) {
         if (!Files.exists(Paths.get(driverPath))) {
             LOGGER.log(Level.SEVERE, "Driver not found in the given folder path.");
             return false;
         }
         try {
-            DynamicClassLoader.updateJarInClassLoader(new File(driverPath), false);
+            DynamicClassLoader.updateJarInClassLoader(projectUri, new File(driverPath), false);
             return true;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error occurred while removing the DB driver class.", e);
@@ -239,15 +243,18 @@ public class QueryGenerator {
      * @param addDriverPath folder path of the DB driver to be added
      * @param removeDriverPath folder path of the DB driver to be removed
      * @param className DB connector class name in the driver
+     * @param projectUri the requesting project's root
      *
      * @return Whether the DB driver was modified successfully in the class path
      */
-    public static boolean modifyDriverInClassPath(String addDriverPath, String removeDriverPath, String className) {
+    public static boolean modifyDriverInClassPath(String addDriverPath, String removeDriverPath, String className,
+                                                  String projectUri) {
         if (!(Files.exists(Paths.get(addDriverPath)) && Files.exists(Paths.get(removeDriverPath)))) {
             LOGGER.log(Level.SEVERE, "Driver not found in the given folder path.");
             return false;
         }
-        return removeDriverFromClassPath(removeDriverPath) && addDriverToClassPath(addDriverPath, className);
+        return removeDriverFromClassPath(removeDriverPath, projectUri)
+                && addDriverToClassPath(addDriverPath, className, projectUri);
     }
 
     /**
@@ -283,7 +290,7 @@ public class QueryGenerator {
             DBConnectionTester dbConnectionTester = new DBConnectionTester();
             try {
                 connection = dbConnectionTester.getConnection(requestParams.url, requestParams.username,
-                        requestParams.password, requestParams.className);
+                        requestParams.password, requestParams.className, requestParams.projectUri);
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Error occurred while creating DB connection.", e);
             }
@@ -631,9 +638,9 @@ public class QueryGenerator {
         return StringUtils.EMPTY;
     }
 
-    private static String getDriverVersion(String className) {
+    private static String getDriverVersion(String className, String projectUri) {
         try {
-            Class<?> driverClass = Class.forName(className, true, DynamicClassLoader.getClassLoader());
+            Class<?> driverClass = Class.forName(className, true, DynamicClassLoader.getClassLoader(projectUri));
             if (Driver.class.isAssignableFrom(driverClass)) {
                 Package driverPackage = driverClass.getPackage();
                 String version = driverPackage != null ? driverPackage.getImplementationVersion() : StringUtils.EMPTY;

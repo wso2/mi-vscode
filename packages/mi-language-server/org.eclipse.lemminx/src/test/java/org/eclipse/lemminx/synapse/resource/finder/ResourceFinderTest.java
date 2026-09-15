@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.synapse.resource.finder;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.AbstractResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.ResourceFinderFactory;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.RequestedResource;
@@ -43,7 +44,7 @@ public class ResourceFinderTest {
 
     public ResourceFinderTest() {
 
-        this.resourceFinder = ResourceFinderFactory.getResourceFinder(false);
+        this.resourceFinder = ResourceFinderFactory.getResourceFinder(false, new ConnectorHolder());
         String path = ResourceFinderTest.class.getResource(PROJECT_PATH).getPath();
         projectPath = new File(path).getAbsolutePath();
     }

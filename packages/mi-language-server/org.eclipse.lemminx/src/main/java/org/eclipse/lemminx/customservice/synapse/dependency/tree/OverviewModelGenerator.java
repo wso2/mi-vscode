@@ -36,8 +36,6 @@ import java.util.stream.Collectors;
 
 public class OverviewModelGenerator {
 
-    private static int connectionId = 1;
-
     /**
      * Generate the overview model for the project
      *
@@ -79,6 +77,7 @@ public class OverviewModelGenerator {
         List<Connection> connections = new ArrayList<>();
         Map<String, String> connectionMap = new HashMap<>();
         int entrypointId = 1;
+        int[] nextConnectionId = {1};
 
         for (DependencyTree dependencyTree : dependencyTreeList) {
             String entrypointType = getEntrypointType(dependencyTree.getType());
@@ -87,13 +86,12 @@ public class OverviewModelGenerator {
             }
 
             List<String> connectionIds = new ArrayList<>();
-            extractConnections(dependencyTree.getDependencyList(), connections, connectionMap, connectionIds);
+            extractConnections(dependencyTree.getDependencyList(), connections, connectionMap, connectionIds, nextConnectionId);
             List<Integer> sortedConnectionIds = connectionIds.stream().map(Integer::parseInt).sorted().collect(Collectors.toList());
 
             entrypoints.add(new Entrypoint(String.valueOf(entrypointId++), dependencyTree.getName(), entrypointType, dependencyTree.getPath(),
                     new ArrayList<>(), sortedConnectionIds.stream().map(String::valueOf).collect(Collectors.toList())));
         }
-        connectionId = 1;
         return new OverviewModel(projectName, entrypoints, connections);
     }
 
@@ -104,13 +102,17 @@ public class OverviewModelGenerator {
      * @param connections connections in the project
      * @param connectionMap map of connections used in the considered artifact
      * @param connectionIds ID list of the connections used in the considered artifact
+     * @param nextConnectionId call-local, single-element counter of the next connection ID to assign
+     *                         (a plain int can't be mutated by a recursive helper, so it's boxed in
+     *                         an array scoped to one {@code convertDataToOverviewModel} invocation)
      */
     private static void extractConnections(List<Dependency> dependencyList, List<Connection> connections,
-                                           Map<String, String> connectionMap, List<String> connectionIds) {
+                                           Map<String, String> connectionMap, List<String> connectionIds,
+                                           int[] nextConnectionId) {
         for (Dependency dependency : dependencyList) {
             if (dependency.getType().name().equals(Constant.CONNECTION_UPPERCASE)) {
                 if (!connectionMap.containsKey(dependency.getName())) {
-                    String newConnectionId = String.valueOf(connectionId++);
+                    String newConnectionId = String.valueOf(nextConnectionId[0]++);
                     connections.add(new Connection(newConnectionId, dependency.getName(), dependency.getPath()));
                     connectionMap.put(dependency.getName(), newConnectionId);
                 }
@@ -119,7 +121,7 @@ public class OverviewModelGenerator {
                     connectionIds.add(currentConnectionId);
                 }
             }
-            extractConnections(dependency.getDependencyList(), connections, connectionMap, connectionIds);
+            extractConnections(dependency.getDependencyList(), connections, connectionMap, connectionIds, nextConnectionId);
         }
     }
 

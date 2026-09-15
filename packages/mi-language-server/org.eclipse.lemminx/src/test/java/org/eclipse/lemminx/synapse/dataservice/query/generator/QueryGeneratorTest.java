@@ -97,15 +97,14 @@ public class QueryGeneratorTest {
     void addDriverToClassPathTest() {
         String path = QueryGeneratorTest.class.getResource("/synapse/query.generator/mysql-connector-j-8.2.0.jar").getPath();
         String jarPath = new File(path).getAbsolutePath();
-        boolean result = QueryGenerator.addDriverToClassPath(jarPath, "com.mysql.cj.jdbc.Driver");
+        boolean result = QueryGenerator.addDriverToClassPath(jarPath, "com.mysql.cj.jdbc.Driver", projectAPath());
         assertTrue(result);
     }
 
     @Test
     @Order(2)
     void isDriverAvailableTest() {
-        String projectPath = tempAddSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
-        CheckDBDriverResponseParams result = QueryGenerator.isDriverAvailableInClassPath("com.mysql.cj.jdbc.Driver", projectPath);
+        CheckDBDriverResponseParams result = QueryGenerator.isDriverAvailableInClassPath("com.mysql.cj.jdbc.Driver", projectAPath());
         assertTrue(result.isDriverAvailable());
         assertEquals("8.2.0", result.getDriverVersion());
     }
@@ -117,15 +116,15 @@ public class QueryGeneratorTest {
         String removeJarPath = new File(path).getAbsolutePath();
         path = QueryGeneratorTest.class.getResource("/synapse/query.generator/mysql-connector-j-8.3.0.jar").getPath();
         String addJarPath = new File(path).getAbsolutePath();
-        boolean result = QueryGenerator.modifyDriverInClassPath(addJarPath, removeJarPath, "com.mysql.cj.jdbc.Driver");
+        boolean result = QueryGenerator.modifyDriverInClassPath(addJarPath, removeJarPath, "com.mysql.cj.jdbc.Driver",
+                projectBPath());
         assertTrue(result);
     }
 
     @Test
     @Order(4)
     void isDriverAvailableTestAfterUpdate() {
-        String projectPath = tempUpdateSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
-        CheckDBDriverResponseParams result = QueryGenerator.isDriverAvailableInClassPath("com.mysql.cj.jdbc.Driver", projectPath);
+        CheckDBDriverResponseParams result = QueryGenerator.isDriverAvailableInClassPath("com.mysql.cj.jdbc.Driver", projectBPath());
         assertTrue(result.isDriverAvailable());
         assertEquals("8.3.0", result.getDriverVersion());
     }
@@ -135,15 +134,15 @@ public class QueryGeneratorTest {
     void addDriverToClassPathWithMismatchedClassNameTest() {
         String path = QueryGeneratorTest.class.getResource("/synapse/query.generator/mysql-connector-j-8.2.0.jar").getPath();
         String jarPath = new File(path).getAbsolutePath();
-        boolean result = QueryGenerator.addDriverToClassPath(jarPath, "com.microsoft.sqlserver.jdbc.SQLServerDriver");
+        boolean result = QueryGenerator.addDriverToClassPath(jarPath, "com.microsoft.sqlserver.jdbc.SQLServerDriver",
+                projectAPath());
         assertFalse(result);
     }
 
     @Test
     @Order(6)
     void isDriverUnavailableTest() {
-        String projectPath = tempAddSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
-        CheckDBDriverResponseParams result = QueryGenerator.isDriverAvailableInClassPath("com.microsoft.sqlserver.jdbc.SQLServerDriver", projectPath);
+        CheckDBDriverResponseParams result = QueryGenerator.isDriverAvailableInClassPath("com.microsoft.sqlserver.jdbc.SQLServerDriver", projectAPath());
         assertFalse(result.isDriverAvailable());
     }
 
@@ -154,7 +153,8 @@ public class QueryGeneratorTest {
         String removeJarPath = new File(path).getAbsolutePath();
         path = QueryGeneratorTest.class.getResource("/synapse/query.generator/mysql-connector-j-8.3.0.jar").getPath();
         String addJarPath = new File(path).getAbsolutePath();
-        boolean result = QueryGenerator.modifyDriverInClassPath(addJarPath, removeJarPath, "com.microsoft.sqlserver.jdbc.SQLServerDriver");
+        boolean result = QueryGenerator.modifyDriverInClassPath(addJarPath, removeJarPath,
+                "com.microsoft.sqlserver.jdbc.SQLServerDriver", projectBPath());
         assertFalse(result);
     }
 
@@ -162,7 +162,7 @@ public class QueryGeneratorTest {
     @Order(8)
     void removeNonExistingDriverFromClassPathTest() {
         String jarPath = "/error-path";
-        boolean result = QueryGenerator.removeDriverFromClassPath(jarPath);
+        boolean result = QueryGenerator.removeDriverFromClassPath(jarPath, projectAPath());
         assertFalse(result);
     }
 
@@ -170,8 +170,19 @@ public class QueryGeneratorTest {
     @Order(9)
     void removeExistingDriverFromClassPathTest() {
         String jarPath = tempUpdateSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
-        boolean result = QueryGenerator.removeDriverFromClassPath(jarPath);
+        boolean result = QueryGenerator.removeDriverFromClassPath(jarPath, projectBPath());
         assertTrue(result);
+    }
+
+    /** Project root for the "add" temp driver dir — kept separate from {@link #projectBPath()} so the
+     *  registry-keyed {@link org.eclipse.lemminx.customservice.synapse.dataService.DynamicClassLoader}
+     *  doesn't let one test's driver load mask another's (the bug item 3 fixes). */
+    private String projectAPath() {
+        return tempAddSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
+    }
+
+    private String projectBPath() {
+        return tempUpdateSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
     }
 
     @Test
@@ -181,7 +192,7 @@ public class QueryGeneratorTest {
         metadata = mock(DatabaseMetaData.class);
         resultSetMetadata = mock(ResultSetMetaData.class);
         dbConnectionTester = mockStatic(DBConnectionTester.class);
-        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any())).thenReturn(connection);
+        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any(), any())).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metadata);
 
         List<Map<String, Object>> columnData = new ArrayList<>();
@@ -221,7 +232,7 @@ public class QueryGeneratorTest {
         connection = mock(Connection.class);
         metadata = mock(DatabaseMetaData.class);
         dbConnectionTester = mockStatic(DBConnectionTester.class);
-        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any())).thenReturn(null);
+        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any(), any())).thenReturn(null);
         String result = QueryGenerator.generateDSSQueries(requestParams);
         dbConnectionTester.close();
 
@@ -236,7 +247,7 @@ public class QueryGeneratorTest {
         metadata = mock(DatabaseMetaData.class);
         resultSetMetadata = mock(ResultSetMetaData.class);
         dbConnectionTester = mockStatic(DBConnectionTester.class);
-        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any())).thenReturn(connection);
+        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any(), any())).thenReturn(connection);
         when(connection.getMetaData()).thenReturn(metadata);
 
         List<Map<String, Object>> tableData = new ArrayList<>();
@@ -285,7 +296,7 @@ public class QueryGeneratorTest {
         connection = mock(Connection.class);
         metadata = mock(DatabaseMetaData.class);
         dbConnectionTester = mockStatic(DBConnectionTester.class);
-        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any())).thenReturn(null);
+        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any(), any())).thenReturn(null);
         Map<String, List<Boolean>> result = QueryGenerator.getTableList(requestParams);
         dbConnectionTester.close();
 
@@ -368,7 +379,7 @@ public class QueryGeneratorTest {
         resultSetMetadata = mock(ResultSetMetaData.class);
         preparedStatement = mock(PreparedStatement.class);
         dbConnectionTester = mockStatic(DBConnectionTester.class);
-        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any())).thenReturn(connection);
+        dbConnectionTester.when(() -> DBConnectionTester.getConnection(any(), any(), any(), any(), any())).thenReturn(connection);
         when(connection.prepareStatement(any())).thenReturn(preparedStatement);
         when(preparedStatement.getMetaData()).thenReturn(resultSetMetadata);
         when(resultSetMetadata.getColumnCount()).thenReturn(3);

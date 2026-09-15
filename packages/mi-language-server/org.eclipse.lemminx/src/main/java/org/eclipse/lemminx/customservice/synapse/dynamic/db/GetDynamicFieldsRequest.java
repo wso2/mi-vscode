@@ -15,13 +15,15 @@
 package org.eclipse.lemminx.customservice.synapse.dynamic.db;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class GetDynamicFieldsRequest {
+public class GetDynamicFieldsRequest implements HasProjectUri {
     private String connectorName;
     private String operationName;
     private String fieldName;
     private String selectedValue;
     private Connection connection;
+    private String projectUri;
 
     public static class Connection {
         private String name;
@@ -62,4 +64,6 @@ public class GetDynamicFieldsRequest {
     public void setSelectedValue(String selectedValue) { this.selectedValue = selectedValue; }
     public Connection getConnection() { return connection; }
     public void setConnection(Connection connection) { this.connection = connection; }
+    public String getProjectUri() { return projectUri; }
+    public void setProjectUri(String projectUri) { this.projectUri = projectUri; }
 }

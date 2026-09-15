@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.db;
 
-public class DBConnectionTestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class DBConnectionTestParams implements HasProjectUri {
 
     public String dbType;
     public String username;
@@ -25,4 +27,11 @@ public class DBConnectionTestParams {
     public String url;
     public String className;
     public String driverPath;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

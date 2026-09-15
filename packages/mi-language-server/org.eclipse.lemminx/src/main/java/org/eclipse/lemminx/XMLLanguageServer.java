@@ -18,12 +18,18 @@ import static org.eclipse.lsp4j.jsonrpc.CompletableFutures.computeAsync;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -43,6 +49,9 @@ import org.eclipse.lemminx.customservice.ISynapseLanguageService;
 import org.eclipse.lemminx.customservice.SynapseLanguageClientAPI;
 import org.eclipse.lemminx.customservice.XMLLanguageClientAPI;
 import org.eclipse.lemminx.customservice.XMLLanguageServerAPI;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
 import org.eclipse.lemminx.extensions.contentmodel.settings.ContentModelSettings;
@@ -80,6 +89,7 @@ import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.ServerCapabilities;
 import org.eclipse.lsp4j.SetTraceParams;
 import org.eclipse.lsp4j.TextDocumentPositionParams;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.eclipse.lsp4j.jsonrpc.services.JsonDelegate;
 import org.eclipse.lsp4j.services.LanguageClient;
 import org.eclipse.lsp4j.services.TextDocumentService;
@@ -103,7 +113,9 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	private XMLCapabilityManager capabilityManager;
 	private TelemetryManager telemetryManager;
 	private final SynapseLanguageService synapseLanguageService;
-
+	private final WorkspaceManager workspaceManager = new WorkspaceManager();
+	private Map<String, Path> workspaceSchemas = new HashMap<>();
+	private Object lastKnownInitOptions = null;
 	public XMLLanguageServer() {
 		xmlTextDocumentService = new XMLTextDocumentService(this);
 		xmlWorkspaceService = new XMLWorkspaceService(this);
@@ -120,19 +132,49 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 
 	@Override
 	public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
+		boolean useAssociationSettings = true;
 		try {
-			Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
-			synapseLanguageService.setSynapseXSDPath(synapseSchemaPath);
+			Object initOptionsForCheck = params.getInitializationOptions();
+			if (initOptionsForCheck != null) {
+				com.google.gson.Gson gson = new com.google.gson.Gson();
+				com.google.gson.JsonElement jsonElement = gson.toJsonTree(initOptionsForCheck);
+				if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has("useAssociationSettings")) {
+					useAssociationSettings = jsonElement.getAsJsonObject().get("useAssociationSettings").getAsBoolean();
+				}
+			}
+
+			if (!useAssociationSettings) {
+				Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
+				LOGGER.info("Synapse schema path set to: " + synapseSchemaPath);
+				if (synapseSchemaPath != null && params.getRootPath() != null) {
+					// Catalog mode is single-root only; key it the same way the rootPath fallback
+					// in registerWorkspaceProjects() looks it up, so ProjectContext writes its
+					// generated connectors.xsd into this SAME directory instead of a fresh copy.
+					workspaceSchemas.put(toRegistryUri(params.getRootPath()), synapseSchemaPath);
+				}
+			} else {
+				workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
+				if (!workspaceSchemas.isEmpty()) {
+					LOGGER.info("Loaded " + workspaceSchemas.size() + " workspace schemas");
+				}
+			}
 		} catch (IOException | URISyntaxException e) {
-			LOGGER.log(Level.SEVERE, "Error while updating synapse catalog settings", e);
+			LOGGER.log(Level.SEVERE, "Error while updating synapse settings", e);
 		}
 		Object initOptions = InitializationOptionsSettings.getSettings(params);
+		this.lastKnownInitOptions = initOptions;
 		Object xmlSettings = AllXMLSettings.getAllXMLSettings(initOptions);
 		XMLGeneralClientSettings settings = XMLGeneralClientSettings.getGeneralXMLSettings(xmlSettings);
 
 		LogHelper.initializeRootLogger(languageClient, settings == null ? null : settings.getLogs());
 
 		LOGGER.info("Initializing XML Language server" + System.lineSeparator() + Platform.details());
+		
+		if (!useAssociationSettings) {
+			LOGGER.info("======== WE ARE USING CATALOG SETTINGS ========");
+		} else {
+			LOGGER.info("======== WE ARE USING FILE ASSOCIATION SETTINGS ========");
+		}
 
 		this.parentProcessId = params.getProcessId();
 
@@ -152,8 +194,164 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		ServerCapabilities nonDynamicServerCapabilities = ServerCapabilitiesInitializer.getNonDynamicServerCapabilities(
 				capabilityManager.getClientCapabilities(), xmlTextDocumentService.isIncrementalSupport());
 
-		synapseLanguageService.init(params.getRootPath(), xmlSettings,languageClient);
+		synapseLanguageService.applySettings(xmlSettings);
+		registerWorkspaceProjects(params);
+		synapseLanguageService.init(params.getRootPath(), xmlSettings, languageClient);
 		return CompletableFuture.completedFuture(new InitializeResult(nonDynamicServerCapabilities));
+	}
+
+	/**
+	 * Normalizes a plain filesystem path (e.g. the deprecated {@code InitializeParams.rootPath}) into
+	 * the same {@code file:///...} URI shape LSP folder/document URIs use, with no trailing slash — so
+	 * it can be used as a {@link WorkspaceManager} registry key and matched against real document URIs.
+	 */
+	private static String toRegistryUri(String path) {
+		String uri = Path.of(path).toUri().toString();
+		if (uri.endsWith("/")) {
+			uri = uri.substring(0, uri.length() - 1);
+		}
+		return uri;
+	}
+
+	/**
+	 * Builds and registers a {@link ProjectContext} in the {@link WorkspaceManager} for every
+	 * workspace folder that is an MI project. Falls back to {@code params.getRootPath()} for
+	 * older, single-root-only clients that don't send {@code workspaceFolders}.
+	 *
+	 * <p>No project is singled out as a default. Requests that cannot be attributed to a registered
+	 * project are answered with an empty result rather than by an arbitrary one — see the
+	 * {@code SynapseLanguageService} class javadoc for why.
+	 */
+	private void registerWorkspaceProjects(InitializeParams params) {
+		String miServerPath = synapseLanguageService.getMiServerPath();
+		List<WorkspaceFolder> folders = params.getWorkspaceFolders();
+		if (folders != null && !folders.isEmpty()) {
+			initProjects(folders, miServerPath);
+		} else if (params.getRootPath() != null) {
+			String rootPath = params.getRootPath();
+			String rootUri = toRegistryUri(rootPath);
+			addProjectContext(rootUri, rootPath, miServerPath, workspaceSchemas.get(rootUri));
+		}
+	}
+
+	/**
+	 * Initializes and registers every workspace folder's project, several folders at a time.
+	 *
+	 * <p>{@link ProjectContext#initProject} is mostly disk I/O, so run one folder after another its
+	 * cost is the sum over every open project, paid before {@code initialize} can answer the client.
+	 *
+	 * <p>Still waits for all of them before returning: most {@link ProjectContext} getters throw
+	 * until {@code initProject} completes, so nothing downstream handles a registered-but-unready
+	 * project.
+	 *
+	 * @param folders      the workspace folders the client sent
+	 * @param miServerPath the local MI server installation path
+	 */
+	private void initProjects(List<WorkspaceFolder> folders, String miServerPath) {
+		if (folders.size() == 1) {
+			WorkspaceFolder folder = folders.get(0);
+			addProjectContext(folder.getUri(), Utils.getAbsolutePath(folder.getUri()), miServerPath,
+					workspaceSchemas.get(folder.getUri()));
+			return;
+		}
+		int threads = Math.min(folders.size(), Runtime.getRuntime().availableProcessors());
+		ExecutorService executor = Executors.newFixedThreadPool(threads, runnable -> {
+			Thread thread = new Thread(runnable, "mi-project-init");
+			thread.setDaemon(true);
+			return thread;
+		});
+		try {
+			List<Future<?>> pending = new ArrayList<>(folders.size());
+			for (WorkspaceFolder folder : folders) {
+				pending.add(executor.submit(() -> addProjectContext(folder.getUri(),
+						Utils.getAbsolutePath(folder.getUri()), miServerPath,
+						workspaceSchemas.get(folder.getUri()))));
+			}
+			for (Future<?> pendingProject : pending) {
+				try {
+					pendingProject.get();
+				} catch (ExecutionException e) {
+					LOGGER.log(Level.SEVERE, "Failed to register a workspace project", e.getCause());
+				}
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			LOGGER.log(Level.WARNING, "Interrupted while initializing workspace projects", e);
+		} finally {
+			executor.shutdown();
+		}
+	}
+
+	/**
+	 * Creates and registers a single {@link ProjectContext}, skipping folders that aren't MI
+	 * projects (no {@code pom.xml}/{@code src}, and not a legacy multi-module root).
+	 *
+	 * @param registryUri    the URI to key this project by in {@link WorkspaceManager} (matches the
+	 *                       format of document URIs, for longest-prefix resolution)
+	 * @param projectPath    the absolute filesystem path of the project root
+	 * @param miServerPath   the local MI server installation path
+	 * @param synapseXsdPath the schema directory already registered for this project's document
+	 *                       associations (may be {@code null}, in which case the context extracts its
+	 *                       own copy)
+	 * @return the created {@link ProjectContext}, or {@code null} if {@code projectPath} isn't an MI
+	 *         project. A context whose initialization failed part-way is still registered and
+	 *         returned, so the project stays visible to the server.
+	 */
+	private ProjectContext addProjectContext(String registryUri, String projectPath, String miServerPath,
+			Path synapseXsdPath) {
+		boolean isLegacyProject = Utils.isLegacyProject(projectPath);
+		// A legacy multi-module root keeps its sources in submodules, so it never satisfies
+		// isValidProject's pom.xml-plus-src check while still being a project the server must serve.
+		if (!isLegacyProject && !Utils.isValidProject(projectPath)) {
+			return null;
+		}
+		ProjectContext context;
+		try {
+			String projectServerVersion = Utils.getServerVersion(projectPath, Constant.DEFAULT_MI_VERSION);
+			context = new ProjectContext(projectPath, isLegacyProject, projectServerVersion);
+		} catch (Exception e) {
+			LOGGER.log(Level.SEVERE, "Failed to create ProjectContext for: " + projectPath, e);
+			return null;
+		}
+		// Registered before initializing: one failing init step (an unreadable connector zip, an XSD
+		// extraction error) must not leave the project unknown to the server, which would make every
+		// lookup for it return null and silently empty its syntax tree, diagnostics and tryout. A
+		// partly initialized context still answers with whatever did load.
+		workspaceManager.addProject(registryUri, context);
+		try {
+			context.initProject(miServerPath, languageClient, synapseXsdPath);
+		} catch (Exception e) {
+			LOGGER.log(Level.SEVERE, "Failed to initialize ProjectContext for: " + projectPath, e);
+		}
+		return context;
+	}
+
+	public WorkspaceManager getWorkspaceManager() {
+		return workspaceManager;
+	}
+
+	/**
+	 * Builds and registers a {@link ProjectContext} for a workspace folder added after
+	 * {@code initialize} (e.g. via {@code workspace/didChangeWorkspaceFolders}). No-op if
+	 * {@code projectPath} isn't an MI project.
+	 *
+	 * @param registryUri    the folder URI to key this project by in {@link WorkspaceManager}
+	 * @param projectPath    the absolute filesystem path of the project root
+	 * @param synapseXsdPath the schema directory already registered for this folder's document
+	 *                       associations (may be {@code null})
+	 */
+	public void addWorkspaceProjectContext(String registryUri, String projectPath, Path synapseXsdPath) {
+		addProjectContext(registryUri, projectPath, synapseLanguageService.getMiServerPath(), synapseXsdPath);
+	}
+
+	/**
+	 * Removes the {@link ProjectContext} registered for a workspace folder removed via
+	 * {@code workspace/didChangeWorkspaceFolders}. No-op if none is registered for that URI.
+	 *
+	 * @param registryUri the folder URI the context was registered under
+	 */
+	public void removeWorkspaceProjectContext(String registryUri) {
+		workspaceManager.removeProject(registryUri);
 	}
 
 	/*
@@ -190,12 +388,8 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		if (initOptions == null) {
 			return;
 		}
-		try {
-			initOptions = Utils.updateSynapseCatalogSettings((JsonObject) initOptions,
-					synapseLanguageService.getSynapseXSDPath());
-		} catch (IOException | URISyntaxException e) {
-			LOGGER.log(Level.SEVERE, "Error while updating synapse catalog settings", e);
-		}
+		this.lastKnownInitOptions = initOptions;
+		initOptions = Utils.updateSynapseFileAssociationSettings((JsonObject) initOptions, workspaceSchemas);
 		// Update client settings
 		Object initSettings = AllXMLSettings.getAllXMLSettings(initOptions);
 		XMLGeneralClientSettings xmlClientSettings = XMLGeneralClientSettings.getGeneralXMLSettings(initSettings);
@@ -256,6 +450,21 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		}
 		// Update XML language service extensions
 		xmlTextDocumentService.updateSettings(initSettings);
+	}
+
+	public void addWorkspaceSchema(String folderUri, Path schemaDir) {
+		workspaceSchemas.put(folderUri, schemaDir);
+	}
+
+	public void removeWorkspaceSchema(String folderUri) {
+		workspaceSchemas.remove(folderUri);
+	}
+
+	public void triggerSettingsRefresh() {
+		if (lastKnownInitOptions != null) {
+			updateSettings(lastKnownInitOptions, false);
+			LOGGER.log(Level.WARNING, "Updated settings in Language Server with new workspace schemas: " + lastKnownInitOptions);
+		}
 	}
 
 	@Override

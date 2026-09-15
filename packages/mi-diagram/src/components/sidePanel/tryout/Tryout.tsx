@@ -198,6 +198,9 @@ export function TryOutView(props: TryoutProps) {
                 setMediatorOutput(res.output);
             }
         } catch (error) {
+            // Show the failure instead of just clearing the spinner, so a request that never produced
+            // a result is distinguishable from one that produced an empty one.
+            setTryOutError(error instanceof Error ? error.message : ERROR_MESSAGES.ERROR_TRYING_OUT_MEDIATOR);
             console.error("Error during try out:", error);
         } finally {
             setIsTryOutLoading(false);

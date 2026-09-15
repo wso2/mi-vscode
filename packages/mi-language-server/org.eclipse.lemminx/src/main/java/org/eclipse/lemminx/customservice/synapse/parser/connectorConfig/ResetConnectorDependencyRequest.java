@@ -14,11 +14,13 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
 /**
  * Request to remove dependency overrides from connector-config.json.
  * When connectionType is null, all overrides for the connector are removed.
  */
-public class ResetConnectorDependencyRequest {
+public class ResetConnectorDependencyRequest implements HasProjectUri {
 
     /** Required. Connector Maven artifactId (e.g. "mi-connector-file"). */
     public String connectorArtifactId;
@@ -35,4 +37,12 @@ public class ResetConnectorDependencyRequest {
      */
     public String groupId;
     public String artifactId;
+
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

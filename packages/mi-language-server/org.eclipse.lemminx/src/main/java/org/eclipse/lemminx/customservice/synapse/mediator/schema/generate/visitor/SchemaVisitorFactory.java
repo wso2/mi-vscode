@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.template.Template;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
@@ -24,22 +25,22 @@ public class SchemaVisitorFactory {
 
     private static final Logger LOGGER = Logger.getLogger(SchemaVisitorFactory.class.getName());
 
-    public static SchemaVisitor getSchemaVisitor(STNode node, String projectPath) {
+    public static SchemaVisitor getSchemaVisitor(STNode node, String projectPath, ConnectorHolder connectorHolder) {
 
         String nodeType = node.getTag();
         SchemaVisitor visitor = null;
         if (Constant.API.equals(nodeType)) {
-            visitor = new APIVisitor(projectPath);
+            visitor = new APIVisitor(projectPath, connectorHolder);
         } else if (Constant.SEQUENCE.equals(nodeType)) {
-            visitor = new SequenceVisitor(projectPath);
+            visitor = new SequenceVisitor(projectPath, connectorHolder);
         } else if (Constant.TEMPLATE.equals(nodeType) && ((Template) node).getSequence() != null) {
-            visitor = new SequenceTemplateVisitor(projectPath);
+            visitor = new SequenceTemplateVisitor(projectPath, connectorHolder);
         } else if (Constant.PROXY.equals(nodeType)) {
-            visitor = new ProxyVisitor(projectPath);
+            visitor = new ProxyVisitor(projectPath, connectorHolder);
         } else if (Constant.INBOUND_ENDPOINT.equals(nodeType)) {
-            visitor = new InboundEndpointVisitor(projectPath);
+            visitor = new InboundEndpointVisitor(projectPath, connectorHolder);
         } else if (Constant.TASK.equals(nodeType)) {
-            visitor = new TaskSchemaVisitor(projectPath);
+            visitor = new TaskSchemaVisitor(projectPath, connectorHolder);
         } else {
             LOGGER.warning("No visitor found for the node type: " + nodeType);
         }

@@ -102,6 +102,12 @@ public abstract class AbstractResourceFinder {
     // This has the xml tag mapping for each artifact type
     private static final Map<String, String> typeToXmlTagMap = new HashMap<>();
     protected Map<String, ResourceResponse> dependentResourcesMap = new HashMap<>();
+    private ConnectorHolder connectorHolder;
+
+    public void setConnectorHolder(ConnectorHolder connectorHolder) {
+
+        this.connectorHolder = connectorHolder;
+    }
 
     static {
 
@@ -258,7 +264,7 @@ public abstract class AbstractResourceFinder {
      */
     private Set<String> collectMainProjectConnectorArtifactIds() {
 
-        return ConnectorHolder.getInstance().getConnectors().stream()
+        return connectorHolder.getConnectors().stream()
                 .filter(Connector::isFromProject)
                 .map(Connector::getArtifactId)
                 .filter(Objects::nonNull)

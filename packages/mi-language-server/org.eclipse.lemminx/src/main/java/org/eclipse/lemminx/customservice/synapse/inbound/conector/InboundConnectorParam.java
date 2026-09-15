@@ -14,10 +14,19 @@
 
 package org.eclipse.lemminx.customservice.synapse.inbound.conector;
 
-public class InboundConnectorParam {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class InboundConnectorParam implements HasProjectUri {
 
     public String connectorId;
     public String connectorName;
     public String documentPath;
     public String uiSchema;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

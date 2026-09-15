@@ -14,7 +14,15 @@
 package org.eclipse.lemminx.customservice.synapse.parser;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class UpdateConfigRequest {
+public class UpdateConfigRequest implements HasProjectUri {
     public List<ConfigDetails> configs;
+    public String projectUri;
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }

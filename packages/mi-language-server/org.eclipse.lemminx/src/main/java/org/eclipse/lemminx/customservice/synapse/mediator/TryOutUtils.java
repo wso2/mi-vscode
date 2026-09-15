@@ -20,6 +20,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.Breakpoint;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.debuginfo.IDebugInfo;
 import org.eclipse.lemminx.customservice.synapse.debugger.visitor.VisitorUtils;
@@ -695,6 +696,22 @@ public class TryOutUtils {
     }
 
     /**
+     * Hashes a project root the way the try-out history log records it.
+     * <p>
+     * That log names the project currently holding the shared MI server, so the hash has to be
+     * stable across spellings of the same folder: the path is normalized first, otherwise a
+     * {@code file://} URI and an OS path (or two drive-letter cases on Windows) would hash
+     * differently and a project could fail to recognise its own server.
+     *
+     * @param projectUri the project root, as a path or a {@code file://} URI
+     * @return the hash to compare against {@link #getProjectPathHash()}
+     */
+    public static String getProjectHash(String projectUri) {
+
+        return Utils.getHash(WorkspaceManager.normalizeProjectPath(projectUri));
+    }
+
+    /**
      * Get the project path hash from the tryout history log file.
      *
      * @return the project path hash
@@ -786,7 +803,7 @@ public class TryOutUtils {
      */
     public static void updateTimestamp(String projectUri, boolean removeTimestamp) {
 
-        if (Utils.getHash(projectUri).equals(getProjectPathHash())) {
+        if (getProjectHash(projectUri).equals(getProjectPathHash())) {
             try {
                 String content = Files.readString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE);
                 String[] parts = content.split("\\s*-\\s*");

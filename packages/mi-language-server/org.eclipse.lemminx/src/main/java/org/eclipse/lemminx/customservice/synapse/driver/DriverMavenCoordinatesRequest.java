@@ -14,11 +14,21 @@
 
 package org.eclipse.lemminx.customservice.synapse.driver;
 
-public class DriverMavenCoordinatesRequest {
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+
+public class DriverMavenCoordinatesRequest implements HasProjectUri {
 
     private String filePath;
     private String connectorName;
     private String connectionType;
+    /**
+     * Project root that owns the connection this lookup is for.
+     *
+     * <p>Required for routing: {@code filePath} is blank in the primary use case — a connection whose
+     * driver has not been downloaded yet, which is precisely when the coordinates are needed — so it
+     * cannot be the field the request is resolved by.
+     */
+    private String projectUri;
 
     public DriverMavenCoordinatesRequest() {
 
@@ -60,6 +70,16 @@ public class DriverMavenCoordinatesRequest {
     public void setConnectionType(String connectionType) {
 
         this.connectionType = connectionType;
+    }
+
+    public String getProjectUri() {
+
+        return projectUri;
+    }
+
+    public void setProjectUri(String projectUri) {
+
+        this.projectUri = projectUri;
     }
 
 }

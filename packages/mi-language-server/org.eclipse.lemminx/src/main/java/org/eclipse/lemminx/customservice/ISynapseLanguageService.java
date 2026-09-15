@@ -63,6 +63,7 @@ import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnect
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundEndpointInfo;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundInfoRequest;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
+import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.ShutdownTryoutRequest;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.pojo.MediatorRequest;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.pojo.SynapseConfigRequest;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.pojo.SynapseConfigResponse;
@@ -84,6 +85,7 @@ import org.eclipse.lemminx.customservice.synapse.parser.UpdateDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.UpdatePropertyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.UpdateResponse;
 import org.eclipse.lemminx.customservice.synapse.parser.config.ConfigurableEntry;
+import org.eclipse.lemminx.customservice.synapse.pojo.ProjectUriRequest;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.ResourceUsagesRequest;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.ResourceParam;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo.LoadDependentResourcesResponse;
@@ -147,10 +149,10 @@ public interface ISynapseLanguageService {
     CompletableFuture<List<String>> getRegistryFiles(TextDocumentIdentifier param);
 
     @JsonRequest
-    CompletableFuture<List<String>> getResourceFiles();
+    CompletableFuture<List<String>> getResourceFiles(ProjectUriRequest request);
 
     @JsonRequest
-    CompletableFuture<List<ConfigurableEntry>> getConfigurableEntries();
+    CompletableFuture<List<ConfigurableEntry>> getConfigurableEntries(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<List<String>> getArtifactFiles(TextDocumentIdentifier param);
@@ -195,7 +197,7 @@ public interface ISynapseLanguageService {
     CompletableFuture<InboundConnectorResponse> getInboundConnectorSchema(InboundConnectorParam param);
 
     @JsonRequest
-    CompletableFuture<JsonObject> getLocalInboundConnectors();
+    CompletableFuture<JsonObject> getLocalInboundConnectors(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<JsonObject> getConnectionUISchema(ConnectionUIParam param);
@@ -204,7 +206,7 @@ public interface ISynapseLanguageService {
     CompletableFuture<DependencyTree> dependencyTree(TextDocumentIdentifier param);
 
     @JsonRequest
-    CompletableFuture<OverviewModel> getOverviewModel();
+    CompletableFuture<OverviewModel> getOverviewModel(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<CheckDBDriverResponseParams> checkDBDriver(CheckDBDriverRequestParams requestParams);
@@ -246,13 +248,13 @@ public interface ISynapseLanguageService {
     CompletableFuture<MediatorTryoutInfo> tryOutMediator(MediatorTryoutRequest request);
 
     @JsonRequest
-    CompletableFuture<Boolean> shutDownTryoutServer();
+    CompletableFuture<Boolean> shutDownTryoutServer(ShutdownTryoutRequest request);
 
     @JsonRequest
     CompletableFuture<MediatorTryoutInfo> mediatorInputOutputSchema(MediatorTryoutRequest request);
 
     @JsonRequest
-    CompletableFuture<OverviewPageDetailsResponse> getOverviewPageDetails();
+    CompletableFuture<OverviewPageDetailsResponse> getOverviewPageDetails(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<UpdateResponse> updateProperty(UpdatePropertyRequest request);
@@ -264,13 +266,13 @@ public interface ISynapseLanguageService {
     CompletableFuture<UpdateResponse> updateConfigFile(UpdateConfigRequest request);
 
     @JsonRequest
-    CompletableFuture<String> updateConnectorDependencies();
+    CompletableFuture<String> updateConnectorDependencies(ProjectUriRequest request);
 
     @JsonRequest
-    CompletableFuture<String> refetchIntegrationProjectDependencies();
+    CompletableFuture<String> refetchIntegrationProjectDependencies(ProjectUriRequest request);
 
     @JsonRequest
-    CompletableFuture<LoadDependentResourcesResponse> loadDependentResources();
+    CompletableFuture<LoadDependentResourcesResponse> loadDependentResources(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<TestConnectionResponse> testConnectorConnection(TestConnectionRequest request);
@@ -307,22 +309,22 @@ public interface ISynapseLanguageService {
     CompletableFuture<DeployPluginDetails> updateMavenDeployPlugin(DeployPluginDetails request);
 
     @JsonRequest
-    CompletableFuture<TextEdit> removeMavenDeployPlugin();
+    CompletableFuture<TextEdit> removeMavenDeployPlugin(ProjectUriRequest request);
 
     @JsonRequest
-    CompletableFuture<DeployPluginDetails> getMavenDeployPluginDetails();
+    CompletableFuture<DeployPluginDetails> getMavenDeployPluginDetails(ProjectUriRequest request);
 
     @JsonRequest
-    CompletableFuture<List<ConfigDetails>> getConfigurableList();
+    CompletableFuture<List<ConfigDetails>> getConfigurableList(ProjectUriRequest request);
 
     @JsonRequest
-    CompletableFuture<String> getLocalInboundEndpointsListForCopilot();
+    CompletableFuture<String> getLocalInboundEndpointsListForCopilot(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<List<String>> pdfToImagesBase64(PdfToImagesRequest request);
 
     @JsonRequest
-    CompletableFuture<DependencyStatusResponse> getDependencyStatusList();
+    CompletableFuture<DependencyStatusResponse> getDependencyStatusList(ProjectUriRequest request);
 
     @JsonRequest
     CompletableFuture<List<List<Object>>> getInputOutputMappings(MappingsGenRequestParams param);
@@ -361,5 +363,5 @@ public interface ISynapseLanguageService {
     CompletableFuture<Either<InboundEndpointInfo, String>> getInboundInfo(InboundInfoRequest request);
 
     @JsonRequest
-    CompletableFuture<String> fetchInboundConnectors();
+    CompletableFuture<String> fetchInboundConnectors(ProjectUriRequest request);
 }

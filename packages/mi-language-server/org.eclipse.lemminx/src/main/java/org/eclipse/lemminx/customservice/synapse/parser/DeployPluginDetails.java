@@ -13,9 +13,10 @@
  */
 package org.eclipse.lemminx.customservice.synapse.parser;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 import org.eclipse.lsp4j.TextEdit;
 
-public class DeployPluginDetails {
+public class DeployPluginDetails implements HasProjectUri {
 
     private String truststorePath;
     private String truststorePassword;
@@ -25,6 +26,7 @@ public class DeployPluginDetails {
     private String password;
     private String serverType;
     private TextEdit textEdit;
+    private String projectUri;
 
     public DeployPluginDetails(TextEdit textEdit) {
         this.textEdit = textEdit;
@@ -67,5 +69,9 @@ public class DeployPluginDetails {
 
     public String getServerType() {
         return serverType;
+    }
+
+    public String getProjectUri() {
+        return projectUri;
     }
 }

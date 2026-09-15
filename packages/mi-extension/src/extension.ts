@@ -84,6 +84,9 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.executeCommand('setContext', 'MI.hasMultipleProjects', count > 1);
 	};
 
+	// One panel only: the language server registers a ProjectContext for every workspace
+	// folder from `initialize`/`didChangeWorkspaceFolders`, so a state machine per project
+	// isn't needed to make the other folders available.
 	if (!oldProjects.length) {
 		const showWorkspaceOverview = shouldShowWorkspaceOverview();
 		getStateMachine(firstProject, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);
@@ -127,16 +130,13 @@ export async function activate(context: vscode.ExtensionContext) {
 	activateVisualizer(context, firstProject);
 	activateAiPanel(context);
 
-	workspace.workspaceFolders?.forEach(folder => {
-		context.subscriptions.push(...enableLS());
-	});
+	// enableLS() is workspace-wide (one shared language client), not per-folder,
+	// so it's registered once regardless of how many MI folders are open.
+	context.subscriptions.push(...enableLS());
 }
 
 export async function deactivate(): Promise<void> {
-	const clients = await MILanguageClient.getAllInstances();
-	clients.forEach(async client => {
-		await client?.stop();
-	});
+	await MILanguageClient.stopSharedInstance();
 
 	// close all webviews
 	const allWebviews = Array.from(webviews.values());

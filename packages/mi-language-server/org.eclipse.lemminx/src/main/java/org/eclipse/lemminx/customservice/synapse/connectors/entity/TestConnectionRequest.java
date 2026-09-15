@@ -15,12 +15,14 @@
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
 import java.util.Map;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
 
-public class TestConnectionRequest {
+public class TestConnectionRequest implements HasProjectUri {
 
     private String connectorName;
     private String connectionType;
     private Map<String, Object> parameters;
+    private String projectUri;
 
     public String getConnectorName() {
 
@@ -55,5 +57,15 @@ public class TestConnectionRequest {
     public void addParameter(String key, String value) {
 
         this.parameters.put(key, value);
+    }
+
+    public String getProjectUri() {
+
+        return projectUri;
+    }
+
+    public void setProjectUri(String projectUri) {
+
+        this.projectUri = projectUri;
     }
 }

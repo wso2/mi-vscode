@@ -84,7 +84,13 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-//adapted from org.apache.synapse.config.xml.MediatorFactoryFinder
+/**
+ * Adapted from org.apache.synapse.config.xml.MediatorFactoryFinder.
+ *
+ * <p>Instantiated per project (one instance per {@code ProjectContext}) rather than shared
+ * as a process-wide singleton, so that two projects on different MI versions (or with
+ * different connector sets) never contend over a single "first project wins" factory map.
+ */
 public class MediatorFactoryFinder {
 
     private static final Logger log = Logger.getLogger(MediatorFactoryFinder.class.getName());
@@ -152,33 +158,21 @@ public class MediatorFactoryFinder {
             AIAddToKnowledgeFactory.class
     };
 
-    private final static MediatorFactoryFinder instance = new MediatorFactoryFinder();
-    private Map<String, AbstractMediatorFactory> factoryMap = new HashMap<>();
-    private ConnectorHolder connectorHolder;
-    private boolean initialized = false;
-    private String miVersion;
-    private String projectPath;
+    private final Map<String, AbstractMediatorFactory> factoryMap = new HashMap<>();
+    private final ConnectorHolder connectorHolder;
+    private final String miVersion;
+    private final String projectPath;
 
-    public static synchronized void init(String miVersion, String projectPath, ConnectorHolder connectorHolder) {
+    /**
+     * Creates a {@code MediatorFactoryFinder} for a single project and eagerly loads its
+     * mediator factories, scoped to that project's MI version and connector holder.
+     */
+    public MediatorFactoryFinder(String miVersion, String projectPath, ConnectorHolder connectorHolder) {
 
-        if (!instance.initialized) {
-            instance.setMiVersion(miVersion);
-            instance.setProjectPath(projectPath);
-            instance.setConnectorHolder(connectorHolder);
-            instance.loadMediatorFactories();
-        }
-    }
-
-    public static synchronized MediatorFactoryFinder getInstance() {
-
-        if (!instance.initialized) {
-            instance.loadMediatorFactories();
-        }
-        return instance;
-    }
-
-    private MediatorFactoryFinder() {
-
+        this.miVersion = miVersion;
+        this.projectPath = projectPath;
+        this.connectorHolder = connectorHolder;
+        loadMediatorFactories();
     }
 
     private void loadMediatorFactories() {
@@ -188,12 +182,12 @@ public class MediatorFactoryFinder {
                 AbstractMediatorFactory fac = (AbstractMediatorFactory) c.newInstance();
                 fac.setMiVersion(miVersion);
                 fac.setProjectPath(projectPath);
+                fac.setConnectorHolder(connectorHolder);
                 factoryMap.put(fac.getTagName().toLowerCase(), fac);
             } catch (Exception e) {
                 log.log(Level.SEVERE, "Error instantiating " + c.getName(), e);
             }
         }
-        initialized = true;
     }
 
     public Mediator getMediator(DOMNode node) {
@@ -223,18 +217,4 @@ public class MediatorFactoryFinder {
         return null;
     }
 
-    public void setConnectorHolder(ConnectorHolder connectorHolder) {
-
-        this.connectorHolder = connectorHolder;
-    }
-
-    public void setMiVersion(String miVersion) {
-
-        this.miVersion = miVersion;
-    }
-
-    public void setProjectPath(String projectPath) {
-
-        this.projectPath = projectPath;
-    }
 }

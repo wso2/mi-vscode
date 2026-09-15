@@ -219,7 +219,7 @@ export async function getConnectorInfoFromLS(
         if (!langClient) {
             return { error: 'Language client not available' };
         }
-        const response = await langClient.getConnectorInfo({ groupId, artifactId, version });
+        const response = await langClient.getConnectorInfo({ groupId, artifactId, version, projectUri: projectPath });
         // Error path: LS returns a plain string message on failure.
         if (typeof response === 'string') {
             logDebug(`[ConnectorLSClient] getConnectorInfo error for ${artifactId}:${version}: ${response}`);
@@ -256,7 +256,7 @@ export async function getInboundInfoFromLS(
         if (!langClient) {
             return { error: 'Language client not available' };
         }
-        const response = await langClient.getInboundInfo(req);
+        const response = await langClient.getInboundInfo({ ...req, projectUri: projectPath });
         if (typeof response === 'string') {
             logDebug(`[ConnectorLSClient] getInboundInfo error for ${JSON.stringify(req)}: ${response}`);
             return { error: response };
@@ -393,7 +393,7 @@ export async function getLocalInboundCatalog(projectPath: string): Promise<Local
         if (!langClient) {
             return { bundled: [], maven: [] };
         }
-        const response = (await langClient.getLocalInboundConnectors()) as
+        const response = (await langClient.getLocalInboundConnectors(projectPath)) as
             | { 'inbound-connector-data'?: unknown }
             | undefined;
         const data = response?.['inbound-connector-data'];

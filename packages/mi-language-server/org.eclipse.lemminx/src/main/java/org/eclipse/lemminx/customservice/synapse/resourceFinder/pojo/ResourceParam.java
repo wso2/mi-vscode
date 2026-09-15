@@ -15,14 +15,38 @@
 package org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
 import java.util.List;
 
-public class ResourceParam {
+public class ResourceParam implements HasProjectUri {
 
     public Either<String, List<RequestedResource>> resourceType;
     public String projectPath = StringUtils.EMPTY;
 	public String customProjectUri;
     public String dataServiceName;
+	public String projectUri;
+
+	/**
+	 * The document the request originated from. Clients have always sent this field; declaring it
+	 * here lets the handler route to that document's project when {@link #projectUri} is absent,
+	 * instead of silently falling back to the default project context.
+	 */
+	public TextDocumentIdentifier documentIdentifier;
+
+	/**
+	 * Returns the originating document's URI, or {@code null} when no document was supplied.
+	 */
+	public String getDocumentUri() {
+
+		return documentIdentifier != null ? documentIdentifier.getUri() : null;
+	}
+
+    @Override
+    public String getProjectUri() {
+
+        return projectUri;
+    }
 }
