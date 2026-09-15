@@ -132,6 +132,8 @@ public class Utils {
 
     private static final Map<String, Map<String, JsonObject>> UI_SCHEMA_CACHE = new ConcurrentHashMap<>();
     private static final Map<String, Map<String, Mustache>> TEMPLATE_CACHE = new ConcurrentHashMap<>();
+
+    private static final Object JAR_RESOURCE_LOCK = new Object();
     private static final MustacheFactory mustacheFactory = new SynapseMustacheFactory();
 
     /**
@@ -903,9 +905,14 @@ public class Utils {
 
         Map<String, JsonObject> cached = UI_SCHEMA_CACHE.get(resourceFolderName);
         if (cached == null) {
-            cached = loadUISchemaMap(resourceFolderName);
-            if (!cached.isEmpty()) {
-                UI_SCHEMA_CACHE.put(resourceFolderName, cached);
+            synchronized (JAR_RESOURCE_LOCK) {
+                cached = UI_SCHEMA_CACHE.get(resourceFolderName);
+                if (cached == null) {
+                    cached = loadUISchemaMap(resourceFolderName);
+                    if (!cached.isEmpty()) {
+                        UI_SCHEMA_CACHE.put(resourceFolderName, cached);
+                    }
+                }
             }
         }
         Map<String, JsonObject> schemas = new HashMap<>();
@@ -1157,9 +1164,14 @@ public class Utils {
 
         Map<String, Mustache> cached = TEMPLATE_CACHE.get(resourceFolderName);
         if (cached == null) {
-            cached = loadTemplateMap(resourceFolderName);
-            if (!cached.isEmpty()) {
-                TEMPLATE_CACHE.put(resourceFolderName, cached);
+            synchronized (JAR_RESOURCE_LOCK) {
+                cached = TEMPLATE_CACHE.get(resourceFolderName);
+                if (cached == null) {
+                    cached = loadTemplateMap(resourceFolderName);
+                    if (!cached.isEmpty()) {
+                        TEMPLATE_CACHE.put(resourceFolderName, cached);
+                    }
+                }
             }
         }
         return new HashMap<>(cached);
