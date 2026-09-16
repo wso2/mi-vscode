@@ -4220,7 +4220,7 @@ ${endpointAttributes}
             const isDuplicate = await langClient.isDuplicateConnector(connectorPath);
             const parsedConnectorName = isDuplicate?.parsedConnectorName;
             if (!parsedConnectorName || !parsedConnectorName.trim()) {
-                return { success: false, error: 'Unable to determine the connector name from the selected zip file. Please verify the file is a valid connector package.' };
+                return { success: false, error: 'Unable to determine the connector name from the selected zip file. Please verify the file is a valid connector.' };
             }
             if (isDuplicate?.isFromProject === false) {
                 window.showErrorMessage('The connector you are trying to add is already added from a dependency project.');
