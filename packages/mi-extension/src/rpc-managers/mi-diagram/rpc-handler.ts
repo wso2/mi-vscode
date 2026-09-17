@@ -49,6 +49,7 @@ import {
     EditAPIRequest,
     ExportProjectRequest,
     ExtendedDSSQueryGenRequest,
+    FileDirRequest,
     FileRenameRequest,
     ExpressionCompletionsRequest,
     GetAllArtifactsRequest,
@@ -439,7 +440,7 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onRequest(getProjectRoot, (args: GetProjectRootRequest) => rpcManger.getProjectRoot(args));
     messenger.onRequest(askProjectDirPath, () => rpcManger.askProjectDirPath());
     messenger.onRequest(askProjectImportDirPath, () => rpcManger.askProjectImportDirPath());
-    messenger.onRequest(askFileDirPath, () => rpcManger.askFileDirPath());
+    messenger.onRequest(askFileDirPath, (args?: FileDirRequest) => rpcManger.askFileDirPath(args));
     messenger.onRequest(askOpenAPIDirPath, () => rpcManger.askOpenAPIDirPath());
     messenger.onRequest(createProject, (args: CreateProjectRequest) => rpcManger.createProject(args));
     messenger.onRequest(importProject, (args: ImportProjectRequest) => rpcManger.importProject(args));

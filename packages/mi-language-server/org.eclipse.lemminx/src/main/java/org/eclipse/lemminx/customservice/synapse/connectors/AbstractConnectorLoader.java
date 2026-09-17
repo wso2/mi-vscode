@@ -36,7 +36,6 @@ import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.zip.ZipFile;
 
-import static org.eclipse.lemminx.customservice.synapse.utils.Constant.INBOUND_CONNECTOR_PREFIX;
 
 /**
  * Abstract class to load connectors.
@@ -90,6 +89,7 @@ public abstract class AbstractConnectorLoader {
         try (ZipFile zipFile = new ZipFile(connectorPath)) {
             String connectorName = connectorReader.getConnectorName(zipFile);
             ConnectorDetails details = new ConnectorDetails();
+            details.parsedConnectorName = connectorName;
             if (StringUtils.isNotBlank(connectorName) && connectorHolder.exists(connectorName)) {
                 Connector existingConnector = connectorHolder.getConnector(connectorName);
                 details.connectorName = connectorName;
@@ -145,6 +145,13 @@ public abstract class AbstractConnectorLoader {
 
     }
 
+    private boolean isInboundEndpoint(File extractedFolder) {
+
+        File uiSchemaFile = extractedFolder.toPath().resolve(Constant.RESOURCES)
+                .resolve(Constant.UI_SCHEMA_JSON).toFile();
+        return uiSchemaFile.exists();
+    }
+
     private void extractZips(List<File> connectorZips, File extractFolder) {
 
         File[] tempFiles = extractFolder.listFiles();
@@ -158,7 +165,7 @@ public abstract class AbstractConnectorLoader {
                 File extractToFolder = new File(extractTo);
                 try {
                     Utils.extractZip(zip, extractToFolder);
-                    if (zipName.contains(INBOUND_CONNECTOR_PREFIX)) {
+                    if (isInboundEndpoint(extractToFolder)) {
                         String schema = Utils.readFile(extractToFolder.toPath().resolve(Constant.RESOURCES)
                                 .resolve(Constant.UI_SCHEMA_JSON).toFile());
                         JsonObject uiSchemaJson = Utils.getJsonObject(schema);
@@ -172,6 +179,10 @@ public abstract class AbstractConnectorLoader {
                             inboundConnectorHolder.saveInboundConnectorInputSchema(connectorName,
                                     uiSchemaJson.get(Constant.ID).getAsString(), inputSchema);
                         }
+                        // Notify with the connector.xml name as waitForConnectorStatus matches on that, not the uischema.json name.
+                        String zipConnectorName = getConnectorName(extractToFolder);
+                        notifyAddConnector(StringUtils.isNotBlank(zipConnectorName) ? zipConnectorName : connectorName,
+                                false, "The selected file seems to be an inbound endpoint.");
                     }
                 } catch (Exception e) {
                     log.log(Level.WARNING, "Failed to extract connector zip:" + zipName, e);
@@ -194,18 +205,19 @@ public abstract class AbstractConnectorLoader {
         for (File f : files) {
             String connectorName = getConnectorName(f);
             String connectorPath = f.getAbsolutePath();
-            if (!(connectorHolder.exists(connectorName) || connectorPath.contains(INBOUND_CONNECTOR_PREFIX))) {
-                Connector connector = connectorReader.readConnector(connectorPath, projectUri);
-                if (connector != null) {
-                    connector.setConnectorZipPath(
-                            getConnectorZip(connectorHolder.getConnectorZips(), connector.getExtractedConnectorPath()));
-                    connectorHolder.addConnector(connector);
-                    notifyAddConnector(connector.getName(), true, "Connector added successfully");
-                    continue;
-                }
-                notifyAddConnector(connectorName, false, "Failed to add connector. " +
-                        "Corrupted connector file.");
+            if (connectorHolder.exists(connectorName) || isInboundEndpoint(f)) {
+                continue;
             }
+            Connector connector = connectorReader.readConnector(connectorPath, projectUri);
+            if (connector != null) {
+                connector.setConnectorZipPath(
+                        getConnectorZip(connectorHolder.getConnectorZips(), connector.getExtractedConnectorPath()));
+                connectorHolder.addConnector(connector);
+                notifyAddConnector(connector.getName(), true, "Connector added successfully");
+                continue;
+            }
+            notifyAddConnector(connectorName, false, "Failed to add connector. " +
+                    "Corrupted connector file.");
         }
     }
 

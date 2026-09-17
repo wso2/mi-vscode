@@ -332,34 +332,32 @@ const InputMappingsForm = (props: AddMediatorProps) => {
 
         if (edits.status) {
             const st = await rpcClient.getMiDiagramRpcClient().getSyntaxTree({ documentUri: props.documentUri });
-            let isInResource = false;
-            let resourceData: any = {};
-            if (st.syntaxTree.data.resources !== undefined && st.syntaxTree.data.resources !== null && st.syntaxTree.data.resources.length > 0) {
-                st.syntaxTree.data.resources.forEach((resource: any) => {
-                    if (resource.callQuery.href === sidePanelContext?.formValues?.queryObject.queryName) {
-                        resourceData.resourceRange = resource.callQuery.range;
-                        resourceData.selfClosed = resource.callQuery.selfClosed;
-                        isInResource = true;
-                    }
-                });
-            }
-            if (!isInResource) {
-                if (st.syntaxTree.data.operations !== undefined && st.syntaxTree.data.operations !== null && st.syntaxTree.data.operations.length > 0) {
-                    st.syntaxTree.data.operations.forEach((operation: any) => {
-                        if (operation.callQuery.href === sidePanelContext?.formValues?.queryObject.queryName) {
-                            resourceData.resourceRange = operation.callQuery.range;
-                            resourceData.selfClosed = operation.callQuery.selfClosed;
-                        }
-                    });
+            const callQueryMatches: { resourceRange: any; selfClosed: boolean }[] = [];
+            st.syntaxTree.data.resources?.forEach((resource: any) => {
+                if (resource.callQuery.href === sidePanelContext?.formValues?.queryObject.queryName) {
+                    callQueryMatches.push({ resourceRange: resource.callQuery.range, selfClosed: resource.callQuery.selfClosed });
                 }
-            }
+            });
+            st.syntaxTree.data.operations?.forEach((operation: any) => {
+                if (operation.callQuery.href === sidePanelContext?.formValues?.queryObject.queryName) {
+                    callQueryMatches.push({ resourceRange: operation.callQuery.range, selfClosed: operation.callQuery.selfClosed });
+                }
+            });
 
-            if (Object.keys(resourceData).length !== 0) {
+            // Applying changes from the bottom of the document upward so an earlier edit doesn't shift the
+            // positions of a match that appears later in the file.
+            callQueryMatches.sort((a, b) => {
+                const posA = a.resourceRange.startTagRange.start;
+                const posB = b.resourceRange.startTagRange.start;
+                return posA.line !== posB.line ? posB.line - posA.line : posB.character - posA.character;
+            });
+
+            for (const match of callQueryMatches) {
                 xml = getDssResourceQueryParamsXml(resourceQuery);
-                const end = resourceData.selfClosed ? resourceData.resourceRange.startTagRange.end : resourceData.resourceRange.endTagRange.end;
+                const end = match.selfClosed ? match.resourceRange.startTagRange.end : match.resourceRange.endTagRange.end;
                 await rpcClient.getMiDiagramRpcClient().applyEdit({
                     text: xml, documentUri: props.documentUri,
-                    range: { start: resourceData.resourceRange.startTagRange.start, end: end },
+                    range: { start: match.resourceRange.startTagRange.start, end: end },
                     waitForEdits: true
                 });
             }

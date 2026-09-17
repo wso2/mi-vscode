@@ -53,7 +53,7 @@ export function ImportInboundConnectorForm(props: ImportInboundConnectorFormProp
     const [importError, setImportError] = useState("");
 
     const handleSourceDirSelection = async () => {
-        const specDirectory = await rpcClient.getMiDiagramRpcClient().askFileDirPath();
+        const specDirectory = await rpcClient.getMiDiagramRpcClient().askFileDirPath({ filters: { 'Inbound Endpoint Zip': ['zip'] } });
         setZipDir(specDirectory.path);
     }
 
