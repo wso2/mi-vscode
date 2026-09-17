@@ -97,6 +97,7 @@ export interface ParamManagerProps {
     errorMessage?: string;
     nodeRange?: Range;
     sx?: any;
+    validateField?: (parameters: Param[]) => string;
 }
 
 const ParamManagerWrapper = styled.div< { sx: any }>`
@@ -364,7 +365,8 @@ const getAddParamTextFromParamId = (paramFields: ParamField[], paramId: number) 
 
 export function ParamManager(props: ParamManagerProps) {
     const { paramConfigs, readonly, openInDrawer,
-        addParamText = "Add Parameter", onChange, allowAddItem = true, errorMessage, nodeRange, sx, allowDuplicates = true
+        addParamText = "Add Parameter", onChange, allowAddItem = true, errorMessage, 
+        nodeRange, sx, allowDuplicates = true, validateField
     } = props;
 
     const [editingSegmentId, setEditingSegmentId] = useState<number>(-1);
@@ -373,6 +375,7 @@ export function ParamManager(props: ParamManagerProps) {
 
     const onEdit = (param: Parameters) => {
         setEditingSegmentId(param.id);
+        setFieldErrorMessage("");
     };
 
     const paramValues: Parameters[] = paramConfigs.paramValues.map((paramValue) => {
@@ -418,6 +421,7 @@ export function ParamManager(props: ParamManagerProps) {
     const onAddClick = () => {
         const updatedParameters: ParamValueConfig[] = [...paramConfigs.paramValues];
         setEditingSegmentId(updatedParameters.length);
+        setFieldErrorMessage("");
         const newParams: Parameters = getNewParam(paramConfigs.paramFields, updatedParameters.length);
         const paramValues = newParams.parameters.map(param => {
             return {
@@ -462,17 +466,23 @@ export function ParamManager(props: ParamManagerProps) {
                 paramValues: paramValues
             };
         }
+        let currentFieldErrorMessage = "";
         if (!allowDuplicates) {
             const paramKeys = updatedParameters.map(param => {
                 return param?.paramValues[0]?.value;
             });
             const hasUniqueKeys = new Set(paramKeys).size === paramKeys.length;
             if (!hasUniqueKeys) {
-                setFieldErrorMessage("Key should be unique");
-            } else {
-                setFieldErrorMessage("");
+                currentFieldErrorMessage = "Key should be unique";
             }
         }
+        if (validateField) {
+            const customErrorMessage = validateField(paramConfig.parameters);
+            if (customErrorMessage) {
+                currentFieldErrorMessage = customErrorMessage;
+            }
+        }
+        setFieldErrorMessage(currentFieldErrorMessage);
         onChange({ ...paramConfigs, paramValues: updatedParameters });
     };
 
@@ -488,6 +498,7 @@ export function ParamManager(props: ParamManagerProps) {
             onDelete(param);
         }
         setIsNew(false);
+        setFieldErrorMessage("");
     };
 
     // Function to handle reordering of items after moving

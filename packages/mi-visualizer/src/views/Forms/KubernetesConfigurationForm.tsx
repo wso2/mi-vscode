@@ -24,6 +24,8 @@ import * as yup from "yup";
 import { useForm } from "react-hook-form";
 import { ParamConfig, ParamManager } from "@wso2/mi-diagram";
 
+const DEFAULT_KUBERNETES_PORTS = [8290, 8253, 9201, 9164];
+
 type InputsFields = {
     name?: string;
     replicas?: number;
@@ -92,6 +94,15 @@ export function KubernetesConfigurationForm() {
     }
     const [portsMap, setPorts] = useState(portConfigs);
 
+    const validatePort = (portValue: string): string => {
+        const port = Number(portValue);
+        if (portValue && DEFAULT_KUBERNETES_PORTS.includes(port)) {
+            return `Port ${port} is reserved for the default Kubernetes service. `
+                + "Please choose a different port.";
+        }
+        return "";
+    };
+
     const handlePortsOnChange = (params: any) => {
         let i = 1;
         const modifiedParams = {
@@ -147,6 +158,16 @@ export function KubernetesConfigurationForm() {
 
     const handleCreateDeployment = async (values: InputsFields) => {
 
+        const reservedPortError = portsMap.paramValues
+            .map((param: any) => validatePort(param.paramValues[0].value))
+            .find((message: string) => !!message);
+        if (reservedPortError) {
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: reservedPortError,
+                type: "error"
+            });
+            return;
+        }
         let ports: any = [];
         portsMap.paramValues.map((param: any) => {
             ports.push({ port: param.paramValues[0].value });
@@ -197,6 +218,7 @@ export function KubernetesConfigurationForm() {
                 paramConfigs={portsMap}
                 readonly={false}
                 addParamText="Add Port"
+                validateField={(parameters) => validatePort(String(parameters[0]?.value ?? ""))}
                 onChange={handlePortsOnChange} />
             <ParamManager
                 paramConfigs={envs}
