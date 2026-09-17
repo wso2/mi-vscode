@@ -4269,9 +4269,7 @@ ${endpointAttributes}
             await rpcClient.updateConnectorDependencies();
             commands.executeCommand(COMMANDS.REFRESH_COMMAND);
 
-            return new Promise((resolve, reject) => {
-                resolve({ success: true, connectorPath: destinationPath, parsedConnectorName });
-            });
+            return { success: true, connectorPath: destinationPath, parsedConnectorName };
         } catch (error) {
             console.error('Error downloading connector:', error);
             throw new Error('Failed to download connector');
@@ -5908,7 +5906,7 @@ ${keyValuesXML}`;
             // Delete resources
             const deleteResources = removed.map(resource => resources.find(
                 r => r.path === resource.path && isEqual(r.methods, resource.methods)
-            ));
+            )).filter((resource): resource is typeof resources[number] => resource !== undefined);
             // Applying changes from the bottom of the document upward so an earlier edit doesn't shift the
             // positions of a resource that appears later in the file.
             deleteResources.sort((a, b) => {
