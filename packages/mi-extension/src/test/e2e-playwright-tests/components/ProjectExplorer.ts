@@ -39,21 +39,27 @@ export class ProjectExplorer {
         return `div[role="treeitem"][aria-label="${label}"], div[role="treeitem"][aria-label^="${label}, "]`;
     }
 
+    private withAttribute(selector: string, attribute: string): string {
+        return selector.split(',').map(part => `${part.trim()}${attribute}`).join(', ');
+    }
+
     public async init () {
         await this.explorer.waitFor();
     }
 
-    public async findItem(path: string[], click: boolean = false, matchPrefix: boolean = false): Promise<Locator | undefined> {
+    public async findItem(path: string[], click: boolean = false, matchPrefix: boolean = false, timeout?: number): Promise<Locator | undefined> {
         let currentItem: Locator | undefined = undefined;
         for (let i = 0; i < path.length; i++) {
 
             currentItem = this.explorer.locator(this.treeItem(path[i], matchPrefix));
-            await currentItem.waitFor();
+            await currentItem.waitFor({ timeout });
 
             if (i < path.length - 1) {
                 const isExpanded = await currentItem.getAttribute('aria-expanded');
                 if (isExpanded === 'false') {
                     await currentItem.click();
+                    const expandedItem = this.explorer.locator(this.withAttribute(this.treeItem(path[i], matchPrefix), '[aria-expanded="true"]'));
+                    await expandedItem.waitFor({ timeout });
                 }
             } else {
                 if (click) {

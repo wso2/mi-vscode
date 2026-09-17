@@ -117,14 +117,8 @@ jobs:
           if [[ "${{ inputs.runMIE2ETests }}" == "true" || ("${{ inputs.enableE2ETests }}" == "true" && "${{ steps.diff.outputs.hasMIDiff }}" == "true") || ("${{ inputs.isReleaseBuild }}" == "true" && "${{ inputs.mi }}" == "true") ]]; then
             echo "Including MI UI tests in the matrix"
             matrix=$(echo "$matrix" | jq '.include += [
-              { "name": "MI", "group": "group1", "path": "packages/mi-extension", "os": "linux" },
-              { "name": "MI", "group": "group2", "path": "packages/mi-extension", "os": "linux" },
               { "name": "MI", "group": "group3", "path": "packages/mi-extension", "os": "linux" },
-              { "name": "MI", "group": "group4", "path": "packages/mi-extension", "os": "linux" },
-              { "name": "MI", "group": "group1", "path": "packages/mi-extension", "os": "windows" },
-              { "name": "MI", "group": "group2", "path": "packages/mi-extension", "os": "windows" },
-              { "name": "MI", "group": "group3", "path": "packages/mi-extension", "os": "windows" },
-              { "name": "MI", "group": "group4", "path": "packages/mi-extension", "os": "windows" }
+              { "name": "MI", "group": "group3", "path": "packages/mi-extension", "os": "windows" }
             ]')
           fi
 

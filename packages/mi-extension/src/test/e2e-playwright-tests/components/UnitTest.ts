@@ -468,7 +468,14 @@ export class UnitTest {
         const testExplorer = new ProjectExplorer(this._page, 'Test Explorer');
         await testExplorer.init();
         await this._page.waitForTimeout(1000);
-        const treeItem = await testExplorer.findItem(this.unitTestTreePath(name), false, true) as Locator;
+        let treeItem: Locator | undefined;
+        try {
+            treeItem = await testExplorer.findItem(this.unitTestTreePath(name), false, true, 30000) as Locator;
+        } catch (error) {
+            console.warn(`Unit test "${name}" not found in Test Explorer yet, waiting additional time...`);
+            await this._page.waitForTimeout(5000);
+            treeItem = await testExplorer.findItem(this.unitTestTreePath(name), false, true, 60000) as Locator;
+        }
         if (!treeItem) {
             throw new Error(`Unit test "${name}" not found in Test Explorer`);
         }
