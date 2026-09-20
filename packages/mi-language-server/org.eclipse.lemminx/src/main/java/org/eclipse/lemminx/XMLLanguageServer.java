@@ -21,11 +21,11 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -114,7 +114,17 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	private TelemetryManager telemetryManager;
 	private final SynapseLanguageService synapseLanguageService;
 	private final WorkspaceManager workspaceManager = new WorkspaceManager();
-	private Map<String, Path> workspaceSchemas = new HashMap<>();
+	/**
+	 * Schema directory per workspace folder, keyed by folder URI.
+	 *
+	 * <p>Filled in {@code initialize} and kept up to date by {@link #addWorkspaceSchema} and
+	 * {@link #removeWorkspaceSchema} on {@code workspace/didChangeWorkspaceFolders}, while
+	 * {@link #updateSettings} iterates it to rebuild {@code xml.fileAssociations}. Those all run
+	 * on lsp4j's single message-dispatch thread, but {@link #initProjects} also reads it from the
+	 * per-folder init threads, so it is a {@link ConcurrentHashMap} rather than one that depends
+	 * on that dispatch detail holding.
+	 */
+	private final Map<String, Path> workspaceSchemas = new ConcurrentHashMap<>();
 	private Object lastKnownInitOptions = null;
 	public XMLLanguageServer() {
 		xmlTextDocumentService = new XMLTextDocumentService(this);
@@ -133,7 +143,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	@Override
 	public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
 		try {
-			workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
+			workspaceSchemas.putAll(Utils.updateSynapseFileAssociationSettings(params));
 			if (!workspaceSchemas.isEmpty()) {
 				LOGGER.info("Loaded " + workspaceSchemas.size() + " workspace schemas");
 			}
