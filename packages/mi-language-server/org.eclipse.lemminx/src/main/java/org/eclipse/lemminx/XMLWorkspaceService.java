@@ -138,9 +138,7 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 					|| change.getUri().contains(Constant.INBOUND_CONNECTORS_DIR)) && change.getUri().contains(".zip")) {
 				ProjectContext context = xmlLanguageServer
 						.getWorkspaceManager().getProjectForDocument(change.getUri());
-				if (context != null) {
-					context.updateInboundConnectors();
-				} else {
+				if (context == null) {
 					// TODO(unrouted-request): a watched .zip that belongs to no registered MI project.
 					// This previously reloaded the *default* project's inbound connectors, refreshing a
 					// project with nothing to do with the changed file. Ignoring it is correct for the
@@ -148,16 +146,30 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 					// project ever lands here, that project failed to register — which this log surfaces.
 					log.warning("Watched inbound connector zip belongs to no registered project, ignoring: "
 							+ change.getUri());
+				} else if (!context.isInitialized()) {
+					// Registered but not ready — see XMLLanguageServer.addProjectContext. Either
+					// initProject is still running on another thread, in which case it loads this
+					// project's inbound connectors itself and will pick the zip up anyway, or it failed,
+					// in which case updateInboundConnectors would only throw IllegalStateException.
+					// Nothing here catches that, and it would abandon the remaining events in this batch.
+					log.warning("Watched inbound connector zip belongs to an uninitialized project, ignoring: "
+							+ change.getUri());
+				} else {
+					context.updateInboundConnectors();
 				}
 			} else if (change.getUri().contains(Constant.CONNECTORS) && change.getUri().contains(".zip")) {
 				ProjectContext context = xmlLanguageServer
 						.getWorkspaceManager().getProjectForDocument(change.getUri());
-				if (context != null) {
-					context.updateConnectors();
-				} else {
+				if (context == null) {
 					// TODO(unrouted-request): see the inbound branch above — same reasoning.
 					log.warning("Watched connector zip belongs to no registered project, ignoring: "
 							+ change.getUri());
+				} else if (!context.isInitialized()) {
+					// See the inbound branch above — same reasoning.
+					log.warning("Watched connector zip belongs to an uninitialized project, ignoring: "
+							+ change.getUri());
+				} else {
+					context.updateConnectors();
 				}
 			} else {
 				// LSP URIs use '/', but normalize defensively so a backslash path also matches on Windows.

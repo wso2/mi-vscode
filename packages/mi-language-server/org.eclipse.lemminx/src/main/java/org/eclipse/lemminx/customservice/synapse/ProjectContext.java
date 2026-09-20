@@ -78,8 +78,29 @@ public class ProjectContext {
      * Tracks whether {@link #initProject} has completed successfully.
      * Used by service-handler getters to fail fast with a clear message
      * instead of returning {@code null}.
+     *
+     * <p><b>{@code volatile} on purpose — this flag is also this object's publication fence.</b>
+     * {@code XMLLanguageServer.addProjectContext} registers a context in the shared
+     * {@code WorkspaceManager} map <em>before</em> initializing it, and {@code didChangeWorkspaceFolders}
+     * does so on the notification thread while request threads are already being served. So another
+     * thread can be holding this reference while the fields below are still being written.
+     * {@link java.util.concurrent.ConcurrentHashMap} only orders writes made <em>before</em> the
+     * {@code put}; it says nothing about the ones {@link #initProject} makes afterwards. Reading this
+     * volatile flag is what gives a reader the happens-before edge, so a thread that sees {@code true}
+     * is guaranteed to see every field below fully written.
+     *
+     * <p>Two rules keep that guarantee, and both must hold together:
+     * <ul>
+     *   <li>the field stays {@code volatile} — otherwise a reader could observe {@code true} next to a
+     *       still-null handler and get an NPE instead of the {@link IllegalStateException}
+     *       {@link #checkInitialized} promises;</li>
+     *   <li>the write stays the <em>last</em> statement of {@link #initProject} — never move it earlier
+     *       to let some later init step past {@link #checkInitialized}. Call the unguarded internal
+     *       helper from that step instead, the way {@link #loadConnectors} exists for
+     *       {@link #updateConnectors}.</li>
+     * </ul>
      */
-    private boolean initialized = false;
+    private volatile boolean initialized = false;
 
     // -------------------------------------------------------------------------
     // Identity fields — set once at construction time and never changed.
@@ -229,10 +250,20 @@ public class ProjectContext {
      *   <li>{@link ExpressionHelperProvider} — prepares expression helpers</li>
      *   <li>{@link AbstractResourceFinder} — discovers and indexes dependent
      *       resources (endpoints, sequences, etc.)</li>
+     *   <li>{@link MediatorFactoryFinder} — builds the per-context factory finder</li>
      *   <li>Resolves and stores the {@code synapseXsdPath}</li>
      *   <li>{@link DynamicClassLoader} — seeds this project's DB-driver classloader
      *       from its own {@code deployment/libs}</li>
+     *   <li>{@link #loadConnectors} and {@link #packHttpConnector} — loads this project's
+     *       connectors and regenerates its {@code connectors.xsd}</li>
+     *   <li>Sets {@link #initialized}, publishing the finished context to other threads</li>
      * </ol>
+     *
+     * <p>Only the last step makes this context usable: until it runs, and it runs only if no earlier
+     * step threw, {@link #checkInitialized} rejects every service-handler getter. The context is
+     * already registered in {@code WorkspaceManager} by then (see
+     * {@code XMLLanguageServer.addProjectContext}), so other threads can hold a reference to it
+     * throughout — which is why that final write is what carries the whole object across to them.
      *
      * @param miServerPath   absolute path to the local MI server installation
      * @param languageClient the language-client proxy for sending notifications
@@ -308,12 +339,19 @@ public class ProjectContext {
                     "Could not seed the DB-driver classloader from deployment/libs for: " + projectUri, e);
         }
 
-        this.initialized = true;
-
         // 10. Load this project's connectors now that the loader and XSD path are ready, and pack the
-        // bundled HTTP connector in if this project's MI version needs it.
-        updateConnectors();
+        // bundled HTTP connector in if this project's MI version needs it. Both go through the
+        // unguarded loadConnectors() rather than the public updateConnectors(), because `initialized`
+        // is deliberately still false here — see step 11.
+        loadConnectors();
         packHttpConnector();
+
+        // 11. Publish. This is the last statement on purpose: `initialized == true` is what tells every
+        // other thread this context is both fully wired and fully loaded, so it must not become true
+        // while any work remains — not even the connector loading above, which would otherwise hand a
+        // concurrent reader a context whose ConnectorHolder is still filling and whose connector calls
+        // therefore parse as InvalidMediator. See the field's javadoc for the visibility half.
+        this.initialized = true;
 
         log.log(Level.INFO, "ProjectContext initialized successfully for: " + projectUri);
     }
@@ -347,6 +385,27 @@ public class ProjectContext {
      */
     public String getProjectServerVersion() {
         return projectServerVersion;
+    }
+
+    /**
+     * Whether {@link #initProject} has run to completion for this context, i.e. whether the service
+     * handlers below are safe to use.
+     *
+     * <p>Being registered in {@code WorkspaceManager} does <em>not</em> imply this. Registration and
+     * initialization are deliberately separate (see {@code XMLLanguageServer.addProjectContext}), so a
+     * context resolved from the registry may be one that is still initializing on another thread, or
+     * one whose initialization threw. In both cases every getter below throws
+     * {@link IllegalStateException}.
+     *
+     * <p>Check this before touching a service handler anywhere an exception would be swallowed or
+     * would abandon unrelated work — LSP notification handlers, batch loops, background refreshes —
+     * and skip that project instead. Request handlers that resolve a project per call can rely on the
+     * exception surfacing as an error response.
+     *
+     * @return {@code true} once initialization has fully succeeded
+     */
+    public boolean isInitialized() {
+        return initialized;
     }
 
     // -------------------------------------------------------------------------
@@ -480,6 +539,23 @@ public class ProjectContext {
      */
     public void updateConnectors() {
         checkInitialized();
+        loadConnectors();
+    }
+
+    /**
+     * The body of {@link #updateConnectors} without the readiness guard.
+     *
+     * <p>Exists so {@link #initProject} can run the initial connector load as part of bringing this
+     * context up, at which point {@code initialized} is deliberately still {@code false} and
+     * {@link #checkInitialized} would reject the call. Depends only on {@link #connectorLoader},
+     * {@link #mediatorHandler}, {@link #synapseXsdPath} and {@link #connectorHolder}, all of which are
+     * already assigned by then.
+     *
+     * <p>Callers outside {@link #initProject} must use {@link #updateConnectors} instead, so that a
+     * context which never finished initializing fails with a clear {@link IllegalStateException}
+     * rather than an NPE somewhere in the loader.
+     */
+    private void loadConnectors() {
         connectorLoader.loadConnector();
         if (mediatorHandler.isInitialized()) {
             mediatorHandler.reloadMediatorList(projectServerVersion);
@@ -534,7 +610,8 @@ public class ProjectContext {
             Path httpConnectorPath = Paths.get(connectorDownloadPath, "mi-connector-http-1.0.0.zip");
             Files.copy(inputStream, httpConnectorPath, StandardCopyOption.REPLACE_EXISTING);
             inputStream.close();
-            updateConnectors();
+            // Unguarded: this only runs from initProject, where `initialized` is still false.
+            loadConnectors();
         } catch (Exception e) {
             log.log(Level.SEVERE, "Error while packing the HTTP connector to the project. ", e);
         }
