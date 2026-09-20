@@ -14,9 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class QueryGenRequestParams implements HasProjectUri {
+public class QueryGenRequestParams extends AbstractProjectRequest {
 
     String className;
     String username;
@@ -25,7 +25,6 @@ public class QueryGenRequestParams implements HasProjectUri {
     String tableData;
     String datasourceName;
     String driverPath;
-    String projectUri;
 
     public void setClassName(String className) {
         this.className = className;
@@ -69,13 +68,5 @@ public class QueryGenRequestParams implements HasProjectUri {
 
     public String getDriverPath() {
         return driverPath;
-    }
-
-    public String getProjectUri() {
-        return projectUri;
-    }
-
-    public void setProjectUri(String projectUri) {
-        this.projectUri = projectUri;
     }
 }

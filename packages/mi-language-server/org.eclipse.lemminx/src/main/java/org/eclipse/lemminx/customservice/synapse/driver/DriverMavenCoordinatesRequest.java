@@ -14,21 +14,20 @@
 
 package org.eclipse.lemminx.customservice.synapse.driver;
 
-import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class DriverMavenCoordinatesRequest implements HasProjectUri {
+/**
+ * Looks up the Maven coordinates of the JDBC driver for a connection.
+ *
+ * <p>Resolved by the inherited {@code projectUri} rather than by {@link #filePath}: that path is
+ * blank in the primary use case — a connection whose driver has not been downloaded yet, which is
+ * precisely when the coordinates are needed — so it cannot be the field the request is routed by.
+ */
+public class DriverMavenCoordinatesRequest extends AbstractProjectRequest {
 
     private String filePath;
     private String connectorName;
     private String connectionType;
-    /**
-     * Project root that owns the connection this lookup is for.
-     *
-     * <p>Required for routing: {@code filePath} is blank in the primary use case — a connection whose
-     * driver has not been downloaded yet, which is precisely when the coordinates are needed — so it
-     * cannot be the field the request is resolved by.
-     */
-    private String projectUri;
 
     public DriverMavenCoordinatesRequest() {
 
@@ -71,15 +70,4 @@ public class DriverMavenCoordinatesRequest implements HasProjectUri {
 
         this.connectionType = connectionType;
     }
-
-    public String getProjectUri() {
-
-        return projectUri;
-    }
-
-    public void setProjectUri(String projectUri) {
-
-        this.projectUri = projectUri;
-    }
-
 }

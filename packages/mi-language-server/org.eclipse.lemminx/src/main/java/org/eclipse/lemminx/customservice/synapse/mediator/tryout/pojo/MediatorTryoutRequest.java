@@ -17,9 +17,9 @@ package org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class MediatorTryoutRequest implements HasProjectUri {
+public class MediatorTryoutRequest extends AbstractProjectRequest {
 
     private final String file;
     private String tryoutId;
@@ -32,7 +32,6 @@ public class MediatorTryoutRequest implements HasProjectUri {
     private final Edit[] edits;
     private MediatorInfo mediatorInfo;
     private boolean isIsolatedTryout;
-    private String projectUri;
     private String serverPath;
 
     public MediatorTryoutRequest(String file, int line, int column, String inputPayload, Edit[] edits) {
@@ -109,11 +108,6 @@ public class MediatorTryoutRequest implements HasProjectUri {
     public boolean isIsolatedTryout() {
 
         return isIsolatedTryout;
-    }
-
-    public String getProjectUri() {
-
-        return projectUri;
     }
 
     /**

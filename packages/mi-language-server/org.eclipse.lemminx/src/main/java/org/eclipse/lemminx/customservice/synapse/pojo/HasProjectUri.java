@@ -17,11 +17,10 @@ package org.eclipse.lemminx.customservice.synapse.pojo;
 /**
  * Implemented by every {@code synapse/*} request that names the project it belongs to.
  *
- * <p>These requests had each declared their own {@code projectUri} field independently, in several
- * different access styles (public field, private field with accessors, package-private with
- * accessors), so a caller had to know which style a given request class used. One accessor shape
- * lets the language service resolve the project the same way for all of them, through a single
- * null-safe {@code resolveByProjectUri(HasProjectUri)}.
+ * <p>One accessor shape lets the language service resolve the project the same way for all of them,
+ * through a single null-safe {@code resolveByProjectUri(HasProjectUri)}. Requests get that shape by
+ * extending {@link AbstractProjectRequest}, which declares the field once; this interface stays the
+ * type the resolvers accept, so they depend on the accessor rather than on that base class.
  *
  * <p>The field remains optional: a null, blank or unmatched {@code projectUri} resolves to no
  * project and the RPC answers with an empty or failed result, never with another project's data.

@@ -15,19 +15,18 @@
 package org.eclipse.lemminx.customservice.synapse.resourceFinder.pojo;
 
 import org.apache.commons.lang3.StringUtils;
-import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 import org.eclipse.lsp4j.TextDocumentIdentifier;
 import org.eclipse.lsp4j.jsonrpc.messages.Either;
 
 import java.util.List;
 
-public class ResourceParam implements HasProjectUri {
+public class ResourceParam extends AbstractProjectRequest {
 
     public Either<String, List<RequestedResource>> resourceType;
     public String projectPath = StringUtils.EMPTY;
 	public String customProjectUri;
     public String dataServiceName;
-	public String projectUri;
 
 	/**
 	 * The document the request originated from. Clients have always sent this field; declaring it
@@ -43,10 +42,4 @@ public class ResourceParam implements HasProjectUri {
 
 		return documentIdentifier != null ? documentIdentifier.getUri() : null;
 	}
-
-    @Override
-    public String getProjectUri() {
-
-        return projectUri;
-    }
 }

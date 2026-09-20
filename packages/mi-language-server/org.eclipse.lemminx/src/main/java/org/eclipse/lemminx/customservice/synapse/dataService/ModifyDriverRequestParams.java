@@ -14,18 +14,11 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class ModifyDriverRequestParams implements HasProjectUri {
+public class ModifyDriverRequestParams extends AbstractProjectRequest {
 
     public String addDriverPath;
     public String removeDriverPath;
     public String className;
-    public String projectUri;
-
-    @Override
-    public String getProjectUri() {
-
-        return projectUri;
-    }
 }

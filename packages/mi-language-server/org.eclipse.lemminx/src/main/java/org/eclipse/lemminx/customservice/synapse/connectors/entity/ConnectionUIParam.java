@@ -14,14 +14,13 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
-import org.eclipse.lemminx.customservice.synapse.pojo.HasProjectUri;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class ConnectionUIParam implements HasProjectUri {
+public class ConnectionUIParam extends AbstractProjectRequest {
 
     private String connectorName;
     private String connectionType;
     private String documentUri;
-    private String projectUri;
 
     public ConnectionUIParam(String connectorName, String connectionType) {
 
@@ -62,15 +61,5 @@ public class ConnectionUIParam implements HasProjectUri {
     public void setDocumentUri(String documentUri) {
 
         this.documentUri = documentUri;
-    }
-
-    public String getProjectUri() {
-
-        return projectUri;
-    }
-
-    public void setProjectUri(String projectUri) {
-
-        this.projectUri = projectUri;
     }
 }
