@@ -132,31 +132,10 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 
 	@Override
 	public CompletableFuture<InitializeResult> initialize(InitializeParams params) {
-		boolean useAssociationSettings = true;
 		try {
-			Object initOptionsForCheck = params.getInitializationOptions();
-			if (initOptionsForCheck != null) {
-				com.google.gson.Gson gson = new com.google.gson.Gson();
-				com.google.gson.JsonElement jsonElement = gson.toJsonTree(initOptionsForCheck);
-				if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has("useAssociationSettings")) {
-					useAssociationSettings = jsonElement.getAsJsonObject().get("useAssociationSettings").getAsBoolean();
-				}
-			}
-
-			if (!useAssociationSettings) {
-				Path synapseSchemaPath = Utils.updateSynapseCatalogSettings(params);
-				LOGGER.info("Synapse schema path set to: " + synapseSchemaPath);
-				if (synapseSchemaPath != null && params.getRootPath() != null) {
-					// Catalog mode is single-root only; key it the same way the rootPath fallback
-					// in registerWorkspaceProjects() looks it up, so ProjectContext writes its
-					// generated connectors.xsd into this SAME directory instead of a fresh copy.
-					workspaceSchemas.put(toRegistryUri(params.getRootPath()), synapseSchemaPath);
-				}
-			} else {
-				workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
-				if (!workspaceSchemas.isEmpty()) {
-					LOGGER.info("Loaded " + workspaceSchemas.size() + " workspace schemas");
-				}
+			workspaceSchemas = Utils.updateSynapseFileAssociationSettings(params);
+			if (!workspaceSchemas.isEmpty()) {
+				LOGGER.info("Loaded " + workspaceSchemas.size() + " workspace schemas");
 			}
 		} catch (IOException | URISyntaxException e) {
 			LOGGER.log(Level.SEVERE, "Error while updating synapse settings", e);
@@ -169,12 +148,6 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 		LogHelper.initializeRootLogger(languageClient, settings == null ? null : settings.getLogs());
 
 		LOGGER.info("Initializing XML Language server" + System.lineSeparator() + Platform.details());
-		
-		if (!useAssociationSettings) {
-			LOGGER.info("======== WE ARE USING CATALOG SETTINGS ========");
-		} else {
-			LOGGER.info("======== WE ARE USING FILE ASSOCIATION SETTINGS ========");
-		}
 
 		this.parentProcessId = params.getProcessId();
 
