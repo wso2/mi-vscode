@@ -545,12 +545,14 @@ export function DependencyItem(props: DependencyItemProps) {
                                         className="dependency-artifact"
                                         style={{ opacity: driverData?.omit ? 0.45 : 1 }}
                                     >
-                                        {dependency.artifact}:
+                                        {dependency.artifact}{dependency.version && ':'}
                                     </span>
                                 </div>
-                                <DependencyField>
-                                    <span className="value">{dependency.version}</span>
-                                </DependencyField>
+                                {dependency.version && (
+                                    <DependencyField>
+                                        <span className="value">{dependency.version}</span>
+                                    </DependencyField>
+                                )}
                                 {driverData?.omit && <OmittedBadge>omitted</OmittedBadge>}
                                 {latestVersion && compareVersions(latestVersion, dependency.version) > 0 && (
                                     <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
@@ -585,11 +587,13 @@ export function DependencyItem(props: DependencyItemProps) {
                                         </Button>
                                     </div>
                                 )}
-                                <div className="action-button-container" style={{ opacity: 0, transition: 'opacity 0.2s ease' }}>
-                                    <Button appearance="icon" onClick={handleEditDependencyClick} tooltip="Edit Dependency" buttonSx={{ color: 'var(--vscode-charts-green)' }}>
-                                        <Codicon name="edit" />
-                                    </Button>
-                                </div>
+                                {onEdit && (
+                                    <div className="action-button-container" style={{ opacity: 0, transition: 'opacity 0.2s ease' }}>
+                                        <Button appearance="icon" onClick={handleEditDependencyClick} tooltip="Edit Dependency" buttonSx={{ color: 'var(--vscode-charts-green)' }}>
+                                            <Codicon name="edit" />
+                                        </Button>
+                                    </div>
+                                )}
                                 <div className="action-button-container" style={{ opacity: 0, transition: 'opacity 0.2s ease' }}>
                                     <Button appearance="icon" onClick={() => onDelete?.(dependency)} tooltip="Remove Dependency" buttonSx={{ color: 'var(--vscode-charts-red)' }}>
                                         <Codicon name="trash" />
@@ -597,12 +601,14 @@ export function DependencyItem(props: DependencyItemProps) {
                                 </div>
                             </div>
                         </DependencyTitle>
-                        <DependencyDetailsContainer>
-                            <DependencyField>
-                                <span className="label">Group ID:</span>
-                                <span className="group">{dependency.groupId}</span>
-                            </DependencyField>
-                        </DependencyDetailsContainer>
+                        {dependency.groupId && (
+                            <DependencyDetailsContainer>
+                                <DependencyField>
+                                    <span className="label">Group ID:</span>
+                                    <span className="group">{dependency.groupId}</span>
+                                </DependencyField>
+                            </DependencyDetailsContainer>
+                        )}
                         {/* Driver toggle — second row, below Group ID */}
                         {driverData !== undefined && driverCount > 0 && (
                             <div style={{ marginTop: '4px' }}>

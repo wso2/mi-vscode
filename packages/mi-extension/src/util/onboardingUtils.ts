@@ -47,15 +47,38 @@ export const javaVersionCompatibilityMap: { [key: string]: { supportedRange: { m
     '4.1.0': { supportedRange: { min: '11', max: '11' }, recommended: ['11'] },
 };
 export const LATEST_MI_VERSION = "4.7.0";
+
+export async function isMiProject(projectPath: string): Promise<boolean> {
+    try {
+        const pomFilePath = path.join(projectPath, 'pom.xml');
+        const pomContent = await fs.promises.readFile(pomFilePath, 'utf-8');
+        return pomContent.includes('<projectType>integration-project</projectType>');
+    } catch {
+        return false;
+    }
+}
+
 const COMPATIBLE_JDK_VERSION = "11";
-const DEFAULT_SYNAPSE_CORE_VERSION = "4.0.0-wso2v165";
+export const SYNAPSE_CORE_VERSION_460_AND_ABOVE = "4.1.0-wso2v48";
+export const SYNAPSE_CORE_VERSION_BELOW_460 = "4.0.0-wso2v165";
+const MIN_RUNTIME_FOR_LATEST_SYNAPSE_CORE = "4.6.0";
 export const synapseCoreVersionMap: { [key: string]: string } = {
-    '4.7.0': '4.1.0-wso2v48',
-    '4.6.0': '4.1.0-wso2v48'
+    '4.7.0': SYNAPSE_CORE_VERSION_460_AND_ABOVE,
+    '4.6.0': SYNAPSE_CORE_VERSION_460_AND_ABOVE
 };
 
+/**
+ * Returns the synapse-core dependency version required for the given MI runtime.
+ * MI 4.6.0 and above (and unknown/undefined runtimes, which fall back to the latest)
+ * require 4.1.0-wso2v48; older runtimes require 4.0.0-wso2v165. Using a version
+ * threshold rather than exact map lookups keeps patch/future runtimes (e.g. 4.6.1,
+ * 4.8.0) resolving to the correct version.
+ */
 export function getSynapseCoreVersionForRuntime(runtimeVersion?: string | null): string {
-    return (runtimeVersion && synapseCoreVersionMap[runtimeVersion]) || DEFAULT_SYNAPSE_CORE_VERSION;
+    if (!runtimeVersion || compareVersions(runtimeVersion, MIN_RUNTIME_FOR_LATEST_SYNAPSE_CORE) >= 0) {
+        return SYNAPSE_CORE_VERSION_460_AND_ABOVE;
+    }
+    return SYNAPSE_CORE_VERSION_BELOW_460;
 }
 
 const miDownloadUrls: { [key: string]: string } = {

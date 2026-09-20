@@ -38,6 +38,8 @@ import {
     RetrieveContextResponse,
     RuntimeServicesResponse,
     SampleDownloadRequest,
+    RecentProjectsResponse,
+    OpenRecentProjectRequest,
     AddConfigurableRequest,
     SwaggerProxyRequest,
     SwaggerProxyResponse,
@@ -48,6 +50,8 @@ import {
     addToHistory,
     downloadSelectedSampleFromGithub,
     fetchSamplesFromGithub,
+    getRecentProjects,
+    openRecentProject,
     focusOutput,
     getAvailableRuntimeServices,
     getCurrentThemeKind,
@@ -193,6 +197,14 @@ export class MiVisualizerRpcClient implements MIVisualizerAPI {
 
     downloadSelectedSampleFromGithub(params: SampleDownloadRequest): void {
         return this._messenger.sendNotification(downloadSelectedSampleFromGithub, HOST_EXTENSION, params);
+    }
+
+    getRecentProjects(): Promise<RecentProjectsResponse> {
+        return this._messenger.sendRequest(getRecentProjects, HOST_EXTENSION);
+    }
+
+    openRecentProject(params: OpenRecentProjectRequest): void {
+        return this._messenger.sendNotification(openRecentProject, HOST_EXTENSION, params);
     }
 
     addConfigurable(params: AddConfigurableRequest): Promise<void> {

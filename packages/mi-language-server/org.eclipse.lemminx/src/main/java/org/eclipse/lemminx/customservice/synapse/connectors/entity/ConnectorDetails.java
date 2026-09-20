@@ -21,4 +21,5 @@ public class ConnectorDetails {
     public String artifactId;
     public String version;
     public boolean isFromProject = true;
+    public String parsedConnectorName;
 }

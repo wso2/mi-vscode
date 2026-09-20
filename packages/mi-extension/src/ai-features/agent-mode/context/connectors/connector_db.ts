@@ -26,8 +26,8 @@ export const CONNECTOR_DB = [
         "mavenArtifactId": "mi-connector-ai",
         "id": "",
         "version": {
-            "tagName": "0.1.8",
-            "releaseId": "236147369",
+            "tagName": "1.0.1",
+            "releaseId": "380231497",
             "isLatest": true,
             "isDeprecated": false,
             "operations": [
@@ -19391,8 +19391,8 @@ export const CONNECTOR_DB = [
         "mavenArtifactId": "mi-connector-http",
         "id": "",
         "version": {
-            "tagName": "0.1.14",
-            "releaseId": "255665655",
+            "tagName": "1.0.0",
+            "releaseId": "366757742",
             "isLatest": true,
             "isDeprecated": false,
             "operations": [

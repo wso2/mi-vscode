@@ -267,6 +267,10 @@ export interface FileDirResponse {
     path: string;
 }
 
+export interface FileDirRequest {
+    filters?: { [name: string]: string[] };
+}
+
 export interface CreateMessageStoreRequest {
     directory: string;
     name: string;
@@ -2027,6 +2031,7 @@ export interface CopyConnectorZipResponse {
     success: boolean;
     connectorPath?: string;
     error?: string;
+    parsedConnectorName?: string;
 }
 
 export interface DSSQueryGenRequest {

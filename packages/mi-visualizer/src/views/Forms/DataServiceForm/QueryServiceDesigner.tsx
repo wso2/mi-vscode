@@ -218,6 +218,7 @@ export function DSSQueryServiceDesignerView({ syntaxTree, documentUri }: Service
             <QueryForm
                 isOpen={isQueryFormOpen}
                 formData={mode === "edit" && formData}
+                existingQueries={(syntaxTree?.data?.queries ?? []).map((query: any) => query.id)}
                 onCancel={handleCancel}
                 documentUri={documentUri}
                 onSave={handleQueryCreate}

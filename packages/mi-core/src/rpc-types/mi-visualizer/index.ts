@@ -64,9 +64,12 @@ import {
     McpToolSuggestionResponse,
     ConsolidatedProjectDetails,
     UpdateConsolidatedProjectDetailsRequest,
-    ConsolidatedRemoteDeployConfig
+    ConsolidatedRemoteDeployConfig,
+    GettingStartedData,
+    SampleDownloadRequest,
+    RecentProjectsResponse,
+    OpenRecentProjectRequest
 } from "./types";
-import { GettingStartedData, SampleDownloadRequest } from "./types";
 
 export interface MIVisualizerAPI {
     getProjectUri: () => Promise<string>;
@@ -82,6 +85,8 @@ export interface MIVisualizerAPI {
     goBack: () => void;
     fetchSamplesFromGithub: () => Promise<GettingStartedData>;
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
+    getRecentProjects: () => Promise<RecentProjectsResponse>;
+    openRecentProject: (params: OpenRecentProjectRequest) => void;
     addConfigurable: (params: AddConfigurableRequest) => Promise<void>;
     getHistory: () => Promise<HistoryEntryResponse>;
     addToHistory: (params: HistoryEntry) => void;

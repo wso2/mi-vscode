@@ -53,6 +53,11 @@ import {
 } from './ripgrep_runner';
 import { isSensitiveTokenName } from './shell_sandbox';
 import { stripAnsiAndControl } from '../../utils/sanitize-text';
+import {
+    getSynapseCoreVersionForRuntime,
+    SYNAPSE_CORE_VERSION_460_AND_ABOVE,
+    SYNAPSE_CORE_VERSION_BELOW_460,
+} from '../../../util/onboardingUtils';
 
 // ============================================================================
 // Validation Functions
@@ -639,45 +644,145 @@ function trackModifiedFile(modifiedFiles: string[] | undefined, filePath: string
     }
 }
 
+export const SYNAPSE_CORE_GROUP_ID = 'org.apache.synapse';
+export const SYNAPSE_CORE_ARTIFACT_ID = 'synapse-core';
+
+// Sourced from onboardingUtils so the class mediator reminder and the onboarding
+// pom updater share a single source of truth for synapse-core versions.
+export const SYNAPSE_CORE_VERSION_GE_460 = SYNAPSE_CORE_VERSION_460_AND_ABOVE;
+export const SYNAPSE_CORE_VERSION_LT_460 = SYNAPSE_CORE_VERSION_BELOW_460;
+
+/**
+ * Returns the expected synapse-core version based on the MI runtime version.
+ * - Runtime >= 4.6.0 (or unknown): 4.1.0-wso2v48
+ * - Runtime < 4.6.0: 4.0.0-wso2v165
+ * Delegates to the shared onboardingUtils version selection.
+ */
+export const getExpectedSynapseCoreVersion = getSynapseCoreVersionForRuntime;
+
 /**
  * Returns true for class mediator java sources under src/main/java/.
  */
-function isClassMediatorPath(filePath: string): boolean {
+export function isClassMediatorPath(filePath: string): boolean {
     const normalized = filePath.replace(/\\/g, '/').toLowerCase();
     return /(^|\/)src\/main\/java\//.test(normalized) && normalized.endsWith('.java');
 }
 
+export interface ClassMediatorPomStatus {
+    isJarPackaging: boolean;
+    currentPackaging?: string;
+    runtimeVersion?: string;
+    expectedSynapseCoreVersion: string;
+    hasSynapseCore: boolean;
+    currentSynapseCoreVersion?: string;
+    isSynapseCoreVersionCorrect: boolean;
+    isConfigured: boolean;
+}
+
 /**
- * Builds a `<system-reminder>` for class mediator writes/edits when the
- * project root pom.xml is not yet configured to pack a jar. Returns ''
- * when packaging is already "jar" so the model is not nagged unnecessarily.
- * Falls back to a generic reminder if pom.xml cannot be read or parsed,
- * since the safe default is to surface the requirement.
+ * Parses pom.xml content to inspect packaging and synapse-core dependency configuration.
  */
-function buildClassMediatorPomReminder(projectPath: string): string {
-    const pomPath = path.join(projectPath, 'pom.xml');
-    let currentPackaging: string | undefined;
-    try {
-        const pomContent = fs.readFileSync(pomPath, 'utf-8');
-        const match = pomContent.match(/<packaging>\s*([^<\s]+)\s*<\/packaging>/);
-        currentPackaging = match?.[1]?.toLowerCase();
-    } catch {
-        // pom.xml missing or unreadable; fall through to the generic reminder.
+export function checkClassMediatorPomStatus(pomContent: string): ClassMediatorPomStatus {
+    const cleanPom = pomContent.replace(/<!--[\s\S]*?-->/g, '');
+    // Strip <dependencyManagement>: its entries pin versions but do not add
+    // synapse-core to the project's actual dependencies, so they must not be
+    // treated as a declared dependency when deciding if the reminder is needed.
+    const projectDependencies = cleanPom.replace(
+        /<dependencyManagement\b[^>]*>[\s\S]*?<\/dependencyManagement>/gi,
+        ''
+    );
+    const packagingMatch = cleanPom.match(/<packaging>\s*([^<\s]+)\s*<\/packaging>/i);
+    const currentPackaging = packagingMatch?.[1]?.toLowerCase();
+    const isJarPackaging = currentPackaging === 'jar';
+
+    const runtimeVersionMatch = cleanPom.match(/<project\.runtime\.version>\s*([^<\s]+)\s*<\/project\.runtime\.version>/i);
+    const runtimeVersion = runtimeVersionMatch?.[1]?.trim();
+    const expectedSynapseCoreVersion = getExpectedSynapseCoreVersion(runtimeVersion);
+
+    let hasSynapseCore = false;
+    let currentSynapseCoreVersion: string | undefined;
+    for (const match of projectDependencies.matchAll(/<dependency\b[^>]*>([\s\S]*?)<\/dependency>/gi)) {
+        const block = match[1];
+        const groupId = block.match(/<groupId>\s*([^<\s]+)\s*<\/groupId>/i)?.[1]?.trim();
+        const artifactId = block.match(/<artifactId>\s*([^<\s]+)\s*<\/artifactId>/i)?.[1]?.trim();
+        if (groupId === SYNAPSE_CORE_GROUP_ID && artifactId === SYNAPSE_CORE_ARTIFACT_ID) {
+            hasSynapseCore = true;
+            currentSynapseCoreVersion = block.match(/<version>\s*([^<\s]+)\s*<\/version>/i)?.[1]?.trim();
+            break;
+        }
     }
 
-    if (currentPackaging === 'jar') {
+    const isSynapseCoreVersionCorrect = hasSynapseCore && currentSynapseCoreVersion === expectedSynapseCoreVersion;
+    const isConfigured = isJarPackaging && isSynapseCoreVersionCorrect;
+
+    return {
+        isJarPackaging,
+        currentPackaging,
+        runtimeVersion,
+        expectedSynapseCoreVersion,
+        hasSynapseCore,
+        currentSynapseCoreVersion,
+        isSynapseCoreVersionCorrect,
+        isConfigured,
+    };
+}
+
+/**
+ * Builds a `<system-reminder>` for class mediator writes/edits when the
+ * project root pom.xml is not yet configured with <packaging>jar</packaging>
+ * and the expected synapse-core dependency version.
+ * Returns '' when the pom.xml is already correctly configured so the model is not nagged unnecessarily.
+ * Falls back to a generic reminder if pom.xml cannot be read or parsed.
+ */
+export function buildClassMediatorPomReminder(projectPath: string): string {
+    const pomPath = path.join(projectPath, 'pom.xml');
+    let pomContent: string;
+    try {
+        pomContent = fs.readFileSync(pomPath, 'utf-8');
+    } catch {
+        return (
+            `\n\n<system-reminder>You just wrote/edited a class mediator Java source, but the project root pom.xml could not be read. ` +
+            `Ensure the root pom.xml has <packaging>jar</packaging> and declares the ` +
+            `'${SYNAPSE_CORE_GROUP_ID}:${SYNAPSE_CORE_ARTIFACT_ID}' dependency ` +
+            `(${SYNAPSE_CORE_VERSION_GE_460} for MI 4.6.0+, ${SYNAPSE_CORE_VERSION_LT_460} for < 4.6.0), ` +
+            `otherwise the CApp will not pack the jar and the class mediator will silently fail to deploy.</system-reminder>`
+        );
+    }
+
+    const status = checkClassMediatorPomStatus(pomContent);
+    if (status.isConfigured) {
         return '';
     }
 
-    const currentDesc = currentPackaging
-        ? `currently <packaging>${currentPackaging}</packaging>`
-        : 'current packaging could not be determined';
+    const runtimeDesc = status.runtimeVersion ?? '4.6.0+';
+    const issues: string[] = [];
+    if (!status.isJarPackaging) {
+        const packagingDesc = status.currentPackaging ? `<packaging>${status.currentPackaging}</packaging>` : 'not set to jar';
+        issues.push(`- Change packaging from ${packagingDesc} to <packaging>jar</packaging>.`);
+    }
+    if (!status.hasSynapseCore) {
+        issues.push(
+            `- Add the '${SYNAPSE_CORE_GROUP_ID}:${SYNAPSE_CORE_ARTIFACT_ID}' dependency with version '${status.expectedSynapseCoreVersion}' (for MI runtime ${runtimeDesc}):\n` +
+            `  <dependency>\n` +
+            `      <groupId>${SYNAPSE_CORE_GROUP_ID}</groupId>\n` +
+            `      <artifactId>${SYNAPSE_CORE_ARTIFACT_ID}</artifactId>\n` +
+            `      <version>${status.expectedSynapseCoreVersion}</version>\n` +
+            `  </dependency>`
+        );
+    } else if (!status.isSynapseCoreVersionCorrect) {
+        const fromClause = status.currentSynapseCoreVersion
+            ? `from '${status.currentSynapseCoreVersion}' `
+            : '(currently missing a <version> tag) ';
+        issues.push(
+            `- Update the '${SYNAPSE_CORE_GROUP_ID}:${SYNAPSE_CORE_ARTIFACT_ID}' dependency version ${fromClause}to '${status.expectedSynapseCoreVersion}' (for MI runtime ${runtimeDesc}).`
+        );
+    }
+
     return (
-        '\n\n<system-reminder>You just wrote/edited a class mediator java source, ' +
-        `but the project root pom.xml ${currentDesc}. ` +
-        'Change it to <packaging>jar</packaging> and ensure a synapse-core dependency ' +
-        'is declared, otherwise the CApp will not pack the jar and the class mediator ' +
-        'will silently fail to deploy.</system-reminder>'
+        `\n\n<system-reminder>You just wrote/edited a class mediator Java source (src/main/java/...). ` +
+        `Please update the project root pom.xml with the following requirement(s):\n` +
+        issues.join('\n') +
+        `\nOtherwise, the CApp will not pack the compiled class mediator jar and it will silently fail to deploy at runtime.</system-reminder>`
     );
 }
 

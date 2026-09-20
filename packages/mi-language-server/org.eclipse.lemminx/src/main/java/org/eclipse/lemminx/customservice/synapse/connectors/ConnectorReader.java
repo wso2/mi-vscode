@@ -48,7 +48,7 @@ import java.util.stream.Stream;
 public class ConnectorReader {
 
     private static final Logger log = Logger.getLogger(ConnectorReader.class.getName());
-    private static final Pattern ARTIFACT_VERSION_REGEX = Pattern.compile("(.+)-(\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9]+)*)");
+    public static final Pattern ARTIFACT_VERSION_REGEX = Pattern.compile("(.+)-(\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9]+)*)");
     private HashMap<String, List<String>> allowedConnectionTypesMap = new HashMap<>();
     private static final String BALLERINA_PACKAGE_NAME = "io.ballerina.stdlib.mi";
     private static final List<String> EXCLUDED_AGENT_TOOLS = List.of("ai.chat", "ai.ragChat", "ai.agent");

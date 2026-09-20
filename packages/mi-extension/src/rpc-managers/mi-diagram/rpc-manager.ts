@@ -88,6 +88,7 @@ import {
     ExpressionCompletionsRequest,
     ExpressionCompletionsResponse,
     FileDirResponse,
+    FileDirRequest,
     FileRenameRequest,
     FileStructure,
     GenerateAPIResponse,
@@ -3179,9 +3180,9 @@ ${endpointAttributes}
         });
     }
 
-    async askFileDirPath(): Promise<FileDirResponse> {
+    async askFileDirPath(params?: FileDirRequest): Promise<FileDirResponse> {
         return new Promise(async (resolve) => {
-            const selectedFile = await askFilePath();
+            const selectedFile = await askFilePath(params?.filters);
             if (!selectedFile || selectedFile.length === 0) {
                 window.showErrorMessage('A file must be selected to continue');
                 resolve({ path: "" });
@@ -4203,6 +4204,7 @@ ${endpointAttributes}
     async copyConnectorZip(params: CopyConnectorZipRequest): Promise<CopyConnectorZipResponse> {
         const { connectorPath, isInbound } = params;
         const langClient = await MILanguageClient.getInstance(this.projectUri);
+        const rpcClient = new MiVisualizerRpcManager(this.projectUri);
         try {
             if (isInbound) {
                 const inboundConnectorDirectory = path.join(this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'inbound-endpoints');
@@ -4224,7 +4226,7 @@ ${endpointAttributes}
                 try {
                     await fs.promises.copyFile(connectorPath, inboundDestinationPath);
 
-                    const updateResult = await langClient.updateInboundConnectors(this.projectUri);
+                    const updateResult = await langClient.updateInboundConnectors(this.projectUri, path.basename(connectorPath));
                     if (updateResult !== "success") {
                         deleteInboundZip();
                         return { success: false, error: updateResult || "Failed to import inbound endpoint." };
@@ -4239,6 +4241,10 @@ ${endpointAttributes}
             }
 
             const isDuplicate = await langClient.isDuplicateConnector(connectorPath);
+            const parsedConnectorName = isDuplicate?.parsedConnectorName;
+            if (!parsedConnectorName || !parsedConnectorName.trim()) {
+                return { success: false, error: 'Unable to determine the connector name from the selected zip file. Please verify the file is a valid connector.' };
+            }
             if (isDuplicate?.isFromProject === false) {
                 window.showErrorMessage('The connector you are trying to add is already added from a dependency project.');
                 return { success: false };
@@ -4250,7 +4256,6 @@ ${endpointAttributes}
                     'Yes'
                 );
                 if (overwrite === 'Yes') {
-                    const rpcClient = new MiVisualizerRpcManager(this.projectUri);
                     if (isDuplicate?.connectorPath) {
                         await this.removeConnector({ connectorPath: isDuplicate.connectorPath });
                     } else {
@@ -4284,12 +4289,10 @@ ${endpointAttributes}
             }
 
             await fs.promises.copyFile(connectorPath, destinationPath);
+            await rpcClient.updateConnectorDependencies();
             commands.executeCommand(COMMANDS.REFRESH_COMMAND);
 
-
-            return new Promise((resolve, reject) => {
-                resolve({ success: true, connectorPath: destinationPath });
-            });
+            return { success: true, connectorPath: destinationPath, parsedConnectorName };
         } catch (error) {
             console.error('Error downloading connector:', error);
             throw new Error('Failed to download connector');
@@ -4800,6 +4803,7 @@ ${endpointAttributes}
                         if (err) {
                             reject(`Failed to delete the zip file at ${connectorPath}: ${err.message}`);
                         } else {
+                            commands.executeCommand(COMMANDS.REFRESH_COMMAND);
                             resolve({ success: true }); // Successfully deleted the file
                         }
                     });
@@ -5934,7 +5938,14 @@ ${keyValuesXML}`;
             // Delete resources
             const deleteResources = removed.map(resource => resources.find(
                 r => r.path === resource.path && isEqual(r.methods, resource.methods)
-            ));
+            )).filter((resource): resource is typeof resources[number] => resource !== undefined);
+            // Applying changes from the bottom of the document upward so an earlier edit doesn't shift the
+            // positions of a resource that appears later in the file.
+            deleteResources.sort((a, b) => {
+                return a.position.startLine !== b.position.startLine
+                    ? b.position.startLine - a.position.startLine
+                    : b.position.startColumn - a.position.startColumn;
+            });
             for (const resource of deleteResources) {
                 await this.applyEdit({
                     text: "",
@@ -7298,13 +7309,14 @@ export async function askImportProjectPath() {
     });
 }
 
-export async function askFilePath() {
+export async function askFilePath(filters?: { [name: string]: string[] }) {
     return await window.showOpenDialog({
         canSelectFiles: true,
         canSelectFolders: false,
         canSelectMany: false,
         defaultUri: Uri.file(os.homedir()),
         title: "Select a file",
+        filters
     });
 }
 

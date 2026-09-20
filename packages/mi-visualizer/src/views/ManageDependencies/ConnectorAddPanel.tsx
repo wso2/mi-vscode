@@ -16,8 +16,8 @@
  * under the License.
  */
 
-import { useMemo, useState } from "react";
-import { DependencyDetails } from "@wso2/mi-core";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ConnectorStatus, DependencyDetails } from "@wso2/mi-core";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
 import { Button, Codicon, TextField, Typography, ProgressRing, Overlay } from "@wso2/ui-toolkit";
 import { VSCodeDropdown, VSCodeOption } from "@vscode/webview-ui-toolkit/react";
@@ -85,14 +85,16 @@ const RowActions = styled.div`
 `;
 
 const LoaderContainer = styled.div`
-    position: absolute;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 12px;
     color: white;
-    justify-self: anchor-center;
-    margin-top: 200px;
+    z-index: 2001;
 `;
 
 interface ConnectorAddPanelProps {
@@ -117,6 +119,13 @@ export function ConnectorAddPanel(props: ConnectorAddPanelProps) {
     const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
     const [downloading, setDownloading] = useState(false);
     const [downloadingName, setDownloadingName] = useState<string>("");
+    const connectorStatusQueue = useRef<ConnectorStatus[]>([]);
+
+    useEffect(() => {
+        rpcClient.onConnectorStatusUpdate((connectorStatus: ConnectorStatus) => {
+            connectorStatusQueue.current.push(connectorStatus);
+        });
+    }, []);
 
     const availableConnectors = useMemo(() => {
         const list = Array.isArray(connectors) ? connectors : Object.values(connectors ?? {});
@@ -160,7 +169,28 @@ export function ConnectorAddPanel(props: ConnectorAddPanelProps) {
                     type: 'zip'
                 }]
             });
-            await rpcClient.getMiVisualizerRpcClient().updateConnectorDependencies();
+            const response = await rpcClient.getMiVisualizerRpcClient().updateConnectorDependencies();
+            const downloadSucceeded = response === "Success" || !response.includes(connector.mavenArtifactId);
+            if (!downloadSucceeded) {
+                // remove the connector dependency as the download failed
+                const projectDetails = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+                const connectorDependencies = projectDetails.dependencies.connectorDependencies;
+                for (const d of connectorDependencies) {
+                    if (d.artifact === connector.mavenArtifactId && d.version === version) {
+                        await rpcClient.getMiVisualizerRpcClient().updatePomValues({
+                            pomValues: [{ range: d.range, value: '' }]
+                        });
+                        break;
+                    }
+                }
+                await rpcClient.getMiDiagramRpcClient().formatPomFile();
+                await onChanged();
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: `Failed to download the ${connector.connectorName ?? connector.mavenArtifactId} connector.`,
+                    type: "error"
+                });
+                return;
+            }
             await rpcClient.getMiDiagramRpcClient().formatPomFile();
             await onChanged();
             onClose();
@@ -176,15 +206,79 @@ export function ConnectorAddPanel(props: ConnectorAddPanelProps) {
         }
     };
 
+    const waitForConnectorStatus = (expectedConnectorName?: string) => {
+        return new Promise<ConnectorStatus>((resolve, reject) => {
+            if (!expectedConnectorName?.trim()) {
+                reject(new Error('No connector name was provided to match against the import status.'));
+                return;
+            }
+
+            const checkInterval = setInterval(() => {
+                const queue = connectorStatusQueue.current;
+                const matchIndex = queue.findIndex(status => status.connector === expectedConnectorName);
+                if (matchIndex !== -1) {
+                    const [status] = queue.splice(matchIndex, 1);
+                    clearInterval(checkInterval);
+                    resolve(status);
+                }
+            }, 200);
+
+            // Reject the promise after 15 seconds
+            setTimeout(() => {
+                clearInterval(checkInterval);
+                reject(new Error('Event did not occur within 15 seconds'));
+            }, 15000);
+        });
+    };
+
     const handleImportZip = async (isInbound: boolean) => {
-        const selected = await rpcClient.getMiDiagramRpcClient().askFileDirPath();
+        const selected = await rpcClient.getMiDiagramRpcClient().askFileDirPath({
+            filters: { [isInbound ? 'Inbound Endpoint Zip' : 'Connector Zip']: ['zip'] }
+        });
         if (!selected?.path || !selected.path.endsWith('.zip')) {
             return;
         }
         setDownloading(true);
         setDownloadingName(selected.path.split(/[\\/]/).pop() ?? "connector");
+        connectorStatusQueue.current = [];
         try {
-            await rpcClient.getMiDiagramRpcClient().copyConnectorZip({ connectorPath: selected.path, isInbound });
+            const response = await rpcClient.getMiDiagramRpcClient().copyConnectorZip({ connectorPath: selected.path, isInbound });
+
+            if (!response.success) {
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: response.error || (isInbound
+                        ? "The selected file is not a valid inbound endpoint."
+                        : "The selected file is not a valid connector."),
+                    type: "error",
+                    modal: true
+                });
+                return;
+            }
+
+            if (!isInbound) {
+                try {
+                    const newConnector = await waitForConnectorStatus(response.parsedConnectorName);
+                    if (!newConnector?.isSuccess) {
+                        await removeInvalidConnector(response.connectorPath);
+                        rpcClient.getMiVisualizerRpcClient().showNotification({
+                            message: "The selected file is not a valid connector.",
+                            type: "error",
+                            modal: true
+                        });
+                        return;
+                    }
+                } catch (error) {
+                    console.error("Timed out waiting for connector validation:", error);
+                    await removeInvalidConnector(response.connectorPath);
+                    rpcClient.getMiVisualizerRpcClient().showNotification({
+                        message: "The selected file is not a valid connector.",
+                        type: "error",
+                        modal: true
+                    });
+                    return;
+                }
+            }
+
             await rpcClient.getMiDiagramRpcClient().formatPomFile();
             await onChanged();
             onClose();
@@ -192,11 +286,20 @@ export function ConnectorAddPanel(props: ConnectorAddPanelProps) {
             console.error("Error importing from zip file:", error);
             rpcClient.getMiVisualizerRpcClient().showNotification({
                 message: "Failed to import from the zip file.",
-                type: "error"
+                type: "error",
+                modal: true
             });
         } finally {
             setDownloading(false);
             setDownloadingName("");
+        }
+    };
+
+    const removeInvalidConnector = async (connectorPath: string) => {
+        try {
+            await rpcClient.getMiDiagramRpcClient().removeConnector({ connectorPath });
+        } catch (error) {
+            console.error("Error removing invalid connector:", error);
         }
     };
 

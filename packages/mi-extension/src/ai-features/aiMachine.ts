@@ -601,18 +601,18 @@ const validateApiKeyService = async (_context: AIMachineContext, event: any) => 
 };
 
 const validateAwsCredentialsService = async (_context: AIMachineContext, event: any) => {
-    const { authType, accessKeyId, secretAccessKey, region, sessionToken, apiKey, tavilyApiKey } = event.payload || {};
+    const { authType, accessKeyId, secretAccessKey, region, sessionToken, apiKey, tavilyApiKey, inferenceProfiles } = event.payload || {};
     if (authType === 'api_key') {
         if (!apiKey || !region) {
             throw new Error('Amazon Bedrock API key and AWS region are required');
         }
-        return await validateAwsCredentials({ authType, apiKey, region, tavilyApiKey });
+        return await validateAwsCredentials({ authType, apiKey, region, tavilyApiKey, inferenceProfiles });
     }
 
     if (!accessKeyId || !secretAccessKey || !region) {
         throw new Error('AWS access key ID, secret access key, and region are required');
     }
-    return await validateAwsCredentials({ authType: 'iam', accessKeyId, secretAccessKey, region, sessionToken, tavilyApiKey });
+    return await validateAwsCredentials({ authType: 'iam', accessKeyId, secretAccessKey, region, sessionToken, tavilyApiKey, inferenceProfiles });
 };
 
 const getTokenAndLoginMethod = async () => {

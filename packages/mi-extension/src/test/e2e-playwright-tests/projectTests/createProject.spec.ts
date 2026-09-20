@@ -50,7 +50,7 @@ export default function createTests() {
                 const welcomePage = new Welcome(page);
                 await welcomePage.init("Welcome to MI");
                 console.log('Creating new project from sample');
-                await welcomePage.createNewProjectFromSample('Hello World ServiceA simple', newProjectPath);
+                await welcomePage.createNewProjectFromSample('Hello World Service', newProjectPath);
                 // Wait for project to be fully loaded in explorer
                 await page.page.waitForTimeout(3000);
                 const projectExplorer = new ProjectExplorer(page.page);

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Button, TextField, SidePanel, SidePanelTitleContainer, SidePanelBody, Codicon, TextArea, Typography } from "@wso2/ui-toolkit";
 import * as yup from "yup";
 import styled from "@emotion/styled";
@@ -69,13 +69,36 @@ type QueryFormProps = {
     formData?: QueryType;
     isOpen: boolean;
     documentUri: string;
+    existingQueries?: string[];
     onCancel: () => void;
     onSave: (data: QueryFormData) => void;
 };
 
-export const QueryForm = ({ isOpen, onCancel, onSave, formData, documentUri }: QueryFormProps) => {
+export const QueryForm = ({ isOpen, onCancel, onSave, formData, documentUri, existingQueries = [] }: QueryFormProps) => {
 
     const { rpcClient } = useVisualizerContext();
+
+    // Disallow query creation with the same name
+    const validationSchema = useMemo(
+        () => schema.test("unique-query", function (value) {
+            const name = value?.name;
+            if (!name) {
+                return true;
+            }
+            if (formData && name === formData.name) {
+                return true;
+            }
+            if (existingQueries.includes(name)) {
+                return this.createError({
+                    path: "name",
+                    message: "A query with this name already exists",
+                });
+            }
+            return true;
+        }),
+        [existingQueries, formData]
+    );
+
     const {
         control,
         handleSubmit,
@@ -84,7 +107,7 @@ export const QueryForm = ({ isOpen, onCancel, onSave, formData, documentUri }: Q
         reset
     } = useForm({
         defaultValues: newQuery,
-        resolver: yupResolver(schema),
+        resolver: yupResolver(validationSchema),
         mode: "onChange",
     });
 

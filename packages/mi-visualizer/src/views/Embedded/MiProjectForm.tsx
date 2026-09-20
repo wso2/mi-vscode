@@ -16,12 +16,13 @@
  * under the License.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { Button, Dropdown, FormGroup, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, ParamManager, Tooltip, Icon, ParamConfig } from "@wso2/ui-toolkit";
+import { Button, Dropdown, FormGroup, LocationSelector, OptionProps, TextField, ProgressRing, CheckBox, Tooltip, Icon } from "@wso2/ui-toolkit";
 import { yupResolver } from "@hookform/resolvers/yup"
 import * as yup from "yup";
 import { useForm } from "react-hook-form";
 import styled from "@emotion/styled";
 import { useMiWsContext } from "./wsManager/WsClientContext";
+import { ParamConfig, ParamManager } from "@wso2/mi-diagram";
 
 type InputsFields = {
     name: string;
@@ -243,7 +244,7 @@ export function MiProjectForm() {
                                 labelAdornment={consolidatedHelpTip}
                             />
                             {isConsolidatedProject &&
-                                <ParamManager paramConfigs={subProjects} onChange={handleSubProjectsOnChange} />
+                                <ParamManager paramConfigs={subProjects} onChange={handleSubProjectsOnChange} addParamText="Add Module" sx={{ margin: -10 }} />
                             }
                         </FormGroup>
                         <TextField

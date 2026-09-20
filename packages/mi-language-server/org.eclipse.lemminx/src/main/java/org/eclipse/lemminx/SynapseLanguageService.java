@@ -65,6 +65,7 @@ import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionParam
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionCompletionsProvider;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionValidationResponse;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.HelperPanelData;
+import org.eclipse.lemminx.customservice.synapse.inbound.conector.FetchInboundConnectorsParams;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorResponse;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorParam;
@@ -1791,11 +1792,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     @Override
-    public CompletableFuture<String> fetchInboundConnectors(ProjectUriRequest request) {
+    public CompletableFuture<String> fetchInboundConnectors(FetchInboundConnectorsParams params) {
 
-        ProjectContext ctx = resolveByProjectUri(request);
+        ProjectContext ctx = resolveByProjectUri(params);
+        String targetZipName = params != null ? params.zipFileName : null;
         return CompletableFuture.supplyAsync(() -> ctx != null
-                ? ctx.getInboundConnectorHolder().getCustomInboundConnectors() : null);
+                ? ctx.getInboundConnectorHolder().getCustomInboundConnectors(targetZipName) : null);
     }
 
     public String getExtensionPath() {

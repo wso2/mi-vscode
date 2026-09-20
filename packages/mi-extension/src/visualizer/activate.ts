@@ -190,7 +190,7 @@ export function activateVisualizer(context: vscode.ExtensionContext, firstProjec
                 // active webview
                 const webview = [...webviews.values()].find(webview => webview.getWebview()?.active) || [...webviews.values()][0];
                 const projectUri = webview ? webview.getProjectUri() : firstProject;
-                openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.ProjectCreationForm, projectUri });
+                openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.Welcome, projectUri });
                 log('Create New Project');
             }
         }),

@@ -21,7 +21,8 @@ import { clearNotificationAlerts, dismissUnexpectedCreateFolderPrompt, initTest,
 import { ProjectExplorer } from '../components/ProjectExplorer';
 import { Overview } from '../components/Overview';
 import { AddArtifact } from '../components/AddArtifact';
-import { getVsCodeButton, switchToIFrame } from '@wso2/playwright-vscode-tester';
+import { Welcome } from '../components/Welcome';
+import { switchToIFrame } from '@wso2/playwright-vscode-tester';
 import { Form } from '../components/Form';
 import path from 'path';
 import { MACHINE_VIEW } from "@wso2/mi-core";
@@ -89,13 +90,9 @@ export default function createTests() {
                 console.log("Creating new project for second API");
                 multiWorkspaceName = `newMultiProjectTestAPI${testAttempt}`;
                 await page.page.getByRole('button', { name: 'Create New Project' }).click();
-                const webview = await switchToIFrame(MACHINE_VIEW.Welcome, page.page, 20000)
-                if (!webview) {
-                    throw new Error("Failed to switch to Design View iframe");
-                }
-                const container = webview.locator('div#root');
-                const newProjectbtn = await getVsCodeButton(container, 'Create New Project', 'primary');
-                await newProjectbtn.click();
+                const welcomePage = new Welcome(page);
+                await welcomePage.init(MACHINE_VIEW.Welcome);
+                await welcomePage.createNewProject();
                 console.log("Clicked on Create New Project button");
                 const apiWebView = await switchToIFrame('Project Creation Form', page.page);
                 if (!apiWebView) {

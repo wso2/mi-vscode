@@ -330,6 +330,21 @@ export interface SampleDownloadRequest {
     zipFileName: string;
 }
 
+export interface RecentProjectEntry {
+    path: string;
+    label: string;
+    description?: string;
+    isWorkspace?: boolean;
+}
+
+export interface RecentProjectsResponse {
+    projects: RecentProjectEntry[];
+}
+
+export interface OpenRecentProjectRequest {
+    path: string;
+}
+
 export interface AddConfigurableRequest {
     projectUri: string;
     configurableName: string;
@@ -382,6 +397,7 @@ export interface NotificationRequest {
     message: string;
     options?: string[];
     type?: NotificationType;
+    modal?: boolean;
 }
 
 export interface RuntimeServiceDetails {

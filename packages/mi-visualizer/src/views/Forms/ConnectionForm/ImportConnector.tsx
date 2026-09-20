@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { FormView, FormActions, Button, LocationSelector, ErrorBanner, Typography } from "@wso2/ui-toolkit";
+import { FormView, FormActions, Button, LocationSelector, ErrorBanner } from "@wso2/ui-toolkit";
 import { useEffect, useRef, useState } from "react";
 import styled from "@emotion/styled";
 import { VSCodeProgressRing } from "@vscode/webview-ui-toolkit/react";
@@ -52,7 +52,7 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
     const { rpcClient } = useVisualizerContext();
     const [zipDir, setZipDir] = useState("");
     const [isImporting, setIsImporting] = useState(false);
-    const [isFailedImport, setIsFailedImport] = useState(false);
+    const [importError, setImportError] = useState("");
     const connectionStatus = useRef(null);
 
     useEffect(() => {
@@ -63,19 +63,19 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
     }, []);
 
     const handleSourceDirSelection = async () => {
-        const specDirecrory = await rpcClient.getMiDiagramRpcClient().askFileDirPath();
+        const specDirecrory = await rpcClient.getMiDiagramRpcClient().askFileDirPath({ filters: { 'Connector Zip': ['zip'] } });
         setZipDir(specDirecrory.path);
     }
 
     const importWithZip = async () => {
         setIsImporting(true);
-        setIsFailedImport(false);
+        setImportError("");
         connectionStatus.current = null;
         try {
             const response = await rpcClient.getMiDiagramRpcClient().copyConnectorZip({ connectorPath: zipDir });
 
             if (!response.success) {
-                setIsFailedImport(true);
+                setImportError(response.error || "Error importing connector. Please try again...");
                 return;
             }
 
@@ -90,12 +90,12 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
                     });
                 } else {
                     await removeInvalidConnector(response.connectorPath);
-                    setIsFailedImport(true);
+                    setImportError("The selected file is not a valid connector.");
                 }
             } catch (error) {
                 console.log(error);
                 await removeInvalidConnector(response.connectorPath);
-                setIsFailedImport(true);
+                setImportError("The selected file is not a valid connector.");
             }
         } finally {
             setIsImporting(false);
@@ -150,10 +150,8 @@ export function ImportConnectorForm(props: ImportConnectorFormProps) {
                         </LoaderWrapper>
                     ) : (
                         <>
-                            {isFailedImport && (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                                    <Typography variant="body3">Error importing connector. Please try again...</Typography>
-                                </div>
+                            {importError && (
+                                <ErrorBanner errorMsg={importError} />
                             )}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                 {zipDir && !zipDir.endsWith('.zip') &&

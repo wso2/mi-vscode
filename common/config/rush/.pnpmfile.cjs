@@ -22,13 +22,13 @@ module.exports = {
         if (deps['xmldom']) deps['xmldom'] = 'npm:@xmldom/xmldom@0.8.10';
         if (deps['braces']) deps['braces'] = '3.0.3';
         if (deps['micromatch']) deps['micromatch'] = '4.0.8';
-        if (deps['js-yaml']) deps['js-yaml'] = '4.3.1';
+        if (deps['js-yaml']) deps['js-yaml'] = '4.3.2';
         if (deps['diff']) deps['diff'] = '8.0.3';
         if (deps['eslint']) deps['eslint'] = '^9.27.0';
         if (deps['fast-xml-parser']) deps['fast-xml-parser'] = '5.7.0';
         if (deps['esbuild']) deps['esbuild'] = '0.25.12';
         if (deps['lodash']) deps['lodash'] = '4.18.0';
-        if (deps['qs']) deps['qs'] = '6.15.2';
+        if (deps['qs']) deps['qs'] = '6.16.0';
         if (deps['hono']) deps['hono'] = '4.12.18'; // CVE-2026-44455 (JSX injection), CVE-2026-44456 (bodyLimit bypass)
         if (deps['@hono/node-server']) deps['@hono/node-server'] = '1.19.13';
         if (deps['@tootallnate/once']) deps['@tootallnate/once'] = '3.0.1';
@@ -55,7 +55,7 @@ module.exports = {
         if (deps['uuid']) deps['uuid'] = '14.0.0'; // security fix
         if (deps['@nevware21/ts-utils']) deps['@nevware21/ts-utils'] = '0.14.0'; // security fix: CVE-2026-46681 (prototype pollution)
         if (deps['webpack-dev-server']) deps['webpack-dev-server'] = '5.2.6'; // security fix
-        if (deps['fast-uri']) deps['fast-uri'] = '3.1.5';
+        if (deps['fast-uri']) deps['fast-uri'] = '3.1.6';
         if (deps['ws']) {
           if (/^[\s\^~><=]*8[.\s]/.test(deps['ws'])) {
             deps['ws'] = '8.21.0'; // security fix
@@ -163,9 +163,10 @@ module.exports = {
           }
           deps['picomatch'] = newVersion;
         }
+        if (deps['@ai-sdk/provider-utils']) deps['@ai-sdk/provider-utils'] = '4.0.33';
         if (deps['linkify-it']) deps['linkify-it'] = '5.0.2';
         if (deps['shell-quote']) deps['shell-quote'] = '1.9.0';
-        if (deps['svgo']) deps['svgo'] = '4.0.2';
+        if (deps['svgo']) deps['svgo'] = '4.1.0';
         if (deps['yaml']) {
           const currentVersion = deps['yaml'];
           let newVersion;

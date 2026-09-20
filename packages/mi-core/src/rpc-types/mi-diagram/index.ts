@@ -58,6 +58,7 @@ import {
     CreateLocalEntryRequest,
     CreateLocalEntryResponse,
     FileDirResponse,
+    FileDirRequest,
     CreateInboundEndpointRequest,
     CreateInboundEndpointResponse,
     UndoRedoParams,
@@ -367,7 +368,7 @@ export interface MiDiagramAPI {
     getProjectRoot: (params: GetProjectRootRequest) => Promise<ProjectRootResponse>;
     askProjectDirPath: () => Promise<ProjectDirResponse>;
     askProjectImportDirPath: () => Promise<ProjectDirResponse>;
-    askFileDirPath: () => Promise<FileDirResponse>;
+    askFileDirPath: (params?: FileDirRequest) => Promise<FileDirResponse>;
     askOpenAPIDirPath: () => Promise<FileDirResponse>;
     createProject: (params: CreateProjectRequest) => Promise<CreateProjectResponse>;
     importProject: (params: ImportProjectRequest) => Promise<ImportProjectResponse>;

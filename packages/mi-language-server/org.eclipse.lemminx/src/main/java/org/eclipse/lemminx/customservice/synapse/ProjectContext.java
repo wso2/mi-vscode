@@ -571,7 +571,7 @@ public class ProjectContext {
      */
     public void updateInboundConnectors() {
         checkInitialized();
-        inboundConnectorHolder.getCustomInboundConnectors();
+        inboundConnectorHolder.getCustomInboundConnectors(null);
     }
 
     /**

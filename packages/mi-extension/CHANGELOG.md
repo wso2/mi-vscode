@@ -2,6 +2,12 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.   
 
+## [4.1.5] - 2026-09-09          
+
+### Fixed   
+
+Fixed: Copilot Bedrock sign-in with Application Inference Profiles ([#1579](https://github.com/wso2/mi-vscode/issues/1579))       
+
 ## [4.1.4] - 2026-07-30      
 
 ### Fixed   

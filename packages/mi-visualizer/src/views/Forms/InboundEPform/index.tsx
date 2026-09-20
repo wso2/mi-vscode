@@ -185,7 +185,7 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
     const selectStoreConnector = async (connector: any) => {
         // A store connector that was never downloaded has no local entry at all — the normal case in
         // a fresh project. Reading `.id` off that missing entry threw, and the rejected promise left
-        // the card looking inert; ask for the download instead.
+        // the card looking inert; ask for the download instead, which is what makes it local.
         const localConnector = localConnectors?.find((c: any) => c.name === connector.connectorName);
         if (!localConnector) {
             requiresDownload(connector);
@@ -250,11 +250,14 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
                 (connector: any) => !HIDDEN_INBOUND_CONNECTORS.test(connector.name)) ?? [];
             setLocalConnectors(connectors);
 
+            // Still missing after a successful download: the zip carries no uischema this extension
+            // can render, so no amount of retrying here will help — say so instead of failing silently.
             const downloaded = connectors.find((c: any) => c.name === inboundOnconfirmation.connectorName);
             if (!downloaded) {
                 rpcClient.getMiVisualizerRpcClient().showNotification({
-                    message: `Could not load the downloaded ${inboundOnconfirmation.connectorName} inbound endpoint`,
-                    type: "error"
+                    message: `The "${inboundOnconfirmation.connectorName}" event integration is not recognized by this extension. Please make sure you are using the latest version of the extension.`,
+                    type: "warning",
+                    modal: true
                 });
                 return;
             }

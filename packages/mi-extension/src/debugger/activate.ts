@@ -21,14 +21,15 @@ import { CancellationToken, DebugConfiguration, ProviderResult, Uri, window, wor
 import { MiDebugAdapter } from './debugAdapter';
 import { COMMANDS } from '../constants';
 import { extension } from '../MIExtensionContext';
-import {executeBuildTask, executeRemoteDeployTask, getServerPath, stopServer} from './debugHelper';
+import { executeBuildTask, executeRemoteDeployTask, getServerPath, stopServer, getConfigurableEntries } from './debugHelper';
 import { getDockerTask } from './tasks';
 import { getStateMachine, refreshUI } from '../stateMachine';
+import { openPopupView } from '../stateMachinePopup';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SELECTED_SERVER_PATH, SELECTED_JAVA_HOME } from './constants';
 import { buildBallerinaModule, isConsolidatedProject, setPathsInWorkSpace, verifyJavaHomePath, verifyMIPath } from '../util/onboardingUtils';
-import { MACHINE_VIEW } from '@wso2/mi-core';
+import { MACHINE_VIEW, POPUP_EVENT_TYPE } from '@wso2/mi-core';
 import { askForProject } from '../util/workspace';
 import { webviews } from '../visualizer/webview';
 import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
@@ -68,6 +69,12 @@ class MiConfigurationProvider implements vscode.DebugConfigurationProvider {
                     return undefined;
                 }
                 config.projectList = selectedItems.map(item => item.label);
+            }
+        }
+
+        for (const projectPath of config.projectList as string[]) {
+            if (!(await confirmConfigurableValues(projectPath))) {
+                return undefined;
             }
         }
 
@@ -417,6 +424,34 @@ export function activateDebugger(context: vscode.ExtensionContext) {
 
     const factory = new InlineDebugAdapterFactory();
     context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mi', factory));
+}
+
+async function confirmConfigurableValues(projectUri: string): Promise<boolean> {
+    const configurables = await getConfigurableEntries(projectUri);
+    const missing = configurables.filter(config => !config.value);
+    if (missing.length === 0) {
+        return true;
+    }
+
+    const proceed = 'Proceed';
+    const addValues = 'Add Values';
+    const response = await vscode.window.showWarningMessage(
+        `There are configurables with no value in the .env file of the project '${path.basename(projectUri)}'. How do you want to proceed?`,
+        { modal: true },
+        proceed,
+        addValues
+    );
+
+    if (response === proceed) {
+        return true;
+    }
+    if (response === addValues) {
+        openPopupView(projectUri, POPUP_EVENT_TYPE.OPEN_VIEW, {
+            view: MACHINE_VIEW.ManageConfigurables,
+            customProps: { configs: configurables }
+        });
+    }
+    return false;
 }
 
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {

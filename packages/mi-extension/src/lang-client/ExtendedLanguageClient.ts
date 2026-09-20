@@ -531,8 +531,9 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest('synapse/getLocalInboundConnectors', { projectUri });
     }
 
-    async updateInboundConnectors(projectUri: string): Promise<string> {
-        return this.sendRequest('synapse/fetchInboundConnectors', { projectUri });
+    async updateInboundConnectors(projectUri: string, zipFileName?: string): Promise<string> {
+        return this.sendRequest('synapse/fetchInboundConnectors',
+            zipFileName ? { projectUri, zipFileName } : { projectUri });
     }
 
     async getConnectionSchema(request: GetConnectionSchemaRequest): Promise<GetConnectionSchemaResponse> {
@@ -575,7 +576,7 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest('synapse/pdfToImagesBase64', {base64: req});
     }
 
-    async getConfigurableList(projectUri: string): Promise<any[]> {
+    async getConfigurableList(projectUri: string): Promise<{ key: string; type: string; value: string; range: Range | Range[]; }[]> {
         return this.sendRequest('synapse/getConfigurableList', { projectUri });
     }
 
