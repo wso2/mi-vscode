@@ -171,6 +171,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -219,6 +220,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     // requests are served on the common pool, so two projects can ask to bind at once; without this,
     // both would pass the "not mine" check and launch a server for the single shared MI port.
     private final Object tryOutBindLock = new Object();
+    // Resource finders for project roots the debug flow names but that no ProjectContext owns, keyed
+    // by normalized project path. See unregisteredProjectResourceFinder for why these are held.
+    private final Map<String, AbstractResourceFinder> unregisteredProjectFinders = new ConcurrentHashMap<>();
     private DynamicFieldsHandler dynamicFieldsHandler;
     private final URIResolverExtensionManager uriResolverExtensionManager;
 
@@ -672,8 +676,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
      * project root path, hence {@link #resolveByProjectUri} rather than {@link #resolveByUri}. A
      * debug session's project list comes from {@code launch.json} ({@code projectList}) and only
      * defaults to the open workspace folders, so a named project genuinely need not be registered —
-     * when it isn't, this falls back to {@link #unregisteredProjectResourceFinder} and still scans
-     * the directory, as it did before projects became per-context.
+     * when it isn't, this falls back to {@link #unregisteredProjectResourceFinder}, which scans the
+     * directory and loads its dependencies, so the debugger sees the same two sources a registered
+     * project's finder draws on.
      *
      * <p>Except for that override and the legacy {@code projectPath} field, the scanned directory is
      * taken from the resolved context, so the directory walked and the dependency map merged into the
@@ -703,19 +708,36 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * A throwaway {@link AbstractResourceFinder} for a project root that no {@link ProjectContext}
-     * owns, so the debug flow can list a project that is not open in the workspace.
+     * A stand-in {@link AbstractResourceFinder} for a project root that no {@link ProjectContext}
+     * owns, so the debug flow can list a project that is not open in the workspace — its own
+     * artifacts and those its {@code .car} dependencies contribute, the same two sources a
+     * registered project's finder draws on.
      *
-     * <p>Only the directory scan is available this way: the finder carries an empty
-     * {@link ConnectorHolder} and an empty dependent-resources map, so nothing a {@code .car}
-     * dependency would contribute appears in the result. That is the whole of what an unregistered
-     * project can honestly offer — the dependency map is built by {@code loadDependentResources}
-     * during project initialization, which never ran for this directory. Registered projects keep
-     * going through their own context's finder, dependency map included.
+     * <p>The dependency half comes from {@link AbstractResourceFinder#loadDependentResources}, the
+     * call {@link ProjectContext#initProject} makes for a registered project and which never ran for
+     * this directory. It reads the already-extracted dependencies under
+     * {@code ~/.wso2-mi/integration-project-dependencies} — it downloads nothing, so an unregistered
+     * project gets whatever a previous session left on disk and an empty map otherwise. That
+     * directory is keyed by a hash of the project path, so the dependencies resolve only when the
+     * debugger spells the root the same way the session that downloaded them did; the load's status
+     * is logged to make a miss visible rather than silent.
      *
-     * <p>Not cached: these requests are rare (one per debug session's project list), and caching a
-     * finder for a directory the server does not otherwise track would mean holding scan state for a
-     * project nothing invalidates.
+     * <p>Failure to load dependencies is not fatal: as in {@code initProject}, the finder is still
+     * returned so the project's own artifacts are listed rather than nothing.
+     *
+     * <p>Cached per project root, and deliberately so. {@code loadDependentResources} walks and parses
+     * every dependency and, on an artifact conflict, <em>deletes</em> the offending extracted
+     * dependency and its downloaded archive. Neither belongs on a per-request path: this request is a
+     * read that populates a dropdown, the debugger fans it out across its whole project list at once,
+     * and repeating the load would repeat the deletion. Caching gives an unregistered project the same
+     * once-per-server-lifetime dependency load a registered one gets at init — including the same
+     * staleness, since a registered context reloads only when the client asks. The project's own
+     * artifacts are rescanned on every call either way; only the dependency map is held.
+     *
+     * <p>The finder carries an empty {@link ConnectorHolder} rather than one loaded from the project's
+     * connector archives, which is only used to spot connectors a dependency duplicates. Its emptiness
+     * can therefore let a conflict go unreported, never invent one — and reporting conflicts is the
+     * job of the {@code loadDependentResources} RPC, not of this listing.
      *
      * @param projectPath the project root to scan
      * @return a finder for {@code projectPath}, or {@code null} if it is blank
@@ -725,9 +747,32 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         if (StringUtils.isBlank(projectPath)) {
             return null;
         }
-        log.log(Level.INFO, "Scanning an unregistered project for the debug flow: " + projectPath
-                + " — artifacts from its .car dependencies will not be listed.");
-        return ResourceFinderFactory.getResourceFinder(Utils.isLegacyProject(projectPath), new ConnectorHolder());
+        // Keyed by the normalized root so two spellings of one project share a finder, but built from
+        // the path as the debugger named it: loadDependentResources locates the dependency directory
+        // by hashing this string, and re-spelling it would hash to a directory that does not exist.
+        return unregisteredProjectFinders.computeIfAbsent(WorkspaceManager.normalizeProjectPath(projectPath),
+                key -> buildUnregisteredProjectResourceFinder(projectPath));
+    }
+
+    /**
+     * Builds the finder {@link #unregisteredProjectResourceFinder} caches. Separate so the work the
+     * cache is there to do once reads as one unit, rather than as a lambda inside the lookup.
+     */
+    private AbstractResourceFinder buildUnregisteredProjectResourceFinder(String projectPath) {
+
+        log.log(Level.INFO, "Building a ResourceFinder for a project the debug flow named but that is "
+                + "not registered: " + projectPath);
+        AbstractResourceFinder finder =
+                ResourceFinderFactory.getResourceFinder(Utils.isLegacyProject(projectPath), new ConnectorHolder());
+        try {
+            LoadDependentResourcesResponse result = finder.loadDependentResources(projectPath);
+            log.log(Level.INFO, "Dependent resources for unregistered project " + projectPath + ": "
+                    + result.getStatus() + " — " + result.getMessage());
+        } catch (Exception e) {
+            log.log(Level.WARNING, "Failed to load dependent resources for unregistered project: " + projectPath
+                    + " — only its own artifacts will be listed.", e);
+        }
+        return finder;
     }
 
     @Override
