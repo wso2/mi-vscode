@@ -106,7 +106,9 @@ import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ResetCon
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorDependencyRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateConnectorFlagsRequest;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.UpdateGlobalConnectorFlagsRequest;
+import org.eclipse.lemminx.customservice.synapse.resourceFinder.AbstractResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.ArtifactFileScanner;
+import org.eclipse.lemminx.customservice.synapse.resourceFinder.ResourceFinderFactory;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.RegistryFileScanner;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.BreakpointInfoResponse;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.BreakpointsRequest;
@@ -667,7 +669,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
      *
      * <p>{@code customProjectUri} is the debug-flow override: the debugger asks for a project that
      * may not be open in the workspace at all, so it names the directory to scan directly. It is a
-     * project root path, hence {@link #resolveByProjectUri} rather than {@link #resolveByUri}.
+     * project root path, hence {@link #resolveByProjectUri} rather than {@link #resolveByUri}. A
+     * debug session's project list comes from {@code launch.json} ({@code projectList}) and only
+     * defaults to the open workspace folders, so a named project genuinely need not be registered —
+     * when it isn't, this falls back to {@link #unregisteredProjectResourceFinder} and still scans
+     * the directory, as it did before projects became per-context.
      *
      * <p>Except for that override and the legacy {@code projectPath} field, the scanned directory is
      * taken from the resolved context, so the directory walked and the dependency map merged into the
@@ -676,21 +682,52 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<ResourceResponse> availableResources(ResourceParam param) {
 
-        ProjectContext ctx = StringUtils.isNotBlank(param.customProjectUri)
+        boolean isDebugFlow = StringUtils.isNotBlank(param.customProjectUri);
+        ProjectContext ctx = isDebugFlow
                 ? resolveByProjectUri(param.customProjectUri)
                 : resolveByUriOrProjectUri(param.getDocumentUri(), param);
         String effectivePath = StringUtils.isNotBlank(param.projectPath) ? param.projectPath
-                : StringUtils.isNotBlank(param.customProjectUri) ? param.customProjectUri
+                : isDebugFlow ? param.customProjectUri
                 : ctx != null ? ctx.getProjectUri() : null;
+        AbstractResourceFinder resourceFinder = ctx != null ? ctx.getResourceFinder()
+                : isDebugFlow ? unregisteredProjectResourceFinder(effectivePath) : null;
         ResourceResponse response;
-        if (ctx == null) {
+        if (resourceFinder == null) {
             response = new ResourceResponse();
         } else if (StringUtils.isNotBlank(param.dataServiceName)) {
-            response = ctx.getResourceFinder().getDataServiceOperations(effectivePath, param.dataServiceName);
+            response = resourceFinder.getDataServiceOperations(effectivePath, param.dataServiceName);
         } else {
-            response = ctx.getResourceFinder().getAvailableResources(effectivePath, param.resourceType);
+            response = resourceFinder.getAvailableResources(effectivePath, param.resourceType);
         }
         return CompletableFuture.supplyAsync(() -> response);
+    }
+
+    /**
+     * A throwaway {@link AbstractResourceFinder} for a project root that no {@link ProjectContext}
+     * owns, so the debug flow can list a project that is not open in the workspace.
+     *
+     * <p>Only the directory scan is available this way: the finder carries an empty
+     * {@link ConnectorHolder} and an empty dependent-resources map, so nothing a {@code .car}
+     * dependency would contribute appears in the result. That is the whole of what an unregistered
+     * project can honestly offer — the dependency map is built by {@code loadDependentResources}
+     * during project initialization, which never ran for this directory. Registered projects keep
+     * going through their own context's finder, dependency map included.
+     *
+     * <p>Not cached: these requests are rare (one per debug session's project list), and caching a
+     * finder for a directory the server does not otherwise track would mean holding scan state for a
+     * project nothing invalidates.
+     *
+     * @param projectPath the project root to scan
+     * @return a finder for {@code projectPath}, or {@code null} if it is blank
+     */
+    private AbstractResourceFinder unregisteredProjectResourceFinder(String projectPath) {
+
+        if (StringUtils.isBlank(projectPath)) {
+            return null;
+        }
+        log.log(Level.INFO, "Scanning an unregistered project for the debug flow: " + projectPath
+                + " — artifacts from its .car dependencies will not be listed.");
+        return ResourceFinderFactory.getResourceFinder(Utils.isLegacyProject(projectPath), new ConnectorHolder());
     }
 
     @Override
@@ -1293,11 +1330,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> response);
     }
 
-    // TODO(unrouted-request): expressionCompletion and signatureHelp carry a documentUri but never
-    // resolve a ProjectContext from it — the providers below read the file directly and derive what
-    // they need from the path. They therefore ignore per-project connector and dependency state, so a
-    // connector operation available in one open project is offered in all of them. Route these through
-    // resolveByPath and pass the context to the providers.
+    // Unrouted by design: signatureHelp is served from a static, project-independent function
+    // catalogue, and ExpressionCompletionsProvider resolves the owning project itself — it is also
+    // reached from ContentModelCompletionParticipant, which has no ProjectContext to pass.
     @Override
     public CompletableFuture<ICompletionResponse> expressionCompletion(ExpressionParam param) {
 
@@ -1534,9 +1569,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> SyntaxTreeGenerator.getArtifactType(artifactIdentifier.getUri()));
     }
 
-    // TODO(unrouted-request): getDynamicFields, getStoredProcedures and fetchTables are served by one
-    // process-global dynamicFieldsHandler shared by every open project, so neither its state nor its
-    // caches are per-project. Give each ProjectContext its own handler, or key this one by project.
+    // Unrouted by design: the handler is stateless and its driver classloader is keyed by projectUri.
     @Override
     public CompletableFuture<Map<String, List<DynamicField>>> getDynamicFields(GetDynamicFieldsRequest request) {
 
