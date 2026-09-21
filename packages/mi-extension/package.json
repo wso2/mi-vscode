@@ -1256,7 +1256,7 @@
     "@wso2/syntax-tree": "workspace:*",
     "@wso2/webview-giga-bridge": "workspace:*",
     "@wso2/playwright-vscode-tester": "workspace:*",
-    "adm-zip": "0.6.0",
+    "adm-zip": "0.6.1",
     "axios": "1.18.0",
     "copyfiles": "2.4.1",
     "cors-anywhere": "0.4.4",
