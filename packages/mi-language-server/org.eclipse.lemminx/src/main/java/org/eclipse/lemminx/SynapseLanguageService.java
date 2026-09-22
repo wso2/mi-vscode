@@ -1309,9 +1309,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> shutDownTryoutServer(ShutdownTryoutRequest request) {
 
-        // Only tear down the shared TryOutManager if it's still bound to the requesting project (or the
-        // request carries no project, for older clients) - otherwise an unrelated project's shutdown call
-        // (e.g. before its own build/run) would kill another project's active try-out session.
+        // Only tear down the shared TryOutManager if the request proves it owns the currently bound
+        // server - otherwise an unrelated project's shutdown call (e.g. before its own build/run) would
+        // kill another project's active try-out session. A request that carries no project cannot prove
+        // that ownership, so it is declined instead of being allowed to stop whichever project happens
+        // to hold the server.
         //
         // The ownership check compares project roots through WorkspaceManager.isSameProjectPath rather
         // than String.equals: the client sends WorkspaceFolder.uri.fsPath while the manager holds the
@@ -1328,14 +1330,13 @@ public class SynapseLanguageService implements ISynapseLanguageService {
                 }
                 String requestProjectUri = request != null ? request.getProjectUri() : null;
                 if (StringUtils.isBlank(requestProjectUri)) {
-                    // Older clients send no project, so the ownership check cannot run and this stops
-                    // whichever project currently holds the server. Logged because it is the one path
-                    // where a request can stop another project's try-out.
-                    log.log(Level.INFO, String.format(
-                            "Shutdown request carries no project; stopping the try-out server of '%s'.",
+                    log.log(Level.WARNING, String.format(
+                            "Ignoring a try-out shutdown request that carries no project; the server bound "
+                                    + "to '%s' is left running because the request cannot be shown to own it.",
                             tryOutManager.getProjectUri()));
-                } else if (!WorkspaceManager.isSameProjectPath(requestProjectUri,
-                        tryOutManager.getProjectUri())) {
+                    return true;
+                }
+                if (!WorkspaceManager.isSameProjectPath(requestProjectUri, tryOutManager.getProjectUri())) {
                     return true;
                 }
                 return tryOutManager.shutdown();
