@@ -103,9 +103,7 @@ export class MILanguageClient {
     // Single well-known key: one shared LS process serves every MI workspace folder.
     private static readonly SHARED_KEY = '__shared__';
     private static _instances: Map<string, MILanguageClient> = new Map();
-    // In-flight launch promise, used as a lock so concurrent getInstance() calls
-    // (e.g. multiple workspace folders activating at once) await the same JVM
-    // spawn instead of each seeing an empty _instances map and launching their own.
+    // Lock so concurrent getInstance() calls await the same JVM spawn instead of each launching their own.
     private static _launchPromise: Promise<MILanguageClient> | undefined;
     private static lsChannel: vscode.OutputChannel | undefined;
     private languageClient: ExtendedLanguageClient | undefined;
@@ -113,9 +111,7 @@ export class MILanguageClient {
     // eslint-disable-next-line @typescript-eslint/naming-convention
     private COMPATIBLE_JDK_VERSION = "11"; // Minimum JDK version required to run the language server
     private _errorStack: ErrorType[] = [];
-    // Per-project work, keyed by projectUri, on the single shared instance. Cached so
-    // repeated getInstance() calls for the same project do not redo it, and so concurrent
-    // callers coalesce onto one in-flight promise.
+    // Per-project work keyed by projectUri, cached so repeated or concurrent getInstance() calls coalesce onto one in-flight promise instead of redoing it.
     private _projectSetup: Map<string, Promise<void>> = new Map();
     private _projectInit: Map<string, Promise<void>> = new Map();
 
@@ -123,10 +119,7 @@ export class MILanguageClient {
 
     public static async getInstance(projectUri: string): Promise<ExtendedLanguageClient> {
         if (!this._launchPromise) {
-            // First caller seeds JDK/version resolution and spawns the single JVM.
-            // The promise itself is the lock: concurrent callers (e.g. several
-            // workspace folders activating at once) await it below instead of
-            // each finding an empty map and launching their own JVM.
+            // First caller spawns the single JVM; the promise itself is the lock that later concurrent callers await instead of each launching their own.
             const attempt = (async () => {
                 const instance = new MILanguageClient(projectUri);
                 await instance.launch(projectUri);
@@ -153,17 +146,13 @@ export class MILanguageClient {
             throw error;
         }
         const languageClient = instance.languageClient!;
-        // Every project initializes itself here, including the one that spawned the JVM
-        // and the ones that arrived while it was still spawning. Doing this outside
-        // launch() is what makes it run for all of them: launch() runs exactly once.
+        // Every project initializes itself here (not in launch(), which runs exactly once) so both the spawning project and any that arrived while it spawned get initialized.
         await instance.initProject(projectUri, languageClient);
         return languageClient;
     }
 
     public static async stopInstance(projectUri: string) {
-        // No-op: a single shared language server now serves all MI projects, so one
-        // project's last document closing (or its explicit teardown) must not stop
-        // it for the rest. The shared server is only stopped on extension deactivate.
+        // No-op: the single shared language server must not be stopped for one project's teardown, only on extension deactivate.
     }
 
     // Called only from extension deactivate() - stops the single shared server, if running.
@@ -212,9 +201,7 @@ export class MILanguageClient {
         return isCompatible;
     }
 
-    // Per-project runtime setup (JDK/MI download for that project's own runtime,
-    // LEGACY_EXPRESSION_ENABLED). Runs once per project even though the JVM itself
-    // is launched only once for the shared client.
+    // Per-project runtime setup (JDK/MI download, LEGACY_EXPRESSION_ENABLED) that runs once per project even though the shared JVM is launched only once.
     private async setupProject(projectUri: string): Promise<void> {
         const { miVersionFromPom } = await getProjectSetupDetails(projectUri);
         if (!miVersionFromPom) {
@@ -259,11 +246,7 @@ export class MILanguageClient {
         return setup;
     }
 
-    // Runtime setup plus this project's own dependency download and CApp conflict
-    // detection. Every MI project in the window needs this, not just the one that
-    // happened to spawn the shared language server, so it lives here rather than in
-    // launch() - a conflict in a project that joined an existing server was otherwise
-    // never detected, leaving its pom.xml entry in place.
+    // Runtime setup plus this project's dependency download and CApp conflict detection, done here rather than in launch() since every project in the window needs it, not just the one that spawned the shared server.
     private initProject(projectUri: string, languageClient: ExtendedLanguageClient): Promise<void> {
         let init = this._projectInit.get(projectUri);
         if (!init) {
@@ -319,10 +302,7 @@ export class MILanguageClient {
                 if (!workspace.getWorkspaceFolder(Uri.file(this.projectUri))) {
                     throw new Error("Workspace folder not found.");
                 }
-                // Options to control the language client. No workspaceFolder is pinned here:
-                // vscode-languageclient then sends every workspace folder in
-                // initialize.workspaceFolders and auto-forwards didChangeWorkspaceFolders,
-                // so the single client serves all MI projects in the workspace.
+                // Options to control the language client; no workspaceFolder is pinned here, so vscode-languageclient sends every workspace folder and the single client serves all MI projects.
                 let clientOptions: LanguageClientOptions = {
                     initializationOptions: { "settings": getXMLSettings() },
                     synchronize: {
@@ -393,9 +373,7 @@ export class MILanguageClient {
                 this.languageClient = new ExtendedLanguageClient('synapseXML', 'Synapse Language Server',
                     serverOptions, clientOptions);
                 await this.languageClient.start();
-                // Dependency loading and conflict detection are deliberately NOT done here.
-                // launch() runs once per window; getInstance() -> initProject() does that
-                // work per project so every workspace folder gets it.
+                // Dependency loading and conflict detection are deliberately not done here since launch() runs once per window; getInstance() -> initProject() does that per project instead.
 
                 //Setup autoCloseTags
                 let tagProvider: (document: TextDocument, position: Position) => Thenable<AutoCloseResult> = (document: TextDocument, position: Position) => {

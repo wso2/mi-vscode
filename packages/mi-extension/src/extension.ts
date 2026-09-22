@@ -84,9 +84,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		vscode.commands.executeCommand('setContext', 'MI.hasMultipleProjects', count > 1);
 	};
 
-	// One panel only: the language server registers a ProjectContext for every workspace
-	// folder from `initialize`/`didChangeWorkspaceFolders`, so a state machine per project
-	// isn't needed to make the other folders available.
+	// One panel only: the language server registers a ProjectContext for every workspace folder, so a state machine per project isn't needed.
 	if (!oldProjects.length) {
 		const showWorkspaceOverview = shouldShowWorkspaceOverview();
 		getStateMachine(firstProject, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);

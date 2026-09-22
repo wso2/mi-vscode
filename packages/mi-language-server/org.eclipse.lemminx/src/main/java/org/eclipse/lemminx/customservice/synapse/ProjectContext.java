@@ -46,59 +46,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Holds all per-project state required by the MI Language Server for a single
- * workspace folder/project. In a Multi-Root Workspace scenario, one instance
- * of {@code ProjectContext} is created per open project root, and all language
- * features (completions, hover, validation, connectors, etc.) are resolved
- * through the context that corresponds to the document being processed.
- *
- * <p>Instances are stored in a map keyed by the project root URI inside the
- * language server (e.g. {@code SynapseLanguageClientAPI} or its successor
- * manager class) so that requests for any document are dispatched to the
- * correct context.
- *
- * <p>Immutable identity fields (projectUri, isLegacyProject, projectServerVersion)
- * are set in the constructor and cannot be changed afterwards. All service
- * handler fields are eagerly initialized via the {@link #initProject} method,
- * which must be called immediately after construction. No setters are provided
- * — Early Initialization ensures everything is ready before the context is
- * used, eliminating loading delays during coding.
- *
- * <p><b>Note:</b> The {@code TryOutManager} is intentionally excluded from
- * this class. It manages a heavy background MI Server process that binds to
- * a specific network port, so only one instance can run at a time across all
- * projects. It remains a separate global concern managed by
- * {@code SynapseLanguageService}.
+ * Holds all per-project state for the MI Language Server, with one instance per open project root keyed by
+ * project URI, identity fields set at construction, and service handlers eagerly initialized via
+ * {@link #initProject}; the {@code TryOutManager} is deliberately excluded since it manages a single shared
+ * MI Server process and stays a global concern in {@code SynapseLanguageService}.
  */
 public class ProjectContext {
 
     private static final Logger log = Logger.getLogger(ProjectContext.class.getName());
 
     /**
-     * Tracks whether {@link #initProject} has completed successfully.
-     * Used by service-handler getters to fail fast with a clear message
-     * instead of returning {@code null}.
-     *
-     * <p><b>{@code volatile} on purpose — this flag is also this object's publication fence.</b>
-     * {@code XMLLanguageServer.addProjectContext} registers a context in the shared
-     * {@code WorkspaceManager} map <em>before</em> initializing it, and {@code didChangeWorkspaceFolders}
-     * does so on the notification thread while request threads are already being served. So another
-     * thread can be holding this reference while the fields below are still being written.
-     * {@link java.util.concurrent.ConcurrentHashMap} only orders writes made <em>before</em> the
-     * {@code put}; it says nothing about the ones {@link #initProject} makes afterwards. Reading this
-     * volatile flag is what gives a reader the happens-before edge, so a thread that sees {@code true}
-     * is guaranteed to see every field below fully written.
-     *
-     * <p>Two rules keep that guarantee, and both must hold together:
-     * <ul>
-     *   <li>the field stays {@code volatile} — otherwise a reader could observe {@code true} next to a
-     *       still-null handler and get an NPE instead of the {@link IllegalStateException}
-     *       {@link #checkInitialized} promises;</li>
-     *   <li>the write stays the <em>last</em> statement of {@link #initProject} — never move it earlier
-     *       to let some later init step past {@link #checkInitialized}. Call the unguarded internal
-     *       helper from that step instead, the way {@link #loadConnectors} exists for
-     *       {@link #updateConnectors}.</li>
-     * </ul>
+     * Tracks whether {@link #initProject} has completed, deliberately kept {@code volatile} so this flag
+     * acts as this object's publication fence — it must stay volatile and be set only as
+     * {@link #initProject}'s last statement, so a thread that observes it {@code true} is guaranteed to
+     * see every field below fully written.
      */
     private volatile boolean initialized = false;
 
@@ -107,22 +68,20 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * The root folder URI of this project (e.g. {@code file:///Users/.../ProjectA}).
-     * Used as the primary key when looking up the context for a given document URI.
+     * The root folder URI of this project (e.g. {@code file:///Users/.../ProjectA}), used as the primary
+     * key when looking up its context.
      */
     private final String projectUri;
 
     /**
-     * Whether this project is a <em>legacy</em> (state-machine-based) MI project.
-     * Legacy projects use a different activation and completion pathway compared
-     * to modern MI projects.
+     * Whether this project is a legacy (state-machine-based) MI project, which uses a different
+     * activation and completion pathway than modern MI projects.
      */
     private final boolean isLegacyProject;
 
     /**
-     * The WSO2 MI version string associated with this project
-     * (e.g. {@code "4.3.0"}, {@code "4.4.0"}). Used to select the correct
-     * XSD schemas, mediator descriptors, and feature toggles.
+     * The WSO2 MI version string for this project (e.g. {@code "4.4.0"}), used to select the correct XSD
+     * schemas, mediator descriptors, and feature toggles.
      */
     private final String projectServerVersion;
 
@@ -131,9 +90,7 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Path to the extracted root {@code synapse_config.xsd} for this specific
-     * project. Resolved during {@link #initProject} by extracting the
-     * version-specific XSD bundle for this project.
+     * Path to this project's extracted root {@code synapse_config.xsd}, resolved during {@link #initProject}.
      */
     private Path synapseXsdPath;
 
@@ -142,15 +99,14 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Holds metadata and descriptors for all regular (outbound) connectors
-     * discovered for this project. Initialized eagerly so that connector
-     * scanning can populate it immediately after construction.
+     * Holds metadata and descriptors for this project's regular (outbound) connectors, initialized eagerly
+     * so scanning can populate it right after construction.
      */
     private final ConnectorHolder connectorHolder;
 
     /**
-     * Holds metadata and descriptors for all inbound connectors discovered
-     * for this project. Initialized eagerly alongside {@link #connectorHolder}.
+     * Holds metadata and descriptors for this project's inbound connectors, initialized eagerly alongside
+     * {@link #connectorHolder}.
      */
     private final InboundConnectorHolder inboundConnectorHolder;
 
@@ -159,16 +115,14 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Responsible for loading and refreshing connectors from the project's
-     * connector directory. The concrete type (Old vs New) depends on
-     * {@link #isLegacyProject}.
+     * Loads and refreshes connectors from this project's connector directory, using a concrete type
+     * (Old vs New) that depends on {@link #isLegacyProject}.
      */
     private AbstractConnectorLoader connectorLoader;
 
     /**
-     * Handles completion proposals and hover information for Synapse mediators
-     * within this project. Depends on {@link #projectServerVersion} to load
-     * the correct mediator descriptor set.
+     * Handles mediator completion proposals and hover information for this project, loading the mediator
+     * descriptor set for {@link #projectServerVersion}.
      */
     private MediatorHandler mediatorHandler;
 
@@ -201,12 +155,9 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Creates a new {@code ProjectContext} for the given project root.
-     *
-     * <p>The {@link ConnectorHolder} and {@link InboundConnectorHolder} are
-     * created eagerly so that connector-scanning routines can start populating
-     * them immediately. All other service handlers remain {@code null} until
-     * {@link #initProject} is called.
+     * Creates a new {@code ProjectContext} for the given project root, eagerly creating its
+     * {@link ConnectorHolder} and {@link InboundConnectorHolder} while leaving other service handlers
+     * {@code null} until {@link #initProject} is called.
      *
      * @param projectUri           root folder URI of the project
      *                             (e.g. {@code "file:///Users/.../ProjectA"})
@@ -231,39 +182,9 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Eagerly initializes all service handlers for this project in the correct
-     * dependency order, mirroring the initialization sequence from
-     * {@code SynapseLanguageService.init(...)}.
-     *
-     * <p>This method must be called exactly once, immediately after construction,
-     * before the context is registered for use. After this call returns
-     * successfully, every getter is guaranteed to return a non-null, fully
-     * initialized instance — eliminating any lazy-loading delays during coding.
-     *
-     * <p><b>Initialization order:</b>
-     * <ol>
-     *   <li>{@link InboundConnectorHolder#init} — loads inbound connector metadata</li>
-     *   <li>{@link AbstractConnectorLoader} — instantiates the correct loader
-     *       (Old vs New) and calls {@code init(projectUri)}</li>
-     *   <li>{@link MediatorHandler} — loads mediator descriptors for this version</li>
-     *   <li>{@link ConnectionHandler} — indexes named connections</li>
-     *   <li>{@link ExpressionHelperProvider} — prepares expression helpers</li>
-     *   <li>{@link AbstractResourceFinder} — discovers and indexes dependent
-     *       resources (endpoints, sequences, etc.)</li>
-     *   <li>{@link MediatorFactoryFinder} — builds the per-context factory finder</li>
-     *   <li>Resolves and stores the {@code synapseXsdPath}</li>
-     *   <li>{@link DynamicClassLoader} — seeds this project's DB-driver classloader
-     *       from its own {@code deployment/libs}</li>
-     *   <li>{@link #loadConnectors} and {@link #packHttpConnector} — loads this project's
-     *       connectors and regenerates its {@code connectors.xsd}</li>
-     *   <li>Sets {@link #initialized}, publishing the finished context to other threads</li>
-     * </ol>
-     *
-     * <p>Only the last step makes this context usable: until it runs, and it runs only if no earlier
-     * step threw, {@link #checkInitialized} rejects every service-handler getter. The context is
-     * already registered in {@code WorkspaceManager} by then (see
-     * {@code XMLLanguageServer.addProjectContext}), so other threads can hold a reference to it
-     * throughout — which is why that final write is what carries the whole object across to them.
+     * Eagerly initializes all service handlers for this project, in dependency order mirroring
+     * {@code SynapseLanguageService.init(...)}, and must be called exactly once immediately after
+     * construction so that every getter is guaranteed non-null once it returns successfully.
      *
      * @param miServerPath   absolute path to the local MI server installation
      * @param languageClient the language-client proxy for sending notifications
@@ -276,15 +197,14 @@ public class ProjectContext {
 
     /**
      * Same as {@link #initProject(String, SynapseLanguageClientAPI)}, but lets the caller supply the
-     * schema directory this project's documents were already registered against (e.g. via LemMinX file
-     * associations or the XML catalog), so this context's generated {@code connectors.xsd} lands in the
-     * SAME directory the validation engine actually reads — not an independently re-extracted copy.
+     * schema directory this project's documents are already registered against, so the generated
+     * {@code connectors.xsd} lands where the validation engine actually reads instead of an
+     * independently re-extracted copy.
      *
      * @param miServerPath   absolute path to the local MI server installation
      * @param languageClient the language-client proxy for sending notifications back to the IDE
-     * @param synapseXsdPath the schema directory already resolved for this project's document
-     *                       associations, or {@code null} to let this context extract its own (e.g. for
-     *                       callers that never registered one, such as tests)
+     * @param synapseXsdPath the schema directory already resolved for this project's documents, or
+     *                       {@code null} to let this context extract its own
      * @throws Exception if any step in the initialization pipeline fails
      */
     public void initProject(String miServerPath, SynapseLanguageClientAPI languageClient, Path synapseXsdPath)
@@ -326,12 +246,11 @@ public class ProjectContext {
         // 7. Build the per-context mediator factory finder.
         this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
 
-        // 8. Resolve the synapse XSD path for this project's MI version — reuse the caller-supplied
-        // directory when given, so generated schemas land where the validation engine already looks.
+        // 8. Resolve the synapse XSD path for this project's MI version, reusing the caller-supplied
+        // directory when given.
         this.synapseXsdPath = synapseXsdPath != null ? synapseXsdPath : Utils.copyXSDFiles(projectUri);
 
-        // 9. Seed this project's DB-driver classloader from its own deployment/libs, so drivers already on
-        // disk stay visible to checkDBDriver/testDBConnection.
+        // 9. Seed this project's DB-driver classloader from its own deployment/libs.
         try {
             DynamicClassLoader.updateClassLoader(projectUri, Path.of(projectUri, "deployment", "libs").toFile());
         } catch (Exception e) {
@@ -339,18 +258,13 @@ public class ProjectContext {
                     "Could not seed the DB-driver classloader from deployment/libs for: " + projectUri, e);
         }
 
-        // 10. Load this project's connectors now that the loader and XSD path are ready, and pack the
-        // bundled HTTP connector in if this project's MI version needs it. Both go through the
-        // unguarded loadConnectors() rather than the public updateConnectors(), because `initialized`
-        // is deliberately still false here — see step 11.
+        // 10. Load this project's connectors and pack the bundled HTTP connector, both through the
+        // unguarded loadConnectors() since `initialized` is deliberately still false here.
         loadConnectors();
         packHttpConnector();
 
-        // 11. Publish. This is the last statement on purpose: `initialized == true` is what tells every
-        // other thread this context is both fully wired and fully loaded, so it must not become true
-        // while any work remains — not even the connector loading above, which would otherwise hand a
-        // concurrent reader a context whose ConnectorHolder is still filling and whose connector calls
-        // therefore parse as InvalidMediator. See the field's javadoc for the visibility half.
+        // 11. Publish last on purpose: `initialized == true` must not become visible until every field,
+        // including the connector loading above, is fully written. See the field's javadoc.
         this.initialized = true;
 
         log.log(Level.INFO, "ProjectContext initialized successfully for: " + projectUri);
@@ -388,19 +302,10 @@ public class ProjectContext {
     }
 
     /**
-     * Whether {@link #initProject} has run to completion for this context, i.e. whether the service
-     * handlers below are safe to use.
-     *
-     * <p>Being registered in {@code WorkspaceManager} does <em>not</em> imply this. Registration and
-     * initialization are deliberately separate (see {@code XMLLanguageServer.addProjectContext}), so a
-     * context resolved from the registry may be one that is still initializing on another thread, or
-     * one whose initialization threw. In both cases every getter below throws
-     * {@link IllegalStateException}.
-     *
-     * <p>Check this before touching a service handler anywhere an exception would be swallowed or
-     * would abandon unrelated work — LSP notification handlers, batch loops, background refreshes —
-     * and skip that project instead. Request handlers that resolve a project per call can rely on the
-     * exception surfacing as an error response.
+     * Whether {@link #initProject} has run to completion for this context — being registered in
+     * {@code WorkspaceManager} does not imply this, so callers on notification handlers, batch loops, or
+     * background refreshes should check it and skip the project if false, while per-call request
+     * handlers can rely on the resulting {@link IllegalStateException}.
      *
      * @return {@code true} once initialization has fully succeeded
      */
@@ -530,10 +435,9 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Reloads this project's outbound connectors from disk, refreshes its mediator
-     * descriptor list, and regenerates {@code connectors.xsd} into this project's own
-     * {@link #synapseXsdPath}. Scoped entirely to this context's {@link #connectorHolder},
-     * so it never affects any other open project.
+     * Reloads this project's outbound connectors from disk, refreshes its mediator descriptor list, and
+     * regenerates {@code connectors.xsd} into its own {@link #synapseXsdPath}, scoped entirely to this
+     * context's {@link #connectorHolder} so other open projects are unaffected.
      *
      * @throws IllegalStateException if {@link #initProject} has not been called
      */
@@ -543,17 +447,9 @@ public class ProjectContext {
     }
 
     /**
-     * The body of {@link #updateConnectors} without the readiness guard.
-     *
-     * <p>Exists so {@link #initProject} can run the initial connector load as part of bringing this
-     * context up, at which point {@code initialized} is deliberately still {@code false} and
-     * {@link #checkInitialized} would reject the call. Depends only on {@link #connectorLoader},
-     * {@link #mediatorHandler}, {@link #synapseXsdPath} and {@link #connectorHolder}, all of which are
-     * already assigned by then.
-     *
-     * <p>Callers outside {@link #initProject} must use {@link #updateConnectors} instead, so that a
-     * context which never finished initializing fails with a clear {@link IllegalStateException}
-     * rather than an NPE somewhere in the loader.
+     * The body of {@link #updateConnectors} without the readiness guard, so {@link #initProject} can run
+     * the initial connector load while {@code initialized} is still {@code false}; callers outside
+     * {@link #initProject} must use {@link #updateConnectors} instead.
      */
     private void loadConnectors() {
         connectorLoader.loadConnector();
@@ -575,9 +471,9 @@ public class ProjectContext {
     }
 
     /**
-     * Packs the bundled HTTP connector into this project's connector download directory, if this
-     * project's MI version needs it and it isn't already there. Mirrors the previous single-project
-     * bootstrap so every registered project (not just the first one) gets the built-in HTTP connector.
+     * Packs the bundled HTTP connector into this project's connector download directory if this
+     * project's MI version needs it and it isn't already there, mirroring the previous single-project
+     * bootstrap for every registered project.
      */
     private void packHttpConnector() {
 
@@ -622,9 +518,8 @@ public class ProjectContext {
     // -------------------------------------------------------------------------
 
     /**
-     * Throws {@link IllegalStateException} if {@link #initProject} has not
-     * been called yet. Guards service-handler getters so that callers get a
-     * clear error message instead of a downstream {@code NullPointerException}.
+     * Throws {@link IllegalStateException} if {@link #initProject} has not been called yet, so
+     * service-handler getters fail with a clear message instead of a downstream {@code NullPointerException}.
      */
     private void checkInitialized() {
         if (!initialized) {

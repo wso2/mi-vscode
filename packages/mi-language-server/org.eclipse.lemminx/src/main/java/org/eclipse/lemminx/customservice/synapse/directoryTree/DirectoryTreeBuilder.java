@@ -68,12 +68,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Builds the project directory tree for a single workspace folder.
- *
- * <p>Instances are created per invocation (see {@link #buildDirectoryTree}) so that
- * {@link #projectPath}, {@link #mainSequence}, and {@link #artifactResourcePaths} are
- * scoped to that one call and cannot leak between concurrent requests for different
- * projects in a multi-root workspace.
+ * Builds the project directory tree for a single workspace folder, creating one instance per invocation so its state cannot leak between concurrent requests.
  */
 public class DirectoryTreeBuilder {
 

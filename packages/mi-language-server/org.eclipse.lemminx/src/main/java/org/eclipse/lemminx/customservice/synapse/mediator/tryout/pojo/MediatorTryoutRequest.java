@@ -111,9 +111,7 @@ public class MediatorTryoutRequest extends AbstractProjectRequest {
     }
 
     /**
-     * The initiating project's configured MI server path, used to (re)bind the single shared
-     * {@code TryOutManager} to the correct runtime when this request is what starts a new try-out
-     * session. Ignored otherwise.
+     * The initiating project's configured MI server path, used to (re)bind the shared {@code TryOutManager} when this request starts a new try-out session.
      */
     public String getServerPath() {
 

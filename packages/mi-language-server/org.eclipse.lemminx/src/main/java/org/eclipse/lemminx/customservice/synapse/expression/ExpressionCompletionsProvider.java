@@ -126,9 +126,7 @@ public class ExpressionCompletionsProvider {
         }
         String documentUri = Utils.getAbsolutePath(request.getXMLDocument().getDocumentURI());
 
-        // Use the ConnectorHolder of the project that owns this document, so connector response and
-        // target variables (e.g. the variable named by <http.get responseVariable="..."/>) contribute
-        // their schema to the completions. An empty holder leaves every connector mediator unresolved.
+        // Use the ConnectorHolder of the project that owns this document so connector response/target variables contribute their schema to completions (an empty holder leaves connector mediators unresolved).
         ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(documentUri);
         ConnectorHolder connectorHolder =
                 projectContext != null ? projectContext.getConnectorHolder() : new ConnectorHolder();

@@ -183,9 +183,7 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
     }
 
     const selectStoreConnector = async (connector: any) => {
-        // A store connector that was never downloaded has no local entry at all — the normal case in
-        // a fresh project. Reading `.id` off that missing entry threw, and the rejected promise left
-        // the card looking inert; ask for the download instead, which is what makes it local.
+        // A store connector that hasn't been downloaded yet has no local entry — the normal case in a fresh project — so prompt for the download instead of erroring on a missing id.
         const localConnector = localConnectors?.find((c: any) => c.name === connector.connectorName);
         if (!localConnector) {
             requiresDownload(connector);

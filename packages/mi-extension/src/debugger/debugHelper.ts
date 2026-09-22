@@ -463,8 +463,7 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
         try {
             runCommand = await getRunCommand(serverPath, isDebug);
         } catch (error) {
-            // A path that can't be quoted for the shell (see escapeShellArg) fails here rather than
-            // being handed over half-parsed and leaving the launch to time out on the command port.
+            // A path that can't be quoted for the shell (see escapeShellArg) fails here rather than being handed over half-parsed and timing out later.
             const message = `Server startup failed: ${error instanceof Error ? error.message : error}`;
             serverLog(message);
             reject(message);

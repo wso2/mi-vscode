@@ -186,25 +186,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         }
     };
 
-    // Published once per process so static-context-only callers (e.g. IDiagnosticsParticipant, which
-    // has no DI path to the live server instance) can resolve a document's ProjectContext.
+    // Published once per process so callers with no DI path to the live server can resolve a document's ProjectContext.
     private static volatile WorkspaceManager workspaceManagerHolder;
 
     /**
-     * Resolves the {@link ProjectContext} for a document URI, for callers with no DI path to the live
-     * {@code XMLLanguageServer}/{@code WorkspaceManager} (e.g. {@code SynapseDiagnosticsParticipant},
-     * {@code SyntaxTreeUtils}). Returns {@code null} if no project is registered for the document (or
-     * none has initialized yet).
-     *
-     * <p>This resolves through {@link WorkspaceManager#getProjectForFile} — the path-based lookup —
-     * rather than {@link WorkspaceManager#getProjectForDocument}, because the URIs reaching here are
-     * <em>not</em> always the ones the client sent. A {@link org.eclipse.lemminx.dom.DOMDocument} that
-     * lemminx opened from disk itself carries {@code path.toUri().toString()}
-     * ({@code Utils.getDOMDocument(File)}), which on Windows spells the drive-letter colon differently
-     * from the workspace-folder URIs the registry is keyed by ({@code c:} vs. {@code c%3A}) and so can
-     * never prefix-match one. The consequence is silent and severe rather than a visible error: callers
-     * fall back to a default {@code MediatorFactoryFinder} with an empty {@code ConnectorHolder}, so
-     * every connector call ({@code http.get}, …) parses as an {@code InvalidMediator}.
+     * Resolves the {@link ProjectContext} for a document URI (returning {@code null} if none is registered) for callers with no DI path to the live server, using the path-based {@link WorkspaceManager#getProjectForFile} lookup because disk-opened documents' URIs don't always match the client's spelling.
      */
     public static ProjectContext resolveProjectContext(String documentUri) {
         WorkspaceManager manager = workspaceManagerHolder;
@@ -217,12 +203,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     private String extensionPath;
     private String miServerPath;
     private TryOutManager tryOutManager;
-    // Serializes the stop-the-old-server/start-a-new-one handover in bindTryOutManager. Try-out
-    // requests are served on the common pool, so two projects can ask to bind at once; without this,
-    // both would pass the "not mine" check and launch a server for the single shared MI port.
+    // Serializes the stop-the-old-server/start-a-new-one handover in bindTryOutManager, since concurrent
+    // try-out requests from two projects could otherwise both pass the "not mine" check.
     private final Object tryOutBindLock = new Object();
-    // Resource finders for project roots the debug flow names but that no ProjectContext owns, keyed
-    // by normalized project path. See unregisteredProjectResourceFinder for why these are held.
+    // Resource finders for project roots the debug flow names but no ProjectContext owns, keyed by
+    // normalized path; see unregisteredProjectResourceFinder for why these are held.
     private final Map<String, AbstractResourceFinder> unregisteredProjectFinders = new ConcurrentHashMap<>();
     private DynamicFieldsHandler dynamicFieldsHandler;
     private final URIResolverExtensionManager uriResolverExtensionManager;
@@ -237,9 +222,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Parses the {@code extensionPath}/{@code miServerPath} settings. Split out from {@link #init} so
-     * {@code XMLLanguageServer} can call it before building this process's {@link ProjectContext}s
-     * (which need {@link #getMiServerPath()}), then call {@link #init} afterwards.
+     * Parses the {@code extensionPath}/{@code miServerPath} settings, split out from {@link #init} so {@code XMLLanguageServer} can call it before building this process's {@link ProjectContext}s (which need {@link #getMiServerPath()}).
      */
     public void applySettings(Object settings) {
         if (settings instanceof JsonObject) {
@@ -254,17 +237,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Completes initialisation once {@code XMLLanguageServer} has registered every workspace project.
-     *
-     * <p>This no longer captures a default project, and no longer pre-binds anything to one:
-     * <ul>
-     *   <li>the shared {@link TryOutManager} is created lazily, per request, by
-     *       {@link #bindTryOutManager(ProjectContext, String)}, which binds it to whichever project
-     *       actually asked;</li>
-     *   <li>each project's DB-driver classloader is seeded from its own {@code deployment/libs} by
-     *       {@link ProjectContext#initProject}, so every registered project gets one — not just the
-     *       first, which is all this method could ever have done.</li>
-     * </ul>
+     * Completes initialisation once {@code XMLLanguageServer} has registered every workspace project, no longer binding a default project or pre-loading state for just one.
      *
      * @param projectUri the client's {@code rootPath}; retained for logging only
      */
@@ -282,29 +255,18 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     // -------------------------------------------------------------------------
-    // Dispatch — resolves the ProjectContext for a request, falling back to
-    // null when the request carries no resolvable project reference. Never another project.
+    // Dispatch: resolves the ProjectContext for a request, or null — never another project's.
     // -------------------------------------------------------------------------
 
     /**
-     * Resolves a {@link ProjectContext} from a document {@code file://} URI, or {@code null} when the
-     * document belongs to no registered project.
-     *
-     * <p>Returning {@code null} for an <i>unmatched</i> URI is the point: the caller answers with an
-     * empty result rather than another project's data. See the class javadoc.
+     * Resolves a {@link ProjectContext} from a document {@code file://} URI, returning {@code null} (by design, so the caller answers empty rather than with another project's data) when it matches none.
      */
     private ProjectContext resolveByUri(String documentUri) {
         return resolve(documentUri, "document URI", WorkspaceManager::getProjectForDocument);
     }
 
     /**
-     * Shared body of the {@code resolveBy*} family, which differ only in which
-     * {@link WorkspaceManager} lookup they run and what the field is called in the log.
-     *
-     * <p>A blank value and an unmatched one are logged at different levels on purpose: the first
-     * means the request never named anything, the second that what it named belongs to no open
-     * project. Both resolve to no project, so the RPC answers empty rather than with another
-     * project's data.
+     * Shared body of the {@code resolveBy*} family: resolves {@code value} via {@code lookup}, logging blank vs. unmatched at different levels since both resolve to no project.
      *
      * @param value     the request field to resolve from
      * @param fieldName what that field is, for the log
@@ -321,8 +283,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         }
         ProjectContext context = lookup.find(xmlLanguageServer.getWorkspaceManager(), value);
         if (context == null) {
-            // The lookup already logs the miss; this adds the facade-level consequence so the pair
-            // reads as one story in the log.
+            // The lookup already logs the miss; this adds the facade-level consequence for the log.
             log.log(Level.WARNING, "No registered project for " + fieldName + ": " + value
                     + " — request will be answered with an empty result, not another project's data.");
         }
@@ -344,25 +305,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Resolves a {@link ProjectContext} from a request field that carries a filesystem path (e.g.
-     * {@link MediatorTryoutRequest#getFile()}) by matching normalized {@link java.nio.file.Path}s via
-     * {@link WorkspaceManager#getProjectForFile}.
-     *
-     * <p>Use this — not {@link #resolveByUri} — for any field the handler itself dereferences as a
-     * path ({@code new File(..)}, {@code Path.of(..)}, {@code new ZipFile(..)}). Routing such a field
-     * through {@code resolveByUri} resolves every request to no project at all.
-     *
-     * <p><b>Do not "fix" this by converting the path to a URI and delegating to {@link #resolveByUri}.</b>
-     * That was the previous implementation and it resolved to no project for <em>every</em> document on
-     * Windows: the registry is keyed by the workspace-folder URIs exactly as the client sent them, and
-     * VS Code percent-encodes the drive-letter colon ({@code file:///c%3A/Users/...}) where
-     * {@code Path.toUri()} does not ({@code file:///c:/Users/...}), so the prefix match could never
-     * hit. Comparing as paths removes URI spelling from the equation entirely. Note that a URI-based
-     * test harness can hide this — Node's {@code pathToFileURL} emits the same unencoded spelling
-     * Java does, so a probe keyed that way matches the buggy form and reports success.
-     *
-     * <p>A value that is already a {@code file://} URI is accepted too, so this is safe for the fields
-     * whose callers are inconsistent about which of the two forms they send.
+     * Resolves a {@link ProjectContext} from a filesystem-path request field via {@link WorkspaceManager#getProjectForFile}, matching by normalized path rather than URI because Windows drive-letter percent-encoding otherwise fails to match for every document (a {@code file://} URI value is accepted too).
      *
      * @return the owning project, or {@code null} if the path is blank, unparseable, or outside every
      *         registered project
@@ -372,13 +315,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Resolves a {@link ProjectContext} from an explicit project root (e.g. the {@code projectUri}
-     * field on RPCs that carry no document to resolve a project from). The VS Code extension sends
-     * this field as {@code WorkspaceFolder.uri.fsPath} — an absolute filesystem path, not the
-     * {@code file://} URI {@link WorkspaceManager} registers projects under — so this resolves via
-     * {@link WorkspaceManager#getProjectByPath(String)}, which matches on each context's own
-     * {@link ProjectContext#getProjectUri()} instead of the registry key. Both an OS path and a
-     * {@code file://} URI are accepted, since that method normalizes either form.
+     * Resolves a {@link ProjectContext} from an explicit project root (an OS path or {@code file://} URI) via {@link WorkspaceManager#getProjectByPath(String)}, since RPCs send it as {@code WorkspaceFolder.uri.fsPath} rather than the registry's URI key.
      *
      * @return the named project, or {@code null} if {@code projectUri} is blank or names no
      *         registered project
@@ -388,12 +325,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Null-safe overload for the many RPCs whose only project hint is the request's own
-     * {@code projectUri}.
-     *
-     * <p>Call sites used to disagree about whether to guard the request object first - some passed
-     * {@code request != null ? request.projectUri : null}, others dereferenced it directly, for
-     * structurally identical params. Guarding here once makes every call site read the same.
+     * Null-safe overload for RPCs whose only project hint is the request's own {@code projectUri}, guarding {@code request == null} once instead of at every call site.
      *
      * @param request the request naming the project, may be null
      * @return the named project, or {@code null} if the request or its field names none
@@ -403,13 +335,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Resolves a {@link ProjectContext} preferring an explicit document URI/path when present, and
-     * falling back to an explicit project root URI.
-     *
-     * <p>When a document URI is supplied but matches no project, this deliberately does <i>not</i>
-     * retry with {@code projectUri}: a document that belongs to no open project is a different
-     * condition from one that was never named, and silently widening the search is how a request ends
-     * up answered by a project that does not own the document.
+     * Resolves a {@link ProjectContext} preferring an explicit document URI/path, falling back to a project root URI only when no document URI was supplied (an unmatched document URI is never retried against {@code projectUri}, to avoid answering from a project that doesn't own it).
      *
      * @return the resolved project, or {@code null} if neither field identifies one
      */
@@ -426,18 +352,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Resolves a {@link ProjectContext} from a file path, falling back to the project root the
-     * request names when that path belongs to no registered project.
-     *
-     * <p>Unlike {@link #resolveByPathOrProjectUri(String, String)}, which falls back only when the
-     * path is blank, this widens on an <em>unmatched</em> path too. A try-out request can name a
-     * file that sits outside every
-     * project root - an artifact extracted from a {@code .car} dependency, for instance - while still
-     * carrying the project whose panel issued it. Without the fallback those requests fail with
-     * {@link #tryOutUnavailableMessage()} even though the project was named correctly.
-     *
-     * <p>The path still wins whenever it matches, so this can never answer from a project other than
-     * the one that owns the file; the named project is consulted only when no project owns it.
+     * Resolves a {@link ProjectContext} from a file path, falling back to the named project root when the path is unmatched (not just blank) — e.g. a try-out file extracted from a {@code .car} dependency, outside every project root but still tied to the requesting project's panel.
      *
      * @return the resolved project, or {@code null} if neither field identifies one
      */
@@ -457,12 +372,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * The {@link #resolveByPath} counterpart of {@link #resolveByUriOrProjectUri}: prefers a
-     * filesystem path field when the request carries one, and falls back to an explicit project root.
-     *
-     * <p>Use this for requests whose path field is <em>legitimately optional</em> — a path that is
-     * blank by design, not by omission. Routing such a request on the path alone resolves it to no
-     * project exactly in the case it was meant to serve.
+     * The {@link #resolveByPath} counterpart of {@link #resolveByUriOrProjectUri}: prefers a filesystem path field when present, falling back to an explicit project root for requests whose path is legitimately optional (blank by design).
      *
      * @return the resolved project, or {@code null} if neither field identifies one
      */
@@ -479,24 +389,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Resolves the single, process-global {@link TryOutManager} for {@code ctx}, (re)binding it to
-     * {@code ctx}'s project when it currently points elsewhere.
-     *
-     * <p>The underlying MI server process is a single-port, single-instance resource (see the multi
-     * project execution plan's Phase 4), so binding a second project means taking that resource over:
-     * the currently bound manager is shut down first — stopping its MI server even when a try-out is
-     * running on it — and the requesting project gets a freshly launched one. Trying out a mediator in
-     * a second project therefore always proceeds; it never fails with "another project is already
-     * active", which left the user with no way forward but to hunt down the other project's panel.
+     * Resolves the single, process-global {@link TryOutManager} for {@code ctx}, taking over the shared single-port MI server (shutting down the currently bound manager) when it points at a different project.
      *
      * @param requestServerPath the initiating project's configured MI server path (may be blank/null);
      *                           used instead of the process-global {@link #miServerPath} when this call
      *                           is what creates a new {@link TryOutManager}, so the single shared server
      *                           launches the runtime the *initiating* project expects
-     * <p>There is no manager to hand back when {@code ctx} is {@code null}: without a project there is
-     * no runtime version, connector set or {@code deployment/libs} to launch against. Callers surface
-     * that via {@link #tryOutUnavailableMessage()}.
-     *
      * @return the {@link TryOutManager} bound to {@code ctx}'s project, or {@code null} if {@code ctx}
      *         is {@code null} — the caller should then surface {@link #tryOutUnavailableMessage()}
      */
@@ -505,15 +403,15 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             return null;
         }
         synchronized (tryOutBindLock) {
-            // Same project-root comparison as every other ownership check (shutDownTryoutServer,
-            // TryOutHandler): a raw equals would read two spellings of one folder as two projects.
+            // Same project-root comparison as every other ownership check: a raw equals would read
+            // two spellings of one folder as two projects.
             if (tryOutManager != null
                     && WorkspaceManager.isSameProjectPath(ctx.getProjectUri(), tryOutManager.getProjectUri())) {
                 return tryOutManager;
             }
             if (tryOutManager != null) {
-                // Take the shared server over from the project that currently holds it. shutdown() blocks
-                // until the MI port is actually free, so the manager created below can bind it right away.
+                // Take the shared server over from the project that currently holds it; shutdown() blocks
+                // until the MI port is free, so the manager created below can bind it right away.
                 log.log(Level.INFO, String.format(
                         "Stopping the try-out server of project '%s' to start one for project '%s'.",
                         tryOutManager.getProjectUri(), ctx.getProjectUri()));
@@ -527,8 +425,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Explains why {@link #bindTryOutManager} declined. Its only remaining cause is an unresolvable
-     * project — another project holding the shared server is taken over rather than refused.
+     * Explains why {@link #bindTryOutManager} declined, which now only happens for an unresolvable project.
      */
     private String tryOutUnavailableMessage() {
         return "This request does not identify an open MI project, so no try-out server could be "
@@ -608,11 +505,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             // src/main/wso2mi/artifacts — so the literal "temp" fallback would silently drop them.
             // Treat a blank fileName as missing, otherwise an unusable URI would skip those checks.
             //
-            // TODO(unrouted-request): with a blank fileName this request identifies no project, so the
-            // diagnostics participants resolve no ProjectContext and validate without connector or
-            // dependent-artifact knowledge. That is correct-but-degraded rather than wrong; the fix is
-            // for the agent/copilot caller to send an explicit projectUri, since it always knows which
-            // project it is generating for. Until then, prefer sending fileName.
+            // TODO(unrouted-request): a blank fileName resolves no ProjectContext, so validation runs
+            // degraded without connector/dependent-artifact knowledge until the agent/copilot caller
+            // sends an explicit projectUri (or, meanwhile, fileName).
             String uri = StringUtils.isBlank(param.getFileName()) ? "temp" : param.getFileName();
             // Opt-out (default off) for cross-file reference checks: the agent validates a file
             // before its referenced siblings are written, so those checks would fire spuriously.
@@ -663,27 +558,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * Lists the artifacts of one project — its own plus those its {@code .car} dependencies
-     * contribute — for the key dropdowns in the property panels.
-     *
-     * <p>Routing must land on the requesting project's {@link ProjectContext}, because the dependent
-     * artifacts live in that context's {@code ResourceFinder} and nowhere else. Both the explicit
-     * {@code projectUri} and the originating document are honoured so a client that supplies either
-     * one is routed correctly; a request identifying no project returns an empty
-     * {@link ResourceResponse} rather than another project's artifact list.
-     *
-     * <p>{@code customProjectUri} is the debug-flow override: the debugger asks for a project that
-     * may not be open in the workspace at all, so it names the directory to scan directly. It is a
-     * project root path, hence {@link #resolveByProjectUri} rather than {@link #resolveByUri}. A
-     * debug session's project list comes from {@code launch.json} ({@code projectList}) and only
-     * defaults to the open workspace folders, so a named project genuinely need not be registered —
-     * when it isn't, this falls back to {@link #unregisteredProjectResourceFinder}, which scans the
-     * directory and loads its dependencies, so the debugger sees the same two sources a registered
-     * project's finder draws on.
-     *
-     * <p>Except for that override and the legacy {@code projectPath} field, the scanned directory is
-     * taken from the resolved context, so the directory walked and the dependency map merged into the
-     * result always belong to the same project.
+     * Lists one project's artifacts (its own plus its {@code .car} dependencies) for the property-panel dropdowns, routed via the request's {@code projectUri}/document or, for the debug flow's {@code customProjectUri}, via {@link #unregisteredProjectResourceFinder} when that project isn't open in the workspace.
      */
     @Override
     public CompletableFuture<ResourceResponse> availableResources(ResourceParam param) {
@@ -709,36 +584,7 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     }
 
     /**
-     * A stand-in {@link AbstractResourceFinder} for a project root that no {@link ProjectContext}
-     * owns, so the debug flow can list a project that is not open in the workspace — its own
-     * artifacts and those its {@code .car} dependencies contribute, the same two sources a
-     * registered project's finder draws on.
-     *
-     * <p>The dependency half comes from {@link AbstractResourceFinder#loadDependentResources}, the
-     * call {@link ProjectContext#initProject} makes for a registered project and which never ran for
-     * this directory. It reads the already-extracted dependencies under
-     * {@code ~/.wso2-mi/integration-project-dependencies} — it downloads nothing, so an unregistered
-     * project gets whatever a previous session left on disk and an empty map otherwise. That
-     * directory is keyed by a hash of the project path, so the dependencies resolve only when the
-     * debugger spells the root the same way the session that downloaded them did; the load's status
-     * is logged to make a miss visible rather than silent.
-     *
-     * <p>Failure to load dependencies is not fatal: as in {@code initProject}, the finder is still
-     * returned so the project's own artifacts are listed rather than nothing.
-     *
-     * <p>Cached per project root, and deliberately so. {@code loadDependentResources} walks and parses
-     * every dependency and, on an artifact conflict, <em>deletes</em> the offending extracted
-     * dependency and its downloaded archive. Neither belongs on a per-request path: this request is a
-     * read that populates a dropdown, the debugger fans it out across its whole project list at once,
-     * and repeating the load would repeat the deletion. Caching gives an unregistered project the same
-     * once-per-server-lifetime dependency load a registered one gets at init — including the same
-     * staleness, since a registered context reloads only when the client asks. The project's own
-     * artifacts are rescanned on every call either way; only the dependency map is held.
-     *
-     * <p>The finder carries an empty {@link ConnectorHolder} rather than one loaded from the project's
-     * connector archives, which is only used to spot connectors a dependency duplicates. Its emptiness
-     * can therefore let a conflict go unreported, never invent one — and reporting conflicts is the
-     * job of the {@code loadDependentResources} RPC, not of this listing.
+     * A stand-in {@link AbstractResourceFinder}, cached per project root, that lets the debug flow list a project not open in the workspace by scanning its directory and loading its already-extracted {@code .car} dependencies from disk (downloading nothing, and never deleting on conflict, unlike the live {@code loadDependentResources} RPC).
      *
      * @param projectPath the project root to scan
      * @return a finder for {@code projectPath}, or {@code null} if it is blank
@@ -749,16 +595,12 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             return null;
         }
         // Keyed by the normalized root so two spellings of one project share a finder, but built from
-        // the path as the debugger named it: loadDependentResources locates the dependency directory
-        // by hashing this string, and re-spelling it would hash to a directory that does not exist.
+        // the path as named, since re-spelling it would hash to a nonexistent dependency directory.
         return unregisteredProjectFinders.computeIfAbsent(WorkspaceManager.normalizeProjectPath(projectPath),
                 key -> buildUnregisteredProjectResourceFinder(projectPath));
     }
 
-    /**
-     * Builds the finder {@link #unregisteredProjectResourceFinder} caches. Separate so the work the
-     * cache is there to do once reads as one unit, rather than as a lambda inside the lookup.
-     */
+    /** Builds the finder {@link #unregisteredProjectResourceFinder} caches, kept separate so the one-time work reads as a unit rather than a lambda inside the lookup. */
     private AbstractResourceFinder buildUnregisteredProjectResourceFinder(String projectPath) {
 
         log.log(Level.INFO, "Building a ResourceFinder for a project the debug flow named but that is "
@@ -1126,11 +968,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<InboundConnectorResponse> getInboundConnectorSchema(InboundConnectorParam param) {
 
-        // documentPath is a filesystem path — the handler below does new File(param.documentPath) —
-        // but it is only sent when an *existing* inbound endpoint is being edited. Creating a new
-        // event integration sends connectorId alone, so routing on documentPath alone resolved every
-        // "pick a connector" click to no project: the handler returned null and the form silently
-        // stayed on the connector list. Fall back to the project the caller named.
+        // documentPath is only sent when editing an existing inbound endpoint (a new one sends only
+        // connectorId), so routing on it alone resolved every "pick a connector" click to no project;
+        // fall back to the project the caller named.
         ProjectContext ctx = resolveByPathOrProjectUri(param.documentPath, param);
         return CompletableFuture.supplyAsync(() -> {
             if (ctx == null) {
@@ -1190,10 +1030,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> response);
     }
 
-    // The DB-driver group below mutates a project's driver classpath, so the project it names must be
-    // resolved before it is used, never passed through raw: DynamicClassLoader keys its registry by
-    // whatever string it is handed, so an unresolvable projectUri would silently create and mutate a
-    // phantom entry instead of failing. Resolving first turns that into an honest false.
+    // The DB-driver group below resolves the project before mutating its driver classpath, since an
+    // unresolved raw projectUri would otherwise silently create/mutate a phantom classloader entry.
     @Override
     public CompletableFuture<Boolean> addDBDriver(ModifyDriverRequestParams requestParams) {
         ProjectContext ctx = resolveByProjectUri(requestParams);
@@ -1309,21 +1147,13 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<Boolean> shutDownTryoutServer(ShutdownTryoutRequest request) {
 
-        // Only tear down the shared TryOutManager if the request proves it owns the currently bound
-        // server - otherwise an unrelated project's shutdown call (e.g. before its own build/run) would
-        // kill another project's active try-out session. A request that carries no project cannot prove
-        // that ownership, so it is declined instead of being allowed to stop whichever project happens
-        // to hold the server.
-        //
-        // The ownership check compares project roots through WorkspaceManager.isSameProjectPath rather
-        // than String.equals: the client sends WorkspaceFolder.uri.fsPath while the manager holds the
-        // context's own projectUri, and a difference in format or drive-letter case between two spellings
-        // of the same folder would otherwise read as "a different project" — declining the shutdown and
-        // leaking the MI server process. It deliberately does not require the project to still be
-        // registered, so a folder removed from the workspace can still shut its own try-out down.
+        // Only tears down the shared TryOutManager when the request's project root (matched via
+        // WorkspaceManager.isSameProjectPath, not String.equals, to tolerate spelling differences and
+        // without requiring the project to still be registered) matches the one currently bound, so an
+        // unrelated or unproven shutdown call can't kill another project's try-out session or leak the server.
         return CompletableFuture.supplyAsync(() -> {
-            // Same lock as bindTryOutManager: without it this can shut down a manager another project
-            // has just bound, or read a half-published one.
+            // Same lock as bindTryOutManager, to avoid shutting down a manager another project just
+            // bound or reading a half-published one.
             synchronized (tryOutBindLock) {
                 if (tryOutManager == null) {
                     return true;
@@ -1347,9 +1177,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<MediatorTryoutInfo> mediatorInputOutputSchema(MediatorTryoutRequest request) {
 
-        // Schema generation here is a lightweight, stateless read (no shared MI server involved), so it
-        // is served directly from the resolved project rather than going through the single rebindable
-        // TryOutManager — it should never be blocked by another project's active try-out session.
+        // Schema generation is a lightweight, stateless read, so it's served directly from the resolved
+        // project rather than the single rebindable TryOutManager, and never blocked by another project's try-out.
         ProjectContext ctx = resolveByPathOrNamedProject(request.getFile(), request);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? new ServerLessTryoutHandler(ctx.getProjectUri(), ctx.getConnectorHolder()).handle(request)
@@ -1377,9 +1206,8 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return CompletableFuture.supplyAsync(() -> response);
     }
 
-    // Unrouted by design: signatureHelp is served from a static, project-independent function
-    // catalogue, and ExpressionCompletionsProvider resolves the owning project itself — it is also
-    // reached from ContentModelCompletionParticipant, which has no ProjectContext to pass.
+    // Unrouted by design: signatureHelp uses a static, project-independent catalogue, and
+    // ExpressionCompletionsProvider (also reached with no ProjectContext to pass) resolves its own project.
     @Override
     public CompletableFuture<ICompletionResponse> expressionCompletion(ExpressionParam param) {
 
@@ -1645,13 +1473,9 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<DriverMavenCoordinatesResponse> getDriverMavenCoordinates(
             DriverMavenCoordinatesRequest request){
-        // filePath is the JDBC driver's path on disk, taken from a connection parameter — and it is
-        // blank whenever the driver has not been downloaded yet, which is the main reason to ask for
-        // the coordinates at all (ConnectorDownloadManager then reads them from the connector's
-        // descriptor.yml instead). Routing on it alone therefore resolved the first-use case, where a
-        // connection carries neither a driverPath nor stored coordinates, to no project: the handler
-        // returned null and the caller's whole connection-validation step failed, leaving the DB
-        // operation form's table and query fields empty. Fall back to the project the caller named.
+        // filePath is blank on first use, before the driver is downloaded, so routing on it alone
+        // resolved that case to no project and broke the DB operation form's validation; fall back to
+        // the project the caller named.
         ProjectContext ctx = resolveByPathOrProjectUri(request.getFilePath(), request);
         return CompletableFuture.supplyAsync(() -> ctx != null ? ConnectorDownloadManager.getDriverMavenCoordinates(
                 request.getFilePath(),

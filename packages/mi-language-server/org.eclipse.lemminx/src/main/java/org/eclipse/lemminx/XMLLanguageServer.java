@@ -174,9 +174,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	}
 
 	/**
-	 * Normalizes a plain filesystem path (e.g. the deprecated {@code InitializeParams.rootPath}) into
-	 * the same {@code file:///...} URI shape LSP folder/document URIs use, with no trailing slash — so
-	 * it can be used as a {@link WorkspaceManager} registry key and matched against real document URIs.
+	 * Normalizes a plain filesystem path into the same {@code file:///...} URI shape used by document URIs, with no trailing slash, so it can serve as a {@link WorkspaceManager} registry key.
 	 */
 	private static String toRegistryUri(String path) {
 		String uri = Path.of(path).toUri().toString();
@@ -187,13 +185,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	}
 
 	/**
-	 * Builds and registers a {@link ProjectContext} in the {@link WorkspaceManager} for every
-	 * workspace folder that is an MI project. Falls back to {@code params.getRootPath()} for
-	 * older, single-root-only clients that don't send {@code workspaceFolders}.
-	 *
-	 * <p>No project is singled out as a default. Requests that cannot be attributed to a registered
-	 * project are answered with an empty result rather than by an arbitrary one — see the
-	 * {@code SynapseLanguageService} class javadoc for why.
+	 * Registers a {@link ProjectContext} for every MI-project workspace folder, falling back to {@code params.getRootPath()} for older single-root clients, with no project treated as a default for unattributable requests.
 	 */
 	private void registerWorkspaceProjects(InitializeParams params) {
 		String miServerPath = synapseLanguageService.getMiServerPath();
@@ -208,14 +200,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	}
 
 	/**
-	 * Initializes and registers every workspace folder's project, several folders at a time.
-	 *
-	 * <p>{@link ProjectContext#initProject} is mostly disk I/O, so run one folder after another its
-	 * cost is the sum over every open project, paid before {@code initialize} can answer the client.
-	 *
-	 * <p>Still waits for all of them before returning: most {@link ProjectContext} getters throw
-	 * until {@code initProject} completes, so nothing downstream handles a registered-but-unready
-	 * project.
+	 * Initializes and registers every workspace folder's project concurrently (since it's mostly disk I/O), waiting for all of them to finish since most {@link ProjectContext} getters throw until {@code initProject} completes.
 	 *
 	 * @param folders      the workspace folders the client sent
 	 * @param miServerPath the local MI server installation path
@@ -256,26 +241,20 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	}
 
 	/**
-	 * Creates and registers a single {@link ProjectContext}, skipping folders that aren't MI
-	 * projects (no {@code pom.xml}/{@code src}, and not a legacy multi-module root).
+	 * Creates and registers a single {@link ProjectContext}, skipping folders that aren't MI projects.
 	 *
-	 * @param registryUri    the URI to key this project by in {@link WorkspaceManager} (matches the
-	 *                       format of document URIs, for longest-prefix resolution)
+	 * @param registryUri    the URI to key this project by in {@link WorkspaceManager}
 	 * @param projectPath    the absolute filesystem path of the project root
 	 * @param miServerPath   the local MI server installation path
-	 * @param synapseXsdPath the schema directory already registered for this project's document
-	 *                       associations (may be {@code null}, in which case the context extracts its
-	 *                       own copy)
-	 * @return the created {@link ProjectContext}, or {@code null} if {@code projectPath} isn't an MI
-	 *         project. A context whose initialization failed part-way is still registered and
-	 *         returned, so the project stays visible to the server — but it is not usable: check
-	 *         {@link ProjectContext#isInitialized()} before touching its service handlers.
+	 * @param synapseXsdPath the schema directory already registered for this project (may be {@code null})
+	 * @return the created {@link ProjectContext}, or {@code null} if not an MI project; a context that
+	 *         failed to initialize is still registered and returned, so check
+	 *         {@link ProjectContext#isInitialized()} before use
 	 */
 	private ProjectContext addProjectContext(String registryUri, String projectPath, String miServerPath,
 			Path synapseXsdPath) {
 		boolean isLegacyProject = Utils.isLegacyProject(projectPath);
-		// A legacy multi-module root keeps its sources in submodules, so it never satisfies
-		// isValidProject's pom.xml-plus-src check while still being a project the server must serve.
+		// A legacy multi-module root keeps its sources in submodules, so it never satisfies isValidProject's pom.xml-plus-src check even though the server must still serve it.
 		if (!isLegacyProject && !Utils.isValidProject(projectPath)) {
 			return null;
 		}
@@ -287,20 +266,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 			LOGGER.log(Level.SEVERE, "Failed to create ProjectContext for: " + projectPath, e);
 			return null;
 		}
-		// Registered before initializing, so that one failing init step (an unreadable connector zip, an
-		// XSD extraction error) leaves the project known-but-broken rather than absent. An unregistered
-		// root makes every lookup return null, which silently empties its syntax tree, diagnostics and
-		// tryout with nothing in the log tying that back to the failure.
-		//
-		// Registered is NOT the same as usable, and callers must not treat it as such. Until
-		// initProject sets ProjectContext.initialized — which it does only on the success path, as its
-		// very last statement — only the identity getters and the two connector holders answer;
-		// every service-handler getter throws IllegalStateException. So a context resolved from the
-		// registry can be in any of three states: ready, still initializing on another thread (the
-		// didChangeWorkspaceFolders path below registers on the notification thread while request
-		// threads are being served), or permanently failed. Anything that resolves a context and then
-		// touches a service handler somewhere an exception would be swallowed or would abandon
-		// unrelated work should gate on ProjectContext.isInitialized() and skip that project.
+		// Register before initializing so a failing init step leaves the project known-but-broken rather than unregistered (which would silently null out every lookup); registered does not mean usable, so callers must still check ProjectContext.isInitialized() before touching a service handler.
 		workspaceManager.addProject(registryUri, context);
 		try {
 			context.initProject(miServerPath, languageClient, synapseXsdPath);
@@ -315,9 +281,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	}
 
 	/**
-	 * Builds and registers a {@link ProjectContext} for a workspace folder added after
-	 * {@code initialize} (e.g. via {@code workspace/didChangeWorkspaceFolders}). No-op if
-	 * {@code projectPath} isn't an MI project.
+	 * Builds and registers a {@link ProjectContext} for a workspace folder added after {@code initialize} (e.g. via {@code workspace/didChangeWorkspaceFolders}), doing nothing if it isn't an MI project.
 	 *
 	 * @param registryUri    the folder URI to key this project by in {@link WorkspaceManager}
 	 * @param projectPath    the absolute filesystem path of the project root
@@ -329,8 +293,7 @@ public class XMLLanguageServer implements ProcessLanguageServer, XMLLanguageServ
 	}
 
 	/**
-	 * Removes the {@link ProjectContext} registered for a workspace folder removed via
-	 * {@code workspace/didChangeWorkspaceFolders}. No-op if none is registered for that URI.
+	 * Removes the {@link ProjectContext} registered for a workspace folder removed via {@code workspace/didChangeWorkspaceFolders}, doing nothing if none is registered for that URI.
 	 *
 	 * @param registryUri the folder URI the context was registered under
 	 */

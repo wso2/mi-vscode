@@ -892,10 +892,7 @@ public class Utils {
     }
 
     /**
-     * Loads the UI schemas in {@code resourceFolderName}, reading the jar only the first time.
-     *
-     * <p>Schemas are copied per caller: {@link JsonObject} is mutable and some are returned
-     * directly as RPC responses, so one project must not be able to alter what another reads.
+     * Loads and caches the UI schemas in {@code resourceFolderName} from the jar, giving each caller its own deep copy so one project cannot mutate what another reads.
      *
      * @param resourceFolderName the jar resource folder to read
      * @return this caller's own map of schema name to schema
@@ -1151,10 +1148,7 @@ public class Utils {
     }
 
     /**
-     * Loads the mustache templates in {@code resourceFolderName}, reading the jar only the first
-     * time.
-     *
-     * <p>Compiled templates are shared, since callers only execute them; the map is per-caller.
+     * Loads and caches the compiled mustache templates in {@code resourceFolderName} from the jar, reading the jar only once and returning each caller its own map.
      *
      * @param resourceFolderName the jar resource folder to read
      * @return this caller's own map of template name to compiled template
@@ -1325,10 +1319,7 @@ public class Utils {
 
         if (settings != null && settings.isJsonObject() && settings.has(Constant.XML)) {
             JsonObject xmlObj = settings.getAsJsonObject(Constant.XML);
-            // Merge with, rather than replace, the associations the client forwarded from the user's
-            // xml.fileAssociations. Theirs stay first so a more specific association they configured
-            // still wins over the project-wide synapse pattern appended here, and re-running this on a
-            // settings refresh does not accumulate duplicates of our own entries.
+            // Merge with (not replace) the client-forwarded xml.fileAssociations, keeping theirs first so a user's more specific association still wins, and skipping entries we've already added so repeated calls don't create duplicates.
             JsonArray mergedAssociations = new JsonArray();
             JsonElement existingAssociations = xmlObj.get(FILE_ASSOCIATIONS);
             if (existingAssociations != null && existingAssociations.isJsonArray()) {
@@ -1342,10 +1333,7 @@ public class Utils {
                 }
             }
             xmlObj.add(FILE_ASSOCIATIONS, mergedAssociations);
-            // Unlike fileAssociations, this entry is not user configuration: the extension overwrites
-            // xml.catalogs with its own synapse catalog before sending the settings. A single shared
-            // catalog would apply one project's XSD to every open project, which is exactly what the
-            // per-project associations above replace, so drop it.
+            // Drop xml.catalogs, since it's not user configuration but a single shared catalog that the per-project fileAssociations above already replace.
             if (xmlObj.has(Constant.CATALOGS)) {
                 xmlObj.remove(Constant.CATALOGS);
             }

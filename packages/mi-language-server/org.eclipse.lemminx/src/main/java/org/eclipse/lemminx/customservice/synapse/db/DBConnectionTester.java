@@ -88,18 +88,13 @@ public class DBConnectionTester {
         try {
             URLClassLoader urlClassLoader = DynamicClassLoader.getClassLoader(projectUri);
 
-            // Connect through the driver instance loaded from this project's classloader instead of going
-            // via DriverManager. DriverManager's registry is process-global and consulted in registration
-            // order, so with several projects open the first project to register a driver for a given URL
-            // scheme would service every other project's connections too - silently defeating the
-            // per-project isolation DynamicClassLoader exists to provide.
+            // Connect via the driver instance directly instead of the process-global DriverManager, which would let one project's registered driver service every other project's connections.
             Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
                     .newInstance();
             Properties props = buildConnectionProperties(connectionUrl, username, password);
             connection = driver.connect(connectionUrl, props);
             if (connection == null) {
-                // Driver.connect returns null rather than throwing when it does not recognise the URL,
-                // where DriverManager used to raise "No suitable driver found". Log so it is not silent.
+                // Log this since Driver.connect returns null instead of throwing when it doesn't recognise the URL.
                 LOGGER.log(Level.SEVERE, "Driver " + className + " did not accept the connection URL.");
             }
 
@@ -121,9 +116,7 @@ public class DBConnectionTester {
             LOGGER.log(Level.INFO,
                     "Get connection with Class name: " + className + "  and Driver path : " + driverPath);
 
-            // The call above already rebuilt this project's shared loader with the jar in it, so use
-            // that one. Building a second loader for the same jar here left an extra, never-closed
-            // URLClassLoader behind on every connection test.
+            // Reuse the shared loader the call above already rebuilt with this jar, rather than leaking an extra URLClassLoader.
             DynamicClassLoader.updateJarInClassLoader(projectUri, new File(driverPath), true);
             URLClassLoader urlClassLoader = DynamicClassLoader.getClassLoader(projectUri);
             Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
@@ -140,12 +133,7 @@ public class DBConnectionTester {
     }
 
     /**
-     * Builds the properties passed to {@link Driver#connect}.
-     * <p>
-     * Mirrors what {@code DriverManager.getConnection(url, user, password)} used to do for us: a null
-     * credential is left out of the properties rather than passed through, since {@link Properties}
-     * rejects null values. Derby can connect without credentials, so empty ones are omitted for Derby
-     * URLs as well.
+     * Builds the properties passed to {@link Driver#connect}, omitting null credentials and, for Derby URLs, empty ones.
      *
      * @param connectionUrl Connection URL
      * @param username      Username, may be null or empty

@@ -615,10 +615,7 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
         return config.get<string>(SELECTED_SERVER_PATH) || "";
     }
 
-    // Errors are turned into an error response rather than left to reject. A try-out request that
-    // rejects here would never reach the panel: the webview awaits this call to clear its "Running..."
-    // state, so an unanswered request leaves the Run button spinning with no way back short of
-    // reopening the panel.
+    // Catch and return errors as a response rather than rejecting, since a rejection here would leave the webview's Run button stuck spinning until the panel is reopened.
     async tryOutMediator(params: MediatorTryOutRequest): Promise<MediatorTryOutResponse> {
         try {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
@@ -4454,10 +4451,7 @@ ${endpointAttributes}
                 registryResources: responses.flatMap(r => r?.registryResources ?? [])
             };
         } else {
-            // Webview callers (e.g. the Keylookup dropdowns) don't know their project, so stamp this
-            // manager's project on the request. Without it the language server has no project to route
-            // to and answers from the default (first) workspace folder, which in a multi-root
-            // workspace omits this project's .car dependency artifacts.
+            // Stamp this manager's project on the request since webview callers (e.g. Keylookup dropdowns) don't know their project and would otherwise fall back to the default workspace folder, missing this project's .car dependency artifacts.
             return (await MILanguageClient.getInstance(this.projectUri)).getAvailableResources({
                 ...params,
                 projectUri: params.projectUri ?? this.projectUri

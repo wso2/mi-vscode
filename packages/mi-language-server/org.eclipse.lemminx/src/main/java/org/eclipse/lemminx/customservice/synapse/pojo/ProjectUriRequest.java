@@ -15,10 +15,7 @@
 package org.eclipse.lemminx.customservice.synapse.pojo;
 
 /**
- * Minimal request carrying only the project root URI, for {@code synapse/*} RPCs that have no
- * document URI to resolve a project from. Optional and backward-compatible: a null/blank/unmatched
- * {@code projectUri} resolves to no project, and the RPC returns an empty/failed result — it is never
- * silently served by a different project.
+ * Minimal request carrying only the project root URI for {@code synapse/*} RPCs with no document URI to resolve a project from, where a null/blank/unmatched {@code projectUri} resolves to no project rather than being silently served by a different one.
  */
 public class ProjectUriRequest extends AbstractProjectRequest {
 }

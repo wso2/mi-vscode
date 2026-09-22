@@ -174,9 +174,7 @@ public class QueryGeneratorTest {
         assertTrue(result);
     }
 
-    /** Project root for the "add" temp driver dir — kept separate from {@link #projectBPath()} so the
-     *  registry-keyed {@link org.eclipse.lemminx.customservice.synapse.dataService.DynamicClassLoader}
-     *  doesn't let one test's driver load mask another's (the bug item 3 fixes). */
+    /** Project root for the "add" temp driver dir, kept separate from {@link #projectBPath()} so one test's driver load can't mask another's in the registry-keyed {@link org.eclipse.lemminx.customservice.synapse.dataService.DynamicClassLoader}. */
     private String projectAPath() {
         return tempAddSQLDriverFilePath.toAbsolutePath().toString().split("/deployment")[0];
     }

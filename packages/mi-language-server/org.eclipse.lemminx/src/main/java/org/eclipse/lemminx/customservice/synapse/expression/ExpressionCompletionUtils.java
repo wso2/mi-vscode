@@ -76,12 +76,10 @@ public class ExpressionCompletionUtils {
     private static final Map<String, Functions> FUNCTIONS = new HashMap<>();
     private static final List<List<String>> OPERATOR_COMPLETIONS = new ArrayList<>();
 
-    // Test-injection seam only (see setMediatorFactory) - production resolves the finder per-project
-    // from the document URI via getMediatorFactory(String), so no project's data is ever stuck here.
+    // Test-injection seam only; production resolves the finder per-project from the document URI.
     private static MediatorFactoryFinder testMediatorFactory;
 
-    // Immutable, project-invariant fallback (null MI version, empty connector set) for callers with
-    // no resolvable document URI (e.g. tests that exercise this class directly without a running server).
+    // Immutable fallback (null MI version, empty connector set) for callers with no resolvable document URI.
     private static final MediatorFactoryFinder DEFAULT_MEDIATOR_FACTORY =
             new MediatorFactoryFinder(null, null, new ConnectorHolder());
 

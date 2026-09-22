@@ -163,15 +163,9 @@ public class TryOutHandler {
     }
 
     /**
-     * Whether the request belongs to a try-out session other than the one currently paused here.
-     * <p>
-     * This handler holds a single session at a time ({@code currentTryoutID},
-     * {@code currentInvocationInfo}, the registered breakpoints), so a request carrying a different
-     * id - a second panel, or a stale click from a session that has since ended - matches neither
-     * {@link #isCompleteTryOut} nor {@link #isNewTryOut} and would fall through to
-     * {@link #resumeTryOut}, injecting its edited properties into the active session's breakpoint
-     * state. The requested session is rebuilt instead, the same way a session lost to a server
-     * handover is.
+     * Whether the request names a try-out session other than the one this handler currently holds (e.g. a
+     * second panel or a stale click), which would otherwise fall through to {@link #resumeTryOut} and
+     * corrupt the active session, so the requested session is rebuilt instead.
      *
      * @param request the incoming try-out request
      * @return true if the request names a session this handler does not currently hold
@@ -256,20 +250,9 @@ public class TryOutHandler {
     }
 
     /**
-     * Serves a "Run" click whose try-out session this handler no longer holds.
-     *
-     * <p>A Try-Out panel keeps the {@code tryoutId} it was loaded with for as long as it stays open,
-     * but the session behind that id does not survive the single shared MI server changing hands:
-     * {@code bindTryOutManager} builds a brand new {@link TryOutHandler} for whichever project asks
-     * next, and another one when the server comes back. The returning click then arrives carrying both
-     * a {@code tryoutId} and a {@code mediatorInfo} at a handler that has neither a deployed CAPP nor a
-     * {@code currentInvocationInfo}, which is exactly the shape {@link #isCompleteTryOut} matches — so
-     * it went to {@link #handleIsolatedTryOut} with {@code useSameCAPP}, the one path that skips
-     * deployment and dereferences {@code currentInvocationInfo} straight away.
-     *
-     * <p>Rebuild the state the panel already believes in instead: deploy and run up to the mediator the
-     * way the initial load did, then resume through it with the properties the user edited, so the
-     * click returns the same input/output pair it would have on a session that was never lost.
+     * Rebuilds a try-out session that a "Run" click still references by its old {@code tryoutId} but that
+     * this handler lost when the shared MI server changed hands, by replaying the deploy-and-run-to-breakpoint
+     * step before resuming with the panel's edited properties.
      */
     private MediatorTryoutInfo handleLostSession(MediatorTryoutRequest request) {
 
@@ -724,10 +707,8 @@ public class TryOutHandler {
             }
             boolean wasStarted = server.isStarted();
             boolean stopped = server.shutDown();
-            // A caller that shuts this handler down to start a server for another project needs the port
-            // to be free by the time this returns, not merely the process to have been signalled. Only
-            // wait when this handler owned the server: otherwise a port held by an unrelated server would
-            // turn every shutdown into a full timeout.
+            // Wait for the port to actually free up only when this handler owned the server, since waiting on
+            // a port held by an unrelated server would turn every shutdown into a full timeout.
             return wasStarted && stopped ? server.awaitServerStop(SERVER_SHUTDOWN_TIMEOUT) : stopped;
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Error while closing the clients", e);
@@ -736,18 +717,10 @@ public class TryOutHandler {
     }
 
     /**
-     * Hands the single, shared MI server over to this project when it currently belongs to another one.
-     *
-     * <p>A server this project already owns is never touched: the in-flight marker its own previous
-     * try-out left behind must not be read as "busy", because marking a live server as not started is
-     * unrecoverable — {@link MIServer#startServer()} is a no-op while the port is in use, so
-     * {@code isStarted} could never return to {@code true} and every later try-out would fail with
-     * {@link TryOutConstants#SERVER_ALREADY_IN_USE_ERROR} until the process was killed by hand.
-     *
-     * <p>A server owned by a different project is always taken over, including while that project's
-     * try-out is still in flight. Refusing instead left the user's only way forward outside the panel
-     * they were working in — and, across two windows sharing the machine, in another VS Code instance
-     * entirely. The interrupted project simply starts its server again on its next try-out.
+     * Hands the single, shared MI server over to this project when it currently belongs to another one: a
+     * server this project already owns is left untouched (marking a live server as not started is
+     * unrecoverable), while a server owned by a different project is always taken over, even mid try-out,
+     * since the interrupted project can simply restart its server on its next try-out.
      */
     private void handleServerRestart(MediatorTryoutRequest request) {
 
@@ -777,8 +750,8 @@ public class TryOutHandler {
                 Thread.sleep(2000);
             }
             if (server.isServerRunning()) {
-                // Bail out instead of blocking this synchronized handler forever. The port is still taken,
-                // so handle() reports SERVER_ALREADY_IN_USE_ERROR and asks the user to stop it.
+                // Bail out instead of blocking this synchronized handler forever, since the port is still taken
+                // and handle() will report SERVER_ALREADY_IN_USE_ERROR to the user.
                 LOGGER.log(Level.WARNING, "The MI server of another project did not stop within the timeout.");
                 return;
             }
@@ -790,9 +763,8 @@ public class TryOutHandler {
     }
 
     /**
-     * Whether the try-out history lock file carries a marker young enough to mean a try-out is running
-     * right now. An absent or unparsable marker counts as expired: a corrupt lock file must not block
-     * try-outs indefinitely.
+     * Whether the try-out history lock file carries a marker young enough to mean a try-out is running right
+     * now, treating an absent or unparsable marker as expired so a corrupt lock file can't block try-outs indefinitely.
      */
     private boolean isTryOutInFlight() {
 

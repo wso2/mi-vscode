@@ -17,12 +17,7 @@ package org.eclipse.lemminx.customservice.synapse.inbound.conector;
 import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
 /**
- * Parameters of {@code synapse/fetchInboundConnectors}.
- *
- * <p>Carries the project whose inbound-endpoint directories are rescanned (from
- * {@link AbstractProjectRequest}) and, optionally, the single zip whose import outcome the caller
- * cares about. With a null {@code zipFileName} the request is a full rescan and the returned status
- * is the aggregate one across every zip in the project.
+ * Parameters of {@code synapse/fetchInboundConnectors}: the project to rescan and an optional single zip name (null means a full rescan with an aggregate status).
  */
 public class FetchInboundConnectorsParams extends AbstractProjectRequest {
 

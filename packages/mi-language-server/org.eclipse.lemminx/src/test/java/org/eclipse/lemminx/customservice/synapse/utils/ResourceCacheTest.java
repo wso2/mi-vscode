@@ -36,11 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 /**
- * Covers how {@link Utils} hands out the UI schemas and mustache templates it caches, which is what
- * makes concurrent project initialization safe: schemas are copied per caller, templates shared.
- *
- * <p>The caches are seeded directly rather than loaded from the jar, since resources resolve to a
- * {@code file:} URL under test and the loaders cannot read a folder that way.
+ * Verifies {@link Utils} hands out UI schemas copied per caller and mustache templates shared, with caches seeded directly here since test resources resolve to {@code file:} URLs the loaders can't read as a folder.
  */
 public class ResourceCacheTest {
 

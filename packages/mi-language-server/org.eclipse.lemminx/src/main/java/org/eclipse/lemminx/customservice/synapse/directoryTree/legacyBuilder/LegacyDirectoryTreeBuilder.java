@@ -36,10 +36,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Builds the legacy (state-machine-based) project directory tree for a single workspace
- * folder. Instances are created per invocation (see {@link #buildDirectoryTree}) so that
- * {@link #projectPath} is scoped to that one call and cannot leak between concurrent
- * requests for different projects in a multi-root workspace.
+ * Builds the legacy project directory tree for a single workspace folder, creating one instance per invocation so its state cannot leak between concurrent requests.
  */
 public class LegacyDirectoryTreeBuilder {
 

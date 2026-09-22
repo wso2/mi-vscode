@@ -100,8 +100,7 @@ public class DynamicClassLoaderTest {
         URLClassLoader whileMissing = DynamicClassLoader.getClassLoader(project);
         assertNotSame(seeded, whileMissing, "A loader must not be reused across a jar disappearing from disk");
 
-        // The datasource wizard copies the jar back to the same path and re-registers it. The key is
-        // already known, so the add itself is a no-op - the rebuild has to come from the restored file.
+        // The datasource wizard copies the jar back and re-registers it, but the key is already known so the rebuild has to come from the restored file, not the no-op add.
         createEmptyJar(libs.resolve("driver.jar"));
         DynamicClassLoader.updateJarInClassLoader(project, jar, true);
         URLClassLoader afterRestore = DynamicClassLoader.getClassLoader(project);

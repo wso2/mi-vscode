@@ -110,9 +110,7 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 		if (params.getEvent().getAdded() != null) {
 			for (WorkspaceFolder folder : params.getEvent().getAdded()) {
 				try {
-					// copyXSDFiles() reads the project's pom.xml to pick the MI-version schema set, so it
-					// needs the filesystem path — handing it the file:// URI makes the pom lookup fail and
-					// silently falls back to DEFAULT_MI_VERSION's XSDs (the initialize path passes a path too).
+					// copyXSDFiles() needs a filesystem path rather than a file:// URI to read the project's pom.xml and resolve the correct MI-version schema set.
 					String projectPath = Utils.getAbsolutePath(folder.getUri());
 					Path schemaDir = Utils.copyXSDFiles(projectPath);
 					xmlLanguageServer.addWorkspaceSchema(folder.getUri(), schemaDir);
@@ -139,19 +137,11 @@ public class XMLWorkspaceService implements WorkspaceService, IXMLCommandService
 				ProjectContext context = xmlLanguageServer
 						.getWorkspaceManager().getProjectForDocument(change.getUri());
 				if (context == null) {
-					// TODO(unrouted-request): a watched .zip that belongs to no registered MI project.
-					// This previously reloaded the *default* project's inbound connectors, refreshing a
-					// project with nothing to do with the changed file. Ignoring it is correct for the
-					// known cause (a zip in a non-MI workspace folder); if a zip inside a real MI
-					// project ever lands here, that project failed to register — which this log surfaces.
+					// TODO(unrouted-request): ignoring an unrouted zip is correct for a non-MI workspace folder, but if this fires for a real MI project it means that project failed to register.
 					log.warning("Watched inbound connector zip belongs to no registered project, ignoring: "
 							+ change.getUri());
 				} else if (!context.isInitialized()) {
-					// Registered but not ready — see XMLLanguageServer.addProjectContext. Either
-					// initProject is still running on another thread, in which case it loads this
-					// project's inbound connectors itself and will pick the zip up anyway, or it failed,
-					// in which case updateInboundConnectors would only throw IllegalStateException.
-					// Nothing here catches that, and it would abandon the remaining events in this batch.
+					// The project is registered but not yet initialized (see XMLLanguageServer.addProjectContext), so skip it here rather than risk an uncaught IllegalStateException aborting the rest of this batch.
 					log.warning("Watched inbound connector zip belongs to an uninitialized project, ignoring: "
 							+ change.getUri());
 				} else {

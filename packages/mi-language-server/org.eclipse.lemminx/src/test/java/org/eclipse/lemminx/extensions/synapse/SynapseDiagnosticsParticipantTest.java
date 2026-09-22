@@ -1690,9 +1690,7 @@ public class SynapseDiagnosticsParticipantTest {
             System.setProperty("user.home", originalUserHome);
             originalUserHome = null;
         }
-        // Unregister so the next test resolves no project again. The static holder keeps pointing at
-        // this (now empty) manager, which behaves exactly like a fresh process: resolveProjectContext
-        // returns null for every document.
+        // Unregister all projects so the next test again resolves no project, as it would in a fresh process.
         if (liveWorkspaceManager != null) {
             registeredProjectUris.forEach(liveWorkspaceManager::removeProject);
             liveWorkspaceManager = null;
@@ -1702,13 +1700,7 @@ public class SynapseDiagnosticsParticipantTest {
     }
 
     /**
-     * Returns the {@link WorkspaceManager} that {@link SynapseLanguageService#resolveProjectContext}
-     * resolves against, creating it on first use.
-     *
-     * <p>Constructing a {@link SynapseLanguageService} is what publishes a server's
-     * {@code WorkspaceManager} into the static holder that {@code resolveProjectContext} reads. That
-     * is the same line production runs, so these tests exercise the production resolution path rather
-     * than a test-only seam.
+     * Returns the {@link WorkspaceManager} that {@link SynapseLanguageService#resolveProjectContext} resolves against, creating it on first use by constructing a real {@link SynapseLanguageService} exactly as production does.
      */
     private WorkspaceManager liveWorkspaceManager() {
         if (liveWorkspaceManager == null) {
@@ -1720,17 +1712,7 @@ public class SynapseDiagnosticsParticipantTest {
     }
 
     /**
-     * Registers {@code projectPath} as an open project whose dependent (.car) resources have been
-     * loaded, so documents under it resolve their dependencies the way production does — through the
-     * document's own {@link ProjectContext}.
-     *
-     * <p>Only {@link ProjectContext#getResourceFinder()} is overridden, to supply an already-loaded
-     * finder without running {@link ProjectContext#initProject}, which would need an MI server path
-     * and would load connectors and extract XSDs. Everything else is a real {@code ProjectContext},
-     * so the path-based project lookup is genuinely exercised.
-     *
-     * <p>Must be called after {@code user.home} is redirected: the finder reads the extracted
-     * dependency cache from under the home directory.
+     * Registers {@code projectPath} as an open project with its dependent (.car) resources preloaded, via a real {@link ProjectContext} whose resource finder alone is overridden to skip the costly {@code initProject}; must be called after {@code user.home} is redirected since the finder reads the dependency cache from under it.
      */
     private void registerProjectWithDependencies(Path projectPath) {
         NewProjectResourceFinder finder = new NewProjectResourceFinder();
@@ -1825,11 +1807,7 @@ public class SynapseDiagnosticsParticipantTest {
     }
 
     /**
-     * The multi-project guarantee: dependent artifacts are scoped to the project that declares them.
-     * A document in project B must not resolve against project A's {@code .car} dependencies, even
-     * though both projects are open in the same language-server process. This is what the previous
-     * process-wide finder could not express — one global map answered for every project, so B saw A's
-     * artifacts and references that should stay unresolved resolved instead.
+     * Verifies dependent artifacts are scoped per project: a document in one open project must not resolve against another open project's {@code .car} dependencies.
      */
     @Test
     public void testDependencyOfOneProjectDoesNotResolveInAnother(@TempDir Path tempDir) throws Exception {

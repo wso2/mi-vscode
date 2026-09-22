@@ -24,9 +24,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Holds the connectors discovered for a single project. Not a process-wide singleton —
- * one instance is owned per project (see {@code ProjectContext}) so that connector lists
- * from different projects in a multi-root workspace never leak into one another.
+ * Holds the connectors discovered for a single project; one instance is owned per project so connector lists never leak between projects.
  */
 public class ConnectorHolder {
 

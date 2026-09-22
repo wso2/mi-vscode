@@ -696,12 +696,7 @@ public class TryOutUtils {
     }
 
     /**
-     * Hashes a project root the way the try-out history log records it.
-     * <p>
-     * That log names the project currently holding the shared MI server, so the hash has to be
-     * stable across spellings of the same folder: the path is normalized first, otherwise a
-     * {@code file://} URI and an OS path (or two drive-letter cases on Windows) would hash
-     * differently and a project could fail to recognise its own server.
+     * Hashes a project root the way the try-out history log records it, normalizing the path first so different spellings of the same folder (URI vs. OS path, drive-letter case) hash the same.
      *
      * @param projectUri the project root, as a path or a {@code file://} URI
      * @return the hash to compare against {@link #getProjectPathHash()}

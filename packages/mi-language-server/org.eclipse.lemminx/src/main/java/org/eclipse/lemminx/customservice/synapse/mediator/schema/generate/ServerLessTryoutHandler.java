@@ -96,11 +96,7 @@ public class ServerLessTryoutHandler {
     }
 
     /**
-     * Builds the syntax tree for {@code domDocument} as belonging to this handler's project.
-     * <p>
-     * The document is often the working copy under {@link #TEMP_FOLDER} rather than the artifact in
-     * the project, and that path resolves to no project - which would leave every connector mediator
-     * in it parsed as an invalid one, against an empty connector set.
+     * Builds the syntax tree for {@code domDocument} scoped to this handler's project, since the document is often a temp working copy whose path would otherwise resolve to no project and parse every connector mediator as invalid.
      *
      * @param domDocument the document to parse
      * @return the root node, or null if the document has no recognised root element

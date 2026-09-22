@@ -15,18 +15,7 @@
 package org.eclipse.lemminx.customservice.synapse.pojo;
 
 /**
- * Base class for every {@code synapse/*} request that names the project it belongs to.
- *
- * <p>Declaring the field once here — rather than repeating it in each request — keeps a single
- * shape for it, so a caller never has to know which access style a given request class chose, and
- * a future change to how the project URI behaves (renaming the wire field, tightening its type) is
- * made in one place instead of in every request. Cross-cutting behaviour that depends on the value
- * rather than on the field, such as validating or logging an unresolvable URI, belongs in the
- * resolver that consumes {@link HasProjectUri}, not here.
- *
- * <p>The field stays public so requests that are deserialized straight from JSON keep working
- * without accessors, and optional: a null, blank or unmatched {@code projectUri} resolves to no
- * project and the RPC answers with an empty or failed result, never with another project's data.
+ * Base class that declares the public, optional {@code projectUri} field once for every {@code synapse/*} request, so all such requests share one JSON-deserializable shape instead of repeating it.
  */
 public abstract class AbstractProjectRequest implements HasProjectUri {
 

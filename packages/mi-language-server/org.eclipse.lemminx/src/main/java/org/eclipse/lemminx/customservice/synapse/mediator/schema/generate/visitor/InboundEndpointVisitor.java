@@ -94,9 +94,7 @@ public class InboundEndpointVisitor implements SchemaVisitor {
     }
 
     /**
-     * Resolves the {@link InboundConnectorHolder} of the project this visitor is bound to.
-     * <p>
-     * Returns null for an unregistered path rather than falling back to another project's holder.
+     * Resolves the {@link InboundConnectorHolder} of the project this visitor is bound to, returning null for an unregistered path rather than another project's holder.
      *
      * @return the holder to read inbound connector schemas from, or null if the project is unknown
      */

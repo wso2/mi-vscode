@@ -77,10 +77,7 @@ public class MIServer {
     private static final HashMap<String, String> ARTIFACT_FOLDERS_MAP = new HashMap<>();
     private final List<String> deployedCAAPs = new ArrayList<>();
     private final List<String> deployedFiles;
-    // Artifacts whose files have been removed from the MI repository but whose undeployment has not been
-    // confirmed yet. A redeployed artifact keeps its name, so the management API cannot tell a freshly
-    // deployed copy from the one that is still deployed; the only observable transition is "gone, then
-    // back again", which is why the removal has to be confirmed before the replacement is copied in.
+    // Artifacts removed from the MI repository but not yet confirmed undeployed, tracked because a redeployed artifact keeps its name so only a "gone, then back" transition proves the old copy left.
     private final List<ArtifactIdentity> pendingUndeployments = new ArrayList<>();
     private boolean isStarted = false;
     private boolean isStarting = false;
@@ -292,17 +289,7 @@ public class MIServer {
     }
 
     /**
-     * Waits until the artifacts deleted from the MI repository have disappeared from the management API.
-     *
-     * <p>{@link #waitForDeployment()} can only recognise a deployment by artifact name, and every try-out
-     * redeploys the same artifact under the same name after the previous copy has been deleted. Without
-     * confirming the removal first, that check passes against the copy that is still deployed and the
-     * caller goes on to register breakpoints against the <em>previous</em> version of the artifact — whose
-     * mediator positions no longer match the file being tried out, so registration fails with
-     * {@link TryOutConstants#INVALID_ARTIFACT_ERROR}.
-     *
-     * <p>Waiting here rather than after the copy is deliberate: the file is genuinely absent from the
-     * repository for the whole wait, so hot deployment is guaranteed to notice it.
+     * Waits until artifacts deleted from the MI repository disappear from the management API, so the later deployment check does not mistake the still-deployed previous copy for the new one.
      */
     private void waitForUndeployment() {
 
@@ -319,8 +306,7 @@ public class MIServer {
                     deployed = isDeployed(artifact);
                 }
                 if (deployed) {
-                    // Proceed anyway: the deployment wait that follows is still the caller's best signal,
-                    // and blocking the try-out on a server that refuses to undeploy helps nobody.
+                    // Proceed anyway since blocking the try-out on a server that refuses to undeploy helps nobody.
                     LOGGER.log(Level.WARNING, String.format(
                             "The artifact %s was not undeployed within the timeout. The try-out may run against " +
                                     "its previous version.", artifact.name));
@@ -500,9 +486,7 @@ public class MIServer {
     }
 
     /**
-     * Notes down what the files about to be deleted are deployed as, so that {@link #waitForUndeployment()}
-     * can later confirm they are gone. The identities have to be resolved before the deletion, since they
-     * are read from the files themselves.
+     * Notes what the files about to be deleted are deployed as, resolved before deletion since identities are read from the files themselves.
      */
     private void recordPendingUndeployments(List<String> filePaths) {
 
@@ -557,13 +541,7 @@ public class MIServer {
     }
 
     /**
-     * Waits, for at most {@code timeoutMillis}, until nothing is listening on the MI port any more.
-     *
-     * <p>{@link #shutDown()} only joins on the process it launched; on Windows that is the
-     * {@code cmd /c micro-integrator.bat} wrapper, whose Java child is destroyed asynchronously and can
-     * still hold the port for a moment after the wrapper has exited. A caller that intends to start a
-     * replacement server needs the port to be observably free first, since {@link #startServer()} is a
-     * no-op while {@link #isServerRunning()} is {@code true}.
+     * Waits, for at most {@code timeoutMillis}, until nothing is listening on the MI port any more, since on Windows the launched process wrapper can exit before its Java child actually releases the port.
      *
      * @return whether the port was free before the timeout elapsed
      */

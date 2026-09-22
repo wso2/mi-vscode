@@ -195,8 +195,7 @@ public class QueryGenerator {
      *
      * @param driverPath folder path of the DB driver
      * @param className  DB connector class name in the driver
-     * @param projectUri the requesting project's root, so the driver is only visible to that
-     *                   project's classloader
+     * @param projectUri the requesting project's root, scoping driver visibility to its classloader
      * @return Whether the DB driver was successfully added to the class path
      */
     public static boolean addDriverToClassPath(String driverPath, String className, String projectUri) {

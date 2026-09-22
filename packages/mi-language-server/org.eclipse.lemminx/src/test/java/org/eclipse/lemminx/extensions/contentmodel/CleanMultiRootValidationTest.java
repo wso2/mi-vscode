@@ -46,20 +46,7 @@ import org.junit.jupiter.api.Test;
 import com.google.gson.JsonObject;
 
 /**
- * Tests for multi-root workspace validation using the XML engine and
- * file-association mechanism.
- *
- * <p>Test 1 ({@link #multiRootIsolation()}) verifies that a single
- * {@code XMLLanguageService} instance validates two isolated projects
- * (MI 4.3.0 and MI 4.4.0) using per-project XSD file associations.</p>
- *
- * <p>Test 2 ({@link #dynamicConnectorSchemaUpdate()}) verifies that
- * dynamically generated connector schemas are picked up by the validation
- * engine without a server restart.</p>
- *
- * <p>Test 3 ({@link #dynamicWorkspaceFolderAddition()}) verifies that
- * when a user adds a new project to the workspace dynamically, the 
- * language server perfectly detects it and applies standard MI validations.</p>
+ * Tests multi-root workspace validation: isolating two projects, picking up dynamically generated connector schemas without a restart, and detecting a project added to the workspace dynamically.
  */
 public class CleanMultiRootValidationTest {
 
@@ -215,8 +202,7 @@ public class CleanMultiRootValidationTest {
 		Thread.sleep(1500);
 		injectSchemasManually(server, tempDirC.toUri().toString(), "430");
 
-		// 3. Open a file in the newly added project. 
-		// Since it's MI 4.3.0, the <variable> mediator should be flagged as an error.
+		// 3. Open a file in the newly added MI 4.3.0 project, where the <variable> mediator should be flagged as an error.
 		String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
 				+ "<sequence xmlns=\"http://ws.apache.org/ns/synapse\" name=\"testSeq\">\n"
 				+ "    <variable name=\"myVar\" type=\"STRING\" value=\"test\"/>\n"

@@ -29,9 +29,7 @@ public class ResourceParam extends AbstractProjectRequest {
     public String dataServiceName;
 
 	/**
-	 * The document the request originated from. Clients have always sent this field; declaring it
-	 * here lets the handler route to that document's project when {@link #projectUri} is absent,
-	 * instead of silently falling back to the default project context.
+	 * The originating document, used to resolve its project when {@link #projectUri} is absent.
 	 */
 	public TextDocumentIdentifier documentIdentifier;
 

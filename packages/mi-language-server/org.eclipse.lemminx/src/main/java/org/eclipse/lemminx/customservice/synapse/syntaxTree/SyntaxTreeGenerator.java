@@ -102,8 +102,7 @@ public class SyntaxTreeGenerator {
 
     public static STNode buildTree(DOMElement xmlNode) {
 
-        // One scope for the whole tree: every mediator below resolves its project through
-        // SyntaxTreeUtils, which would otherwise repeat the same registry lookup per element.
+        // One scope for the whole tree, so every mediator resolves its project via SyntaxTreeUtils without repeating the registry lookup per element.
         return SyntaxTreeUtils.inParseScope(() -> buildTreeInScope(xmlNode));
     }
 

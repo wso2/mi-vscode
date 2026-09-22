@@ -31,35 +31,14 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Central registry that maps open workspace folder URIs to their isolated
- * {@link ProjectContext} instances.
- *
- * <p>In a Multi-Root Workspace scenario, VS Code may have several MI projects
- * open simultaneously, each with its own MI version, connectors, and handlers.
- * {@code WorkspaceManager} is the single source of truth for resolving:
- * <pre>
- *   document URI  →  correct {@link ProjectContext}
- * </pre>
- *
- * <p>All operations are thread-safe; the underlying map is a
- * {@link ConcurrentHashMap} so concurrent LSP request threads can look up
- * contexts without external synchronization.
- *
- * <p><b>URI contract:</b> All URIs stored in and passed to this class must be
- * in normalized {@code file:///} format (e.g.
- * {@code file:///Users/me/ProjectA}). Callers are responsible for normalizing
- * URIs before invoking any method.
+ * Thread-safe registry mapping open workspace folder URIs, normalized to {@code file:///} format, to their isolated {@link ProjectContext} instances.
  */
 public class WorkspaceManager {
 
     private static final Logger log = Logger.getLogger(WorkspaceManager.class.getName());
 
     /**
-     * Map from project root URI to the {@link ProjectContext} for that project.
-     * Uses {@link ConcurrentHashMap} for lock-free, thread-safe reads.
-     *
-     * <p>Key: normalized project root URI (e.g. {@code file:///Users/me/ProjectA})
-     * <br>Value: the fully initialized {@link ProjectContext} for that root
+     * Map from normalized project root URI to the {@link ProjectContext} for that project, backed by a {@link ConcurrentHashMap} for lock-free reads.
      */
     private final Map<String, ProjectContext> projects = new ConcurrentHashMap<>();
 
@@ -68,11 +47,7 @@ public class WorkspaceManager {
     // -------------------------------------------------------------------------
 
     /**
-     * Registers a new {@link ProjectContext} for the given project root URI.
-     *
-     * <p>If a context is already registered for {@code projectUri}, a warning
-     * is logged and the existing entry is <em>not</em> overwritten. Call
-     * {@link #removeProject} first if you need to replace a context.
+     * Registers a {@link ProjectContext} for the given project root URI, without overwriting an existing entry (call {@link #removeProject} first to replace one).
      *
      * @param projectUri the normalized root URI of the project
      *                   (e.g. {@code "file:///Users/me/ProjectA"})
@@ -95,10 +70,7 @@ public class WorkspaceManager {
     }
 
     /**
-     * Removes and returns the {@link ProjectContext} for the given project root URI.
-     *
-     * <p>If no context is registered for {@code projectUri}, a warning is
-     * logged and {@code null} is returned.
+     * Removes and returns the {@link ProjectContext} registered for the given project root URI, or {@code null} if none is registered.
      *
      * @param projectUri the normalized root URI of the project to remove
      * @return the removed {@link ProjectContext}, or {@code null} if not found
@@ -125,14 +97,7 @@ public class WorkspaceManager {
     // -------------------------------------------------------------------------
 
     /**
-     * Resolves a {@link ProjectContext} by matching {@code projectPath} against each registered
-     * context's own {@link ProjectContext#getProjectUri()} (an absolute filesystem path), rather
-     * than the {@code file://} URI this registry is keyed by internally.
-     *
-     * <p>RPCs that carry a bare {@code projectUri} field (as opposed to a document URI) receive it
-     * from the VS Code extension as {@code WorkspaceFolder.uri.fsPath} — an OS filesystem path, not
-     * a URI — which will never match a key in {@link #projects}. Callers resolving from that field
-     * must use this method rather than looking the raw value up as a registry key.
+     * Resolves a {@link ProjectContext} by matching {@code projectPath} against each context's own filesystem path rather than the {@code file://} URI registry keys, which callers must use for RPC fields carrying a raw {@code fsPath} that would never match a key in {@link #projects}.
      *
      * @param projectPath the project root as an absolute filesystem path (or a {@code file://} URI,
      *                     which is normalized the same way)
@@ -152,13 +117,7 @@ public class WorkspaceManager {
     }
 
     /**
-     * Whether two project roots denote the same project, tolerating the format differences that
-     * legitimately occur between a value the client sent and one this process stored: {@code file://}
-     * URI vs. OS path, {@code ..}/redundant separators, and drive-letter/path case on Windows.
-     *
-     * <p>Use this for any project-root equality test. A raw {@link String#equals} will report two
-     * spellings of the same folder as different projects, which typically surfaces as a request being
-     * silently declined rather than as an error.
+     * Whether two project roots denote the same project, tolerating format differences such as {@code file://} URI vs. OS path, redundant separators, and Windows drive-letter/case, since a raw {@link String#equals} would silently treat two spellings of the same folder as different projects.
      *
      * @return {@code true} if both resolve to the same normalized path; {@code false} if either is
      *         {@code null}
@@ -174,12 +133,7 @@ public class WorkspaceManager {
     }
 
     /**
-     * Normalizes a project root — whether given as an absolute filesystem path or a {@code file://}
-     * URI — to an absolute, normalized path string suitable for cross-format comparison.
-     *
-     * <p>This is the one canonical spelling of a project root in the server. Anything that keys,
-     * hashes or compares projects should derive its value from here, so that two components can
-     * never disagree about whether two spellings name the same project.
+     * Normalizes a project root — a filesystem path or a {@code file://} URI — to the one canonical absolute path string that anything keying, hashing, or comparing projects should derive from.
      *
      * @param path the project root, as a filesystem path or a {@code file://} URI
      * @return the normalized absolute path, or {@code path} itself if it cannot be parsed
@@ -194,15 +148,7 @@ public class WorkspaceManager {
     }
 
     /**
-     * Converts a filesystem path <em>or</em> a {@code file://} URI to an absolute, normalized
-     * {@link Path} for comparison against another such value.
-     *
-     * <p>Comparing as {@link Path}s rather than as URI strings is deliberate. There is no single
-     * canonical {@code file://} spelling of a Windows path: VS Code sends the drive-letter colon
-     * percent-encoded ({@code file:///c%3A/Users/...}), while {@code Path.toUri()} does not
-     * ({@code file:///c:/Users/...}). Two spellings of the same folder must never read as two
-     * different projects, so anything that needs to know "does this file live in that project" has
-     * to normalize away the URI layer first — see {@link #getProjectForFile(String)}.
+     * Converts a filesystem path or a {@code file://} URI to an absolute, normalized {@link Path}, since comparing as {@link Path}s (rather than URI strings) avoids the inconsistent encoding of Windows drive letters (e.g. {@code c%3A} vs. {@code c:}).
      *
      * @return the normalized absolute path, or {@code null} if {@code pathOrUri} is {@code null} or
      *         cannot be parsed as a path
@@ -221,19 +167,7 @@ public class WorkspaceManager {
     }
 
     /**
-     * Resolves the {@link ProjectContext} that owns a file, given its <em>filesystem path</em> (a
-     * {@code file://} URI is also accepted), using a longest-prefix match over project roots.
-     *
-     * <p>Use this — not {@link #getProjectForDocument(String)} — for any request field that carries a
-     * path rather than a document URI. {@code getProjectForDocument} compares raw URI strings against
-     * the registry keys, which are the workspace-folder URIs exactly as the client sent them; a path
-     * converted to a URI locally will not necessarily produce the same spelling (on Windows it does
-     * not: {@code c%3A} vs. {@code c:}), and the lookup then misses for every document in every
-     * project. This method compares normalized {@link Path}s instead, so no URI encoding is involved.
-     *
-     * <p>Matching is done on whole path elements, so a root of {@code .../Order} does not claim a file
-     * under {@code .../Order2}, and the <em>longest</em> matching root wins so that a project nested
-     * inside another resolves to the inner one.
+     * Resolves the {@link ProjectContext} that owns a file via a longest-prefix, whole-path-element match over normalized project roots (so {@code .../Order2} isn't matched by root {@code .../Order}); callers with a path rather than a document URI should use this instead of {@link #getProjectForDocument(String)} to avoid URI-encoding mismatches.
      *
      * @param filePath the file's absolute filesystem path, or its {@code file://} URI
      * @return the owning {@link ProjectContext}, or {@code null} if no registered project contains it
@@ -252,8 +186,7 @@ public class WorkspaceManager {
 
         for (ProjectContext context : projects.values()) {
             Path root = toComparablePath(context.getProjectUri());
-            // Path.startsWith compares whole name elements, and does so case-insensitively on
-            // Windows — the same tolerance isSameProjectPath already relies on.
+            // Path.startsWith compares whole name elements case-insensitively on Windows, matching isSameProjectPath's tolerance.
             if (root != null && file.startsWith(root) && root.getNameCount() > longestPrefixLength) {
                 longestPrefixLength = root.getNameCount();
                 bestMatch = context;
@@ -267,31 +200,7 @@ public class WorkspaceManager {
     }
 
     /**
-     * Resolves a document URI to the {@link ProjectContext} of the project it
-     * belongs to, using a <em>longest-prefix match</em>.
-     *
-     * <p>Given a document URI such as
-     * {@code file:///Users/me/ProjectA/src/main/synapse-config/api/MyAPI.xml},
-     * this method iterates all registered project root URIs and returns the
-     * context whose root URI is the longest prefix of the document URI. The
-     * longest-prefix rule ensures correctness when one project root is nested
-     * inside another.
-     *
-     * <p>Example:
-     * <pre>
-     *   Registered roots:
-     *     file:///Users/me/ProjectA      → ContextA
-     *     file:///Users/me/ProjectA/sub  → ContextB   (more specific)
-     *
-     *   getProjectForDocument("file:///Users/me/ProjectA/sub/foo.xml")
-     *     → returns ContextB  (longest match)
-     * </pre>
-     *
-     * <p>This is the same lookup as {@link #getProjectForFile(String)} and delegates to it, rather
-     * than matching raw URI strings against the registry keys: those keys are the workspace-folder
-     * URIs exactly as the client sent them, and a document URI lemminx produced itself does not
-     * always use the same spelling (on Windows, {@code c%3A} vs. {@code c:}), which made every
-     * document in every project miss.
+     * Resolves a document URI to the owning {@link ProjectContext} by delegating to {@link #getProjectForFile(String)}'s longest-prefix match, avoiding a raw URI-key comparison that would miss on spelling differences like Windows {@code c%3A} vs. {@code c:}.
      *
      * @param documentUri the URI of the document being processed
      * @return the best-matching {@link ProjectContext}, or {@code null} if no
@@ -303,19 +212,14 @@ public class WorkspaceManager {
     }
 
     /**
-     * Returns an unmodifiable snapshot of all currently registered
-     * {@link ProjectContext} instances.
-     *
-     * <p>The returned collection reflects the state of the registry at the
-     * moment of the call. Subsequent additions or removals are not reflected.
+     * Returns an unmodifiable snapshot of all currently registered {@link ProjectContext} instances, reflecting the registry only at the moment of the call.
      *
      * @return a collection of all registered contexts (never {@code null},
      *         may be empty)
      */
     public Collection<ProjectContext> getAllProjects() {
 
-        // Return a true snapshot — not a live view — so callers can iterate safely
-        // even if another thread adds/removes a project concurrently.
+        // Return a true snapshot, not a live view, so callers can iterate safely during concurrent modification.
         return Collections.unmodifiableCollection(new ArrayList<>(projects.values()));
     }
 

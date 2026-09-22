@@ -102,9 +102,7 @@ public class OverviewModelGenerator {
      * @param connections connections in the project
      * @param connectionMap map of connections used in the considered artifact
      * @param connectionIds ID list of the connections used in the considered artifact
-     * @param nextConnectionId call-local, single-element counter of the next connection ID to assign
-     *                         (a plain int can't be mutated by a recursive helper, so it's boxed in
-     *                         an array scoped to one {@code convertDataToOverviewModel} invocation)
+     * @param nextConnectionId call-local counter of the next connection ID to assign, boxed in a single-element array so the recursive helper can mutate it
      */
     private static void extractConnections(List<Dependency> dependencyList, List<Connection> connections,
                                            Map<String, String> connectionMap, List<String> connectionIds,

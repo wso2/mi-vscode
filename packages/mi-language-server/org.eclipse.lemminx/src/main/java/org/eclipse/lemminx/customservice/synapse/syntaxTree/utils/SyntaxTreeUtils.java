@@ -46,9 +46,7 @@ import java.util.function.Supplier;
 
 public class SyntaxTreeUtils {
 
-    // Test-injection seam only (see setMediatorFactory) - production resolves the finder per-project
-    // from the node's owning document via getMediatorFactory(DOMNode), so no project's data is ever
-    // stuck here.
+    // Test-injection seam only; production resolves the finder per-project via getMediatorFactory(DOMNode), so no project's data is ever stuck here.
     private static MediatorFactoryFinder testMediatorFactory;
 
     // Immutable, project-invariant fallback (null MI version, empty connector set) for callers with
@@ -56,10 +54,7 @@ public class SyntaxTreeUtils {
     private static final MediatorFactoryFinder DEFAULT_MEDIATOR_FACTORY =
             new MediatorFactoryFinder(null, null, new ConnectorHolder());
 
-    // Project of the document currently being built, for documents whose URI cannot resolve to one
-    // on its own - a Try-Out session parses a copy of the artifact under ~/.wso2-mi/expression-temp,
-    // which sits outside every project root. Scoped to the calling thread and always cleared again
-    // by withProjectPath, so it never leaks one project's factory into another's parse.
+    // Project override for documents whose URI cannot resolve to one on its own (e.g. a Try-Out session parsing a copy under ~/.wso2-mi/expression-temp), scoped per-thread and always cleared by withProjectPath.
     private static final ThreadLocal<String> PROJECT_PATH_OVERRIDE = new ThreadLocal<>();
 
     public static void setMediatorFactory(MediatorFactoryFinder finder) {
@@ -76,15 +71,11 @@ public class SyntaxTreeUtils {
      * @param <T>         the parse result type
      * @return whatever {@code action} returns
      */
-    // Projects already resolved during the current parse. Resolving walks the project registry and
-    // normalizes a path per entry, and a tree build asks for the same document once per mediator
-    // element, so without this the same answer is recomputed hundreds of times for one document.
-    // inParseScope always clears the map, so a project registered or removed later is never stale.
+    // Projects already resolved during the current parse, cached because a tree build re-resolves the same document once per mediator element, and cleared by inParseScope each time so results never go stale.
     private static final ThreadLocal<Map<String, ProjectContext>> PARSE_SCOPE_PROJECTS = new ThreadLocal<>();
 
     /**
-     * Runs {@code action} as a single parse, reusing each document's resolved project within it.
-     * Nested calls join the scope already open rather than starting another.
+     * Runs {@code action} as a single parse, reusing each document's resolved project within it; nested calls join the scope already open rather than starting another.
      *
      * @param action the parse to run
      * @param <T>    the parse result type
@@ -104,8 +95,7 @@ public class SyntaxTreeUtils {
     }
 
     /**
-     * Resolves the project owning {@code documentUri}, reusing the answer for the rest of the parse
-     * when called inside {@link #inParseScope}. Outside one it simply resolves.
+     * Resolves the project owning {@code documentUri}, reusing the cached answer within an {@link #inParseScope} or resolving fresh otherwise.
      *
      * @param documentUri the document to resolve, may be null
      * @return the owning project, or null if the document belongs to none

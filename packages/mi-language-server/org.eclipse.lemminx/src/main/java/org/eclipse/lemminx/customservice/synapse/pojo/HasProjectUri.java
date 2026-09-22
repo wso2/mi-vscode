@@ -15,24 +15,12 @@
 package org.eclipse.lemminx.customservice.synapse.pojo;
 
 /**
- * Implemented by every {@code synapse/*} request that names the project it belongs to.
- *
- * <p>One accessor shape lets the language service resolve the project the same way for all of them,
- * through a single null-safe {@code resolveByProjectUri(HasProjectUri)}. Requests get that shape by
- * extending {@link AbstractProjectRequest}, which declares the field once; this interface stays the
- * type the resolvers accept, so they depend on the accessor rather than on that base class.
- *
- * <p>The field remains optional: a null, blank or unmatched {@code projectUri} resolves to no
- * project and the RPC answers with an empty or failed result, never with another project's data.
+ * Implemented by every {@code synapse/*} request that names an optional project {@code projectUri}, giving the language service one consistent, null-safe way to resolve the owning project (or none) for any request.
  */
 public interface HasProjectUri {
 
     /**
-     * Returns the project root this request belongs to.
-     *
-     * <p>The VS Code extension sends this as {@code WorkspaceFolder.uri.fsPath} — an absolute
-     * filesystem path rather than a {@code file://} URI — though both forms are accepted by the
-     * resolvers, which normalize either.
+     * Returns the project root this request belongs to, as sent by the VS Code extension (an absolute filesystem path or a {@code file://} URI, both accepted).
      *
      * @return the project root, or {@code null}/blank if the request does not name one
      */

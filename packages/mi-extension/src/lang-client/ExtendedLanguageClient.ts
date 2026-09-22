@@ -195,13 +195,7 @@ export interface LoadDependentResourcesResponse {
 }
 
 /**
- * Finds the messenger for a project root the server named.
- *
- * The server computes that path itself, while the messengers are keyed by the workspace folder's
- * fsPath, so the two spellings do not always match exactly (on Windows the drive-letter case is the
- * usual difference). An exact hit is used when there is one; otherwise the paths are compared
- * normalized. Returning undefined lets the caller fall back to broadcasting rather than silently
- * dropping the notification.
+ * Finds the messenger for a project root the server named, falling back to a normalized path comparison (e.g. for Windows drive-letter case) when there is no exact key match.
  */
 function findMessenger(projectPath: string): Messenger | undefined {
     const exactMatch = RPCLayer._messengers.get(projectPath);
@@ -228,10 +222,7 @@ export class ExtendedLanguageClient extends LanguageClient {
         super(id, name, serverOptions, clientOptions);
 
         this.onNotification("synapse/addConnectorStatus", (connectorStatus: any) => {
-            // One shared client serves every project, so this client has no project of its
-            // own to identify the right webview - route by the projectUri the server now
-            // includes in the payload. Fall back to broadcasting to every open project
-            // webview if an older server hasn't started sending it yet.
+            // Route by the projectUri the server includes in the payload, falling back to broadcasting to every open project webview for older servers that don't send it yet.
             const targetProjectUri: string | undefined = connectorStatus?.projectUri;
             const targetMessenger = targetProjectUri ? findMessenger(targetProjectUri) : undefined;
             if (targetMessenger) {
@@ -485,12 +476,7 @@ export class ExtendedLanguageClient extends LanguageClient {
     }
 
     /**
-     * Resolves a sequence name to its file path within a specific project.
-     *
-     * `projectUri` must be the project that owns the artifact referring to the sequence, and is
-     * required for that reason: one shared client serves every project, so there is no project
-     * this client could sensibly default to. Callers that cannot name a project get `undefined`
-     * rather than another project's sequence of the same name.
+     * Resolves a sequence name to its file path within the given project, requiring `projectUri` explicitly since this shared client has no project to default to.
      */
     async getSequencePath(sequenceName: string, projectUri: string | undefined): Promise<string | undefined> {
         if (!projectUri) {

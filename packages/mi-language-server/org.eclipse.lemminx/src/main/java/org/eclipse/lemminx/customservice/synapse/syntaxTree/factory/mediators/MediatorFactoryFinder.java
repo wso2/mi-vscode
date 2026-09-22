@@ -85,11 +85,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Adapted from org.apache.synapse.config.xml.MediatorFactoryFinder.
- *
- * <p>Instantiated per project (one instance per {@code ProjectContext}) rather than shared
- * as a process-wide singleton, so that two projects on different MI versions (or with
- * different connector sets) never contend over a single "first project wins" factory map.
+ * Adapted from org.apache.synapse.config.xml.MediatorFactoryFinder; instantiated per project rather than as a process-wide singleton, so projects on different MI versions or connector sets don't contend over a shared factory map.
  */
 public class MediatorFactoryFinder {
 

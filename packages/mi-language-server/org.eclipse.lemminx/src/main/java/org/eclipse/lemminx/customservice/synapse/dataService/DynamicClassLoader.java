@@ -28,18 +28,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry of per-project DB-driver classloaders.
- *
- * <p>The shared language-server process serves every open project, so a single process-wide
- * classloader would let one project's driver load evict or collide with another's (e.g. two
- * projects needing different versions of the same driver class). Each project therefore gets
- * its own {@link URLClassLoader}, keyed by its normalized project root ({@link #normalize}).
+ * Registry of per-project DB-driver {@link URLClassLoader}s, keyed by normalized project root, so
+ * drivers loaded for one project in the shared language-server process cannot evict or collide with another's.
  */
 public class DynamicClassLoader {
 
     private static final Map<String, ProjectDrivers> registry = new ConcurrentHashMap<>();
 
-    /** Per-project driver classloader state. All mutation is synchronized on the instance. */
+    /** Per-project driver classloader state, with all mutation synchronized on the instance. */
     private static final class ProjectDrivers {
 
         // Stable parent for every project's loader, rather than the calling thread's context
@@ -50,19 +46,9 @@ public class DynamicClassLoader {
         // Keyed by canonical path rather than URL, since URL/File path equality is case-sensitive
         // and breaks deduplication and removal on case-insensitive filesystems (e.g. Windows).
         private final Map<String, URL> currentUrls = new HashMap<>();
-        // Which of those jars actually existed on disk when the current loader was built.
-        //
-        // A URLClassLoader is only valid for the on-disk state it was constructed against: the JDK
-        // pops each URL off its search path the first time it opens it, and an open that fails
-        // (missing jar) drops the URL permanently, so that loader can never see the jar reappear.
-        // Registering the jar again does not help either - the key is already in currentUrls, so
-        // there is nothing to "change" and no rebuild is triggered. That is how deleting a driver
-        // from deployment/libs and then re-adding it through the datasource wizard leaves
-        // checkDBDriver reporting the driver as missing for the rest of the session.
-        //
-        // Tracking existence at build time turns that into something loader() can detect, and also
-        // covers the reverse case (a jar deleted after the loader opened it) and jars dropped into
-        // deployment/libs by hand, neither of which goes through updateJar at all.
+        // Canonical paths of jars present on disk when the loader was built, tracked so loader() can
+        // detect a driver that disappeared or reappeared outside updateJar, since a URLClassLoader
+        // permanently drops a URL the first time it fails to open it and never recovers on its own.
         private Set<String> presentWhenBuilt = Set.of();
 
         synchronized void addDirectory(File jarDirectory) throws Exception {
@@ -119,9 +105,8 @@ public class DynamicClassLoader {
             rebuild(presentJars());
         }
 
-        // Missing jars stay in the URL array: currentUrls is the record of what this project has
-        // registered, and a URL the loader cannot open is simply skipped. Dropping them here would
-        // instead lose them for good, since nothing re-registers a jar that only reappears on disk.
+        // Missing jars stay in the URL array since currentUrls is the record of what's registered, and
+        // dropping them here would lose them for good once nothing re-registers a jar that reappears on disk.
         private void rebuild(Set<String> present) {
             classLoader = new URLClassLoader(currentUrls.values().toArray(new URL[0]), PARENT);
             presentWhenBuilt = present;
@@ -163,9 +148,8 @@ public class DynamicClassLoader {
     }
 
     /**
-     * Drops the registry entry for a project (e.g. on project close), so a later reopen rebuilds
-     * cleanly instead of reusing a stale loader. Does not {@code close()} the discarded
-     * {@link URLClassLoader} — a driver connection opened through it may still be in use.
+     * Drops the registry entry for a project (e.g. on project close) so a later reopen rebuilds cleanly,
+     * without closing the discarded {@link URLClassLoader} since a driver connection through it may still be in use.
      *
      * @param projectKey this project's root (URI or absolute path — see {@link #normalize})
      */
@@ -174,14 +158,9 @@ public class DynamicClassLoader {
     }
 
     /**
-     * Normalizes a project key so the same project always maps to the same registry entry
-     * regardless of whether callers pass a {@code file://} URI or a plain OS path.
-     *
-     * <p>Delegates to {@link WorkspaceManager#normalizeProjectPath(String)} rather than
-     * canonicalizing independently. A second strategy here used to resolve symlinks through
-     * {@code toRealPath()} while {@code WorkspaceManager} did not, so for a project root that is a
-     * symlink the two derived different keys for the same directory - and a driver registered under
-     * one was invisible to a lookup made through the other.
+     * Normalizes a project key via {@link WorkspaceManager#normalizeProjectPath(String)}, rather than a
+     * separate implementation, so the same project always maps to the same registry entry regardless of
+     * URI-vs-OS-path form or symlinks.
      */
     static String normalize(String projectKey) {
         if (projectKey == null) {

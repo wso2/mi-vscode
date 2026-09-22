@@ -17,11 +17,7 @@ package org.eclipse.lemminx.customservice.synapse.driver;
 import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
 /**
- * Looks up the Maven coordinates of the JDBC driver for a connection.
- *
- * <p>Resolved by the inherited {@code projectUri} rather than by {@link #filePath}: that path is
- * blank in the primary use case — a connection whose driver has not been downloaded yet, which is
- * precisely when the coordinates are needed — so it cannot be the field the request is routed by.
+ * Looks up the Maven coordinates of the JDBC driver for a connection, routed by the inherited {@code projectUri} rather than {@link #filePath} since that path is blank when the driver hasn't been downloaded yet.
  */
 public class DriverMavenCoordinatesRequest extends AbstractProjectRequest {
 

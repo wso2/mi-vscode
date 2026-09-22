@@ -81,9 +81,7 @@ public class MediatorHandler {
 
     public void init(String projectUri, String projectServerVersion, ConnectorHolder connectorHolder) {
 
-        // Assigned before the mediator-list load below, which is the only step here that can fail.
-        // None of these throw, and callers dereference them (mediatorFactory in particular) without a
-        // null check once isInitialized is set - so they must hold on the fallback path too.
+        // Assigned before the mediator-list load (the only step that can fail) since callers dereference these without a null check once isInitialized is set.
         this.miServerVersion = projectServerVersion;
         this.connectorHolder = connectorHolder;
         this.projectUri = projectUri;
