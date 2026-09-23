@@ -358,7 +358,7 @@ export const EnvironmentSetup = () => {
     return (
         <Container>
             <TitlePanel>
-                <Headline>WSO2 Integrator: MI for VS Code</Headline>
+                <Headline>WSO2 Integrator: MI VS Code Extension</Headline>
                 <HeadlineSecondary>{getHeadlineDescription()}</HeadlineSecondary>
             </TitlePanel>
 

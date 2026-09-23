@@ -1,10 +1,10 @@
-# WSO2 Integrator: MI for Visual Studio Code
+# WSO2 Integrator: MI VS Code Extension
 
-WSO2 Integrator: MI Visual Studio Code extension (MI for VSCode) is a comprehensive integration solution that simplifies your digital transformation journey. It streamlines connectivity among applications, services, data, and the cloud using a user-friendly low-code graphical designing experience and revolutionizes your integration development workflow. As an integration developer, you can execute all the development lifecycle phases using this tool. When your integration solutions are production-ready, you can easily push the artifacts to your continuous integration/continuous deployment pipeline.
+WSO2 Integrator: MI VS Code Extension is a comprehensive integration solution that simplifies your digital transformation journey. It streamlines connectivity among applications, services, data, and the cloud using a user-friendly low-code graphical designing experience and revolutionizes your integration development workflow. As an integration developer, you can execute all the development lifecycle phases using this tool. When your integration solutions are production-ready, you can easily push the artifacts to your continuous integration/continuous deployment pipeline.
 
 ## Get Started
 
-1. Launch VS Code with the WSO2 Integrator: MI for Visual Studio Code (MI for VS Code) extension installed. When the extension is installed properly, you can see the WSO2 Integrator: MI icon in the Activity Bar of the VS Code editor.
+1. Launch VS Code with the WSO2 Integrator: MI VS Code Extension installed. When the extension is installed properly, you can see the WSO2 Integrator: MI icon in the Activity Bar of the VS Code editor.
 
 2. Click on the WSO2 Integrator: MI icon on the Activity Bar of the VS Code editor to open the extension and get started.
 
@@ -47,7 +47,7 @@ The Design View lists a set of sample projects and integration artifacts that re
 
 ## Documentation
 
-To learn more about the WSO2 Integrator: MI for Visual Studio Code extension, go to the [WSO2 Integrator: MI for VS Code](https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/mi-for-vscode-overview/) documentation.
+To learn more about the WSO2 Integrator: MI VS Code Extension, go to the [WSO2 Integrator: MI VS Code Extension](https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/mi-for-vscode-overview/) documentation.
 
 ## Reach Out
 

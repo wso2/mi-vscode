@@ -185,7 +185,7 @@ export function WelcomeView() {
         <>
             <Wrapper>
                 <TitlePanel>
-                    <Headline>WSO2 Integrator: MI for VS Code</Headline>
+                    <Headline>WSO2 Integrator: MI VS Code Extension</Headline>
                     <span>A comprehensive integration solution that simplifies your digital transformation journey. Streamlines connectivity among applications, services, data, and cloud using a user-friendly low-code graphical designing experience. </span>
                 </TitlePanel>
                 <Grid>
