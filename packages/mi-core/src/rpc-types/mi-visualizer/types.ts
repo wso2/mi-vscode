@@ -202,6 +202,7 @@ export interface UpdatePomValuesRequest {
 
 export interface UpdateConfigValuesRequest {
     configValues: PomNodeDetails[];
+    projectUri?: string;
 }
 
 export interface UpdatePropertiesRequest {
