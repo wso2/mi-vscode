@@ -78,20 +78,32 @@ export function isWso2IntegratorRuntime(): boolean {
 
 let ballerinaOutputChannel: vscode.OutputChannel | undefined;
 
+export async function isMiProject(projectPath: string): Promise<boolean> {
+    try {
+        const pomFilePath = path.join(projectPath, 'pom.xml');
+        const pomContent = await fs.promises.readFile(pomFilePath, 'utf-8');
+        return /<projectType>\s*integration-project\s*<\/projectType>/i.test(pomContent);
+    } catch {
+        return false;
+    }
+}
+
+export async function ensureMavenWrapper(projectUri: string): Promise<void> {
+    const hasWrapper = fs.existsSync(path.join(projectUri, 'mvnw'))
+        && fs.existsSync(path.join(projectUri, 'mvnw.cmd'))
+        && fs.existsSync(path.join(projectUri, '.mvn', 'wrapper', 'maven-wrapper.properties'));
+    if (!hasWrapper) {
+        await copyMavenWrapper(
+            extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
+            projectUri
+        );
+    }
+}
+
 export async function setupEnvironment(projectUri: string, isOldProject: boolean): Promise<boolean> {
     try {
-        const wrapperFiles = await vscode.workspace.findFiles(
-            new vscode.RelativePattern(projectUri, '{mvnw,mvnw.cmd}'),
-            '**/node_modules/**',
-            1
-        );
         if (!isOldProject) {
-            if (wrapperFiles.length === 0) {
-                await copyMavenWrapper(
-                    extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
-                    projectUri
-                );
-            }
+            await ensureMavenWrapper(projectUri);
             setupConfigFiles(projectUri);
         }
         const { miVersionFromPom } = await getProjectSetupDetails(projectUri);
