@@ -100,7 +100,9 @@ public class MediatorHandler {
                 this.mediatorList = Utils.getMediatorList(Constant.DEFAULT_MI_VERSION, connectorHolder);
                 this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
             } catch (IOException ex) {
-                // This should not happen
+                LOGGER.log(Level.SEVERE, String.format(
+                        "Failed to load the default mediator list (MI %s); mediator support will be unavailable "
+                                + "for project: %s", Constant.DEFAULT_MI_VERSION, projectUri), ex);
             }
         }
         this.templateMap = Utils.getTemplateMap("org/eclipse/lemminx/mediators/"
