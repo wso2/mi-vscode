@@ -128,6 +128,10 @@ public class ExpressionCompletionsProvider {
 
         // Use the ConnectorHolder of the project that owns this document so connector response/target variables contribute their schema to completions (an empty holder leaves connector mediators unresolved).
         ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(documentUri);
+        if (projectContext == null) {
+            LOGGER.warning("No registered project for " + documentUri
+                    + "; connector schemas are unavailable for expression completions in this document.");
+        }
         ConnectorHolder connectorHolder =
                 projectContext != null ? projectContext.getConnectorHolder() : new ConnectorHolder();
         String projectPath = projectContext != null ? projectContext.getProjectUri()
