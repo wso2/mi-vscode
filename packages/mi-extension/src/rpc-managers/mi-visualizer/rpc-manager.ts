@@ -95,6 +95,7 @@ import { history } from "../../history";
 import { getStateMachine, navigate, openView, refreshUI } from "../../stateMachine";
 import { formatAndSavePomDocument, goToSource, handleOpenFile, appendContent, selectFolderDialog } from "../../util/fileOperations";
 import { openPopupView } from "../../stateMachinePopup";
+import { webviews } from "../../visualizer/webview";
 import { SwaggerServer } from "../../swagger/server";
 import { log, outputChannel } from "../../util/logger";
 import { escapeXml } from '../../util/templates';
@@ -502,37 +503,39 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
     }
 
     async updateConfigFileValues(params: UpdateConfigValuesRequest): Promise<boolean> {
-        return new Promise(async (resolve) => {
-            const configFilePath = [this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'conf', 'config.properties'].join(path.sep);
-            const configDir = path.dirname(configFilePath);
-            if (!fs.existsSync(configDir)) {
-                // Create the directory structure for the config file if it doesn't exist
-                fs.mkdirSync(configDir, { recursive: true });
-            }
+        const targetProjectUri = params.projectUri ?? this.projectUri;
+        const configFilePath = [targetProjectUri, 'src', 'main', 'wso2mi', 'resources', 'conf', 'config.properties'].join(path.sep);
+        const configDir = path.dirname(configFilePath);
+        if (!fs.existsSync(configDir)) {
+            // Create the directory structure for the config file if it doesn't exist
+            fs.mkdirSync(configDir, { recursive: true });
+        }
 
-            // Create config.properties if it doesn't exist
-            if (!fs.existsSync(configFilePath)) {
-                fs.writeFileSync(configFilePath, "");
-            }
+        // Create config.properties if it doesn't exist
+        if (!fs.existsSync(configFilePath)) {
+            fs.writeFileSync(configFilePath, "");
+        }
 
-            const content = params.configValues.map(configValue => `${configValue.key}:${configValue.type}`).join('\n');
-            fs.writeFileSync(configFilePath, content);
+        const content = params.configValues.map(configValue => `${configValue.key}:${configValue.type}`).join('\n');
+        fs.writeFileSync(configFilePath, content);
 
-            const envFilePath = [this.projectUri, '.env'].join(path.sep);
-            const envDir = path.dirname(envFilePath);
-            if (!fs.existsSync(envDir)) {
-                // Create the directory structure for the .env file if it doesn't exist
-                fs.mkdirSync(envDir, { recursive: true });
-            }
-            // Get values of params.configValues -> configValue -> key and value not empty
-            const nonEmptyConfigValues = params.configValues.filter(configValue => configValue.key && configValue.value);
-            const envContent = nonEmptyConfigValues.map(configValue => `${configValue.key}=${configValue.value}`).join('\n');
-            fs.writeFileSync(envFilePath, envContent);
+        const envFilePath = [targetProjectUri, '.env'].join(path.sep);
+        const envDir = path.dirname(envFilePath);
+        if (!fs.existsSync(envDir)) {
+            // Create the directory structure for the .env file if it doesn't exist
+            fs.mkdirSync(envDir, { recursive: true });
+        }
+        // Get values of params.configValues -> configValue -> key and value not empty
+        const nonEmptyConfigValues = params.configValues.filter(configValue => configValue.key && configValue.value);
+        const envContent = nonEmptyConfigValues.map(configValue => `${configValue.key}=${configValue.value}`).join('\n');
+        fs.writeFileSync(envFilePath, envContent);
 
-            refreshUI(this.projectUri);
+        // Only refresh if a webview is already open
+        if (webviews.has(targetProjectUri)) {
+            refreshUI(targetProjectUri);
+        }
 
-            resolve(true);
-        });
+        return true;
     }
 
     async updateConnectorDependencies(): Promise<string> {
