@@ -197,6 +197,14 @@ public class SynapseLanguageService implements ISynapseLanguageService {
         return manager != null && documentUri != null ? manager.getProjectForFile(documentUri) : null;
     }
 
+    /**
+     * Resolves the {@link ProjectContext} a request named outright via its {@code projectUri}, for the same DI-less callers as {@link #resolveProjectContext(String)}. Used as that lookup's fallback when the document is a code string rather than a file under a project root, so it matches an exact project root instead of a path it contains.
+     */
+    public static ProjectContext resolveProjectContextByProjectUri(String projectUri) {
+        WorkspaceManager manager = workspaceManagerHolder;
+        return manager != null && StringUtils.isNotBlank(projectUri) ? manager.getProjectByPath(projectUri) : null;
+    }
+
     private XMLTextDocumentService xmlTextDocumentService;
     private XMLLanguageServer xmlLanguageServer;
     private SynapseLanguageClientAPI languageClient;
@@ -504,20 +512,21 @@ public class SynapseLanguageService implements ISynapseLanguageService {
             // gated on the document path — e.g. SynapseExpressionValidator only runs for files under
             // src/main/wso2mi/artifacts — so the literal "temp" fallback would silently drop them.
             // Treat a blank fileName as missing, otherwise an unusable URI would skip those checks.
-            //
-            // TODO(unrouted-request): a blank fileName resolves no ProjectContext, so validation runs
-            // degraded without connector/dependent-artifact knowledge until the agent/copilot caller
-            // sends an explicit projectUri (or, meanwhile, fileName).
             String uri = StringUtils.isBlank(param.getFileName()) ? "temp" : param.getFileName();
             // Opt-out (default off) for cross-file reference checks: the agent validates a file
             // before its referenced siblings are written, so those checks would fire spuriously.
             // Set/clear around doDiagnostics on this thread; the editor never sets it.
             try {
                 SynapseDiagnosticsParticipant.setSkipCrossFileValidation(param.isSkipCrossFileValidation());
+                // Route by the project the request names, for callers whose fileName is a label rather
+                // than a path (Copilot snippets) and so resolves no ProjectContext on its own. The
+                // participant prefers the document URI and consults this only when that matched nothing.
+                SynapseDiagnosticsParticipant.setProjectUriOverride(param.getProjectUri());
                 DOMDocument xmlDocument = Utils.getDOMDocument(param.getCode(), uri, uriResolverExtensionManager);
                 return doDiagnostics(xmlDocument, NULL_CANCEL_CHECKER);
             } finally {
                 SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
+                SynapseDiagnosticsParticipant.clearProjectUriOverride();
             }
         });
     }

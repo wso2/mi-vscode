@@ -117,6 +117,33 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         return Boolean.TRUE.equals(SKIP_CROSS_FILE_VALIDATION.get());
     }
 
+    /**
+     * Request-scoped project root for documents whose URI names no registered project. The
+     * {@code synapse/codeDiagnostic} RPC validates a code string rather than a file on disk, and the
+     * MI Copilot caller labels it with a synthetic name (the artifact's {@code name} attribute, or
+     * {@code code_0.xml}) that matches no project root, so neither {@link #deriveProjectPath} nor the
+     * {@link ProjectContext} lookup can route it. It is thread-confined and set by
+     * {@code SynapseLanguageService.codeDiagnostic()} around the {@code doDiagnostics} call; the
+     * editor flows leave it unset and keep routing by document URI alone.
+     */
+    private static final ThreadLocal<String> PROJECT_URI_OVERRIDE = new ThreadLocal<>();
+
+    public static void setProjectUriOverride(String projectUri) {
+        if (StringUtils.isBlank(projectUri)) {
+            PROJECT_URI_OVERRIDE.remove();
+        } else {
+            PROJECT_URI_OVERRIDE.set(projectUri);
+        }
+    }
+
+    public static void clearProjectUriOverride() {
+        PROJECT_URI_OVERRIDE.remove();
+    }
+
+    private static String getProjectUriOverride() {
+        return PROJECT_URI_OVERRIDE.get();
+    }
+
     private static final Set<String> SYNAPSE_ROOT_ELEMENTS = new HashSet<>(Arrays.asList(
             "api", "proxy", "endpoint", "sequence", "inboundEndpoint", "template",
             "task", "localEntry", "messageStore", "messageProcessor", "registry"
@@ -1608,9 +1635,12 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
             Map<String, ResourceResponse> allResources = resourceFinder.findAllResources(projectPath);
             collectResourceNames(allResources, artifactNames, templatePaths, nameToFiles);
 
-            // TODO(unrouted-request): resolve dependent-project artifacts from the document's own ProjectContext by URI so each project sees only its own dependencies, contributing none for an unrouted document instead of resolving incorrectly against the default project's .car dependencies as before.
-            ProjectContext projectContext =
-                    SynapseLanguageService.resolveProjectContext(document.getDocumentURI());
+            // Resolve dependent-project artifacts from the document's own ProjectContext so each
+            // project sees only its own .car dependencies, rather than the process-wide set the
+            // single-project server used to publish. A request routed by projectUri rather than by
+            // document URI (Copilot snippets) falls back to the project it named; only a request
+            // that identifies no project at all contributes nothing.
+            ProjectContext projectContext = resolveProjectContext(document);
             Map<String, ResourceResponse> dependentResources = projectContext != null
                     ? projectContext.getResourceFinder().getDependentResourcesMap()
                     : java.util.Collections.emptyMap();
@@ -1791,7 +1821,7 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
     private String deriveProjectPath(DOMDocument document) {
         String docUri = document.getDocumentURI();
         if (docUri == null) {
-            return null;
+            return deriveProjectPathFromOverride();
         }
         try {
             Path filePath;
@@ -1812,7 +1842,35 @@ public class SynapseDiagnosticsParticipant implements IDiagnosticsParticipant {
         } catch (Exception e) {
             LOGGER.log(Level.FINE, "Could not derive project path from document URI: " + docUri, e);
         }
-        return null;
+        return deriveProjectPathFromOverride();
+    }
+
+    /**
+     * Falls back to the project root the request named explicitly, for documents whose URI carries no
+     * {@code src/main/wso2mi} segment to slice a project root out of. Without it a Copilot-supplied
+     * snippet would silently get no artifact index and no MI version detection at all.
+     *
+     * @return the overriding project root as a filesystem path, or {@code null} if none was set
+     */
+    private String deriveProjectPathFromOverride() {
+        String override = getProjectUriOverride();
+        return StringUtils.isBlank(override) ? null : Utils.getAbsolutePath(override);
+    }
+
+    /**
+     * Resolves the {@link ProjectContext} that owns {@code document}, preferring its URI and falling
+     * back to the project root the request named. The fallback only fires when the URI matched no
+     * registered project, so a document that genuinely belongs to project A is never answered from
+     * project B just because B was named.
+     *
+     * @return the owning context, or {@code null} if neither the URI nor the override identifies one
+     */
+    private ProjectContext resolveProjectContext(DOMDocument document) {
+        ProjectContext context = SynapseLanguageService.resolveProjectContext(document.getDocumentURI());
+        if (context == null) {
+            context = SynapseLanguageService.resolveProjectContextByProjectUri(getProjectUriOverride());
+        }
+        return context;
     }
 
     // ===== P2 Validations =====

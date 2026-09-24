@@ -1697,6 +1697,7 @@ public class SynapseDiagnosticsParticipantTest {
         }
         registeredProjectUris.clear();
         SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
+        SynapseDiagnosticsParticipant.clearProjectUriOverride();
     }
 
     /**
@@ -1981,5 +1982,136 @@ public class SynapseDiagnosticsParticipantTest {
         participant.doDiagnostics(docB, diagsB, null, () -> {});
         assertTrue(diagnosticsWithCode(diagsB, "DuplicateArtifactName").isEmpty(),
                 "Stale cross-file duplicate state must not leak to a request with no project index");
+    }
+
+    // ===== projectUri routing for label-URI (Copilot) requests =====
+
+    /**
+     * Runs diagnostics on a code string whose URI is a bare label rather than a path, as the MI
+     * Copilot flow sends, optionally naming the project the way {@code codeDiagnostic} does.
+     */
+    private List<Diagnostic> diagnoseAsLabel(String xml, String label, String projectUri) {
+        try {
+            SynapseDiagnosticsParticipant.setProjectUriOverride(projectUri);
+            TextDocument textDocument = new TextDocument(xml, label);
+            DOMDocument document = DOMParser.getInstance().parse(textDocument, null);
+            List<Diagnostic> diagnostics = new ArrayList<>();
+            new SynapseDiagnosticsParticipant().doDiagnostics(document, diagnostics, null, () -> {});
+            return diagnostics;
+        } finally {
+            SynapseDiagnosticsParticipant.clearProjectUriOverride();
+        }
+    }
+
+    /** Builds a project whose only 'fromDep' sequence comes from an extracted .car dependency. */
+    private Path projectWithDepSequence(Path tempDir, String name) throws Exception {
+        Path project = tempDir.resolve(name);
+        Path depSequence = tempDir.resolve(".wso2-mi/integration-project-dependencies")
+                .resolve(name + "_" + Utils.getHash(project.toString()))
+                .resolve("Extracted/dep/src/main/wso2mi/artifacts/sequences/fromDep-1.0.0.xml");
+        Files.createDirectories(depSequence.getParent());
+        Files.writeString(depSequence,
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"fromDep\"><log/></sequence>");
+        Files.createDirectories(project.resolve("src/main/wso2mi/artifacts/apis"));
+        registerProjectWithDependencies(project);
+        return project;
+    }
+
+    private static final String REFERENCES_FROM_DEP =
+            "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                    + "<resource methods=\"GET\" uri-template=\"/\">"
+                    + "<inSequence><sequence key=\"fromDep\"/></inSequence>"
+                    + "</resource></api>";
+
+    /**
+     * A Copilot snippet is labelled after the artifact's name attribute, so its URI sits under no
+     * project root. Naming the project must route it, letting it see that project's .car dependencies.
+     * The snippet also references a genuinely missing artifact, so the assertion distinguishes a built
+     * index that resolved 'fromDep' from no index at all (which would report nothing either way).
+     */
+    @Test
+    public void testLabelUriResolvesDependencyWhenProjectUriNamed(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        Path project = projectWithDepSequence(tempDir, "consumer");
+
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<sequence key=\"fromDep\"/><sequence key=\"reallyDoesNotExist\"/>"
+                + "</inSequence></resource></api>";
+        List<String> unresolved = diagnosticsWithCode(
+                diagnoseAsLabel(xml, "cvh.xml", project.toString()), "UnresolvedArtifactReference")
+                .stream().map(Diagnostic::getMessage).collect(Collectors.toList());
+        assertEquals(1, unresolved.size(),
+                "The named project must build an index that flags only the missing artifact, but got: "
+                        + unresolved);
+        assertTrue(unresolved.get(0).contains("reallyDoesNotExist"),
+                "'fromDep' comes from the named project's dependencies and must resolve");
+    }
+
+    /** The same snippet, still routed by projectUri, must keep flagging a genuinely missing artifact. */
+    @Test
+    public void testLabelUriStillFlagsUnknownArtifactWhenProjectUriNamed(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        Path project = projectWithDepSequence(tempDir, "consumer");
+
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"reallyDoesNotExist\"/></inSequence>"
+                + "</resource></api>";
+        List<Diagnostic> unresolved =
+                diagnosticsWithCode(diagnoseAsLabel(xml, "cvh.xml", project.toString()),
+                        "UnresolvedArtifactReference");
+        assertEquals(1, unresolved.size(), "Routing must not mask a genuinely unknown artifact");
+        assertTrue(unresolved.get(0).getMessage().contains("reallyDoesNotExist"));
+    }
+
+    /**
+     * Without a projectUri the label resolves no project at all, so no artifact index is built and
+     * cross-file checks contribute nothing. This is the gap the projectUri plumbing closes.
+     */
+    @Test
+    public void testLabelUriWithoutProjectUriBuildsNoIndex(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        projectWithDepSequence(tempDir, "consumer");
+
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"reallyDoesNotExist\"/></inSequence>"
+                + "</resource></api>";
+        assertTrue(diagnosticsWithCode(diagnoseAsLabel(xml, "cvh.xml", null),
+                        "UnresolvedArtifactReference").isEmpty(),
+                "An unrouted label request has no project index, so it reports no cross-file findings");
+    }
+
+    /**
+     * The override is a fallback, never an override: a document whose URI does match a registered
+     * project must be answered from that project even when the request names a different one.
+     */
+    @Test
+    public void testDocumentUriWinsOverNamedProject(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path withDep = projectWithDepSequence(tempDir, "withDep");
+        Path noDep = tempDir.resolve("noDep");
+        Files.createDirectories(noDep.resolve("src/main/wso2mi/artifacts/apis"));
+        registerProjectWithDependencies(noDep);
+
+        // The document lives in noDep; the request names withDep, which does supply 'fromDep'.
+        try {
+            SynapseDiagnosticsParticipant.setProjectUriOverride(withDep.toString());
+            List<Diagnostic> unresolved = diagnosticsWithCode(
+                    diagnoseAtPath(REFERENCES_FROM_DEP,
+                            noDep.resolve("src/main/wso2mi/artifacts/apis/cvh.xml")),
+                    "UnresolvedArtifactReference");
+            assertEquals(1, unresolved.size(),
+                    "A document owned by noDep must not borrow withDep's dependencies");
+            assertTrue(unresolved.get(0).getMessage().contains("fromDep"));
+        } finally {
+            SynapseDiagnosticsParticipant.clearProjectUriOverride();
+        }
     }
 }

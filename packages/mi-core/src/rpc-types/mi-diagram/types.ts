@@ -2366,6 +2366,13 @@ export interface XmlCode{
      * yet. Optional and ignored by language servers that don't support it.
      */
     skipCrossFileValidation?: boolean;
+    /**
+     * Project root this request belongs to. The language server routes by {@link fileName} when that
+     * is a real path; supply this when it is only a label (MI Copilot names snippets after the
+     * artifact's name attribute), otherwise the request matches no project and validation runs
+     * without connector or dependent-artifact knowledge.
+     */
+    projectUri?: string;
 }
 
 export interface SubmitFeedbackRequest {
