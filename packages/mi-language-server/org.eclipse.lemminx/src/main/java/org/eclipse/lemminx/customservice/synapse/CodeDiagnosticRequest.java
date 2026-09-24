@@ -14,7 +14,15 @@
 
 package org.eclipse.lemminx.customservice.synapse;
 
-public class CodeDiagnosticRequest {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+/**
+ * Request for {@code synapse/codeDiagnostic}. Carries the inherited {@code projectUri} because
+ * {@link #getFileName()} is not always a real path: the MI Copilot flow validates XML the LLM has
+ * just generated, naming it after the artifact's {@code name} attribute (or {@code code_0.xml}),
+ * which sits under no project root and so resolves no {@code ProjectContext} on its own.
+ */
+public class CodeDiagnosticRequest extends AbstractProjectRequest {
 
     private String code;
     private String fileName;

@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class QueryGenRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class QueryGenRequestParams extends AbstractProjectRequest {
 
     String className;
     String username;

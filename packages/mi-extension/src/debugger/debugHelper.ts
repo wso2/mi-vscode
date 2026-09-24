@@ -463,6 +463,7 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
         try {
             runCommand = await getRunCommand(serverPath, isDebug);
         } catch (error) {
+            // A path that can't be quoted for the shell (see escapeShellArg) fails here rather than being handed over half-parsed and timing out later.
             const message = `Server startup failed: ${error instanceof Error ? error.message : error}`;
             serverLog(message);
             reject(message);
@@ -483,11 +484,12 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
             try {
                 escapedVmArgs = vmArgs.map(escapeShellArg);
             } catch (error) {
-                const message = `Server startup failed: ${(error as Error).message}`;
+                const message = `Server startup failed: ${error instanceof Error ? error.message : error}`;
                 serverLog(message);
                 reject(message);
                 return;
             }
+
             serverProcess = child_process.spawn(`${runCommand}`, escapedVmArgs, { shell: true, env: envVariables });
             showServerOutputChannel();
 
@@ -579,7 +581,7 @@ export async function executeTasks(projectUri: string, serverPath: string, isDeb
     const maxTimeout = (Number.isFinite(Number(configuredTimeout)) && Number(configuredTimeout) > 0) ? Number(configuredTimeout) * 1000 : 120000;
     return new Promise<void>(async (resolve, reject) => {
         const langClient = await MILanguageClient.getInstance(projectUri);
-        const isTerminated = await langClient.shutdownTryoutServer();
+        const isTerminated = await langClient.shutdownTryoutServer(projectUri);
         if (!isTerminated) {
             reject('Failed to terminate the tryout server. Kill the server manually and try again.');
         }
@@ -915,6 +917,6 @@ async function compareFilesByMD5(file1: string, file2: string): Promise<boolean>
 
 export async function getConfigurableEntries(projectUri: string): Promise<{key: string; type: string; value: string; range: any; }[]> {
     const langClient = await MILanguageClient.getInstance(projectUri);
-    const res = await langClient.getConfigurableList();
+    const res = await langClient.getConfigurableList(projectUri);
     return res;
 }

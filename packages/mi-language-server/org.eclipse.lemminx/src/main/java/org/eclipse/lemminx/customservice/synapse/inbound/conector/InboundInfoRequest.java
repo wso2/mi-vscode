@@ -14,6 +14,8 @@
 
 package org.eclipse.lemminx.customservice.synapse.inbound.conector;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
 /**
  * Request payload for {@code synapse/getInboundInfo}. Supports two identification
  * modes:
@@ -27,7 +29,7 @@ package org.eclipse.lemminx.customservice.synapse.inbound.conector;
  * When {@code id} is provided but doesn't match a bundled inbound, the endpoint
  * falls through to the Maven path if coordinates are also provided.
  */
-public class InboundInfoRequest {
+public class InboundInfoRequest extends AbstractProjectRequest {
 
     public String id;
     public String groupId;

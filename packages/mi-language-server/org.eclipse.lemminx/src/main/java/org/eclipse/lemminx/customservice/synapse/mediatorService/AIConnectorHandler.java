@@ -22,7 +22,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.commons.BadLocationException;
-import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.Connection;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.ConnectionParameter;
 import org.eclipse.lemminx.customservice.synapse.connectors.entity.ConnectorAction;
@@ -666,7 +665,7 @@ public class AIConnectorHandler {
             }
 
             if (isConnector) {
-                ConnectorAction operation = ConnectorHolder.getInstance().getConnectorAction(mediatorName);
+                ConnectorAction operation = mediatorHandler.getConnectorHolder().getConnectorAction(mediatorName);
                 String operationName = operation.getName();
                 String operationDescription = operation.getDescription();
 

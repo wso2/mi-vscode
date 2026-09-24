@@ -15,6 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.SynapseLanguageService;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutInfo;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
@@ -33,10 +36,12 @@ public class InboundEndpointVisitor implements SchemaVisitor {
 
     private static final Logger LOGGER = Logger.getLogger(InboundEndpointVisitor.class.getName());
     private String projectPath;
+    private ConnectorHolder connectorHolder;
 
-    public InboundEndpointVisitor(String projectPath) {
+    public InboundEndpointVisitor(String projectPath, ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
+        this.connectorHolder = connectorHolder;
     }
 
     @Override
@@ -51,7 +56,7 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         loadInboundVariable(inboundEndpoint, info);
 
         try {
-            Utils.visitSequenceByKey(sequence, projectPath, info, request);
+            Utils.visitSequenceByKey(sequence, projectPath, info, request, connectorHolder);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, String.format("Error occurred while visiting the sequence: %s", sequence), e);
         }
@@ -69,11 +74,10 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         if (StringUtils.isEmpty(inboundVariableName)) {
             return;
         }
-        InboundConnectorHolder holder;
-        try {
-            holder = InboundConnectorHolder.getInstance();
-        } catch (IllegalStateException e) {
-            LOGGER.severe("Inbound connector holder is not initialized");
+        InboundConnectorHolder holder = resolveInboundConnectorHolder();
+        if (holder == null) {
+            LOGGER.warning("No registered project for " + projectPath
+                    + "; inbound connector schema is unavailable for this endpoint.");
             return;
         }
         String id = inboundEndpoint.getProtocol() != null ? inboundEndpoint.getProtocol()
@@ -87,6 +91,17 @@ public class InboundEndpointVisitor implements SchemaVisitor {
         }
         inputSchema.setKey(inboundVariableName);
         info.addOutputVariable(inputSchema);
+    }
+
+    /**
+     * Resolves the {@link InboundConnectorHolder} of the project this visitor is bound to, returning null for an unregistered path rather than another project's holder.
+     *
+     * @return the holder to read inbound connector schemas from, or null if the project is unknown
+     */
+    private InboundConnectorHolder resolveInboundConnectorHolder() {
+
+        ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(projectPath);
+        return projectContext != null ? projectContext.getInboundConnectorHolder() : null;
     }
 
     private String getParameterValue(InboundEndpoint inboundEndpoint, String parameterName) {

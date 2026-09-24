@@ -17,7 +17,10 @@ package org.eclipse.lemminx.customservice.synapse.expression;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.SynapseLanguageService;
 import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionContext;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionRequest;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionCompletionResponse;
@@ -59,7 +62,6 @@ public class ExpressionCompletionsProvider {
             Pattern.quote("file:" + File.separator + File.separator) + "(.+?)" +
                     Pattern.quote(Path.of("src", "main", "wso2mi").toString()) + ".*");
     private static final String EXPRESSION_REGEX = "\\$\\{([^}]*)}?$";
-    private static String projectPath;
 
     private ExpressionCompletionsProvider() {
 
@@ -122,10 +124,20 @@ public class ExpressionCompletionsProvider {
         if (request.getXMLDocument() == null) {
             return null;
         }
-        String projectPath = getProjectPath(request.getXMLDocument().getDocumentURI());
-        ServerLessTryoutHandler serverLessTryoutHandler = new ServerLessTryoutHandler(projectPath);
-
         String documentUri = Utils.getAbsolutePath(request.getXMLDocument().getDocumentURI());
+
+        // Use the ConnectorHolder of the project that owns this document so connector response/target variables contribute their schema to completions (an empty holder leaves connector mediators unresolved).
+        ProjectContext projectContext = SynapseLanguageService.resolveProjectContext(documentUri);
+        if (projectContext == null) {
+            LOGGER.warning("No registered project for " + documentUri
+                    + "; connector schemas are unavailable for expression completions in this document.");
+        }
+        ConnectorHolder connectorHolder =
+                projectContext != null ? projectContext.getConnectorHolder() : new ConnectorHolder();
+        String projectPath = projectContext != null ? projectContext.getProjectUri()
+                : getProjectPath(request.getXMLDocument().getDocumentURI());
+        ServerLessTryoutHandler serverLessTryoutHandler =
+                new ServerLessTryoutHandler(projectPath, connectorHolder);
         String payload = ExpressionCompletionUtils.getInputPayload(projectPath, documentUri, request.getPosition());
 
         // Add a dummy mediator if the current mediator is a new mediator
@@ -152,15 +164,11 @@ public class ExpressionCompletionsProvider {
 
     private static String getProjectPath(String documentURI) {
 
-        if (StringUtils.isNotEmpty(projectPath)) {
-            return projectPath;
-        }
         Matcher matcher = PROJECT_PATH_REGEX.matcher(documentURI);
         if (!matcher.matches()) {
             return null;
         }
-        projectPath = matcher.group(1);
-        return projectPath;
+        return matcher.group(1);
     }
 
     private static void fillAttributeValueWithExpression(String valuePrefix, ICompletionRequest request,

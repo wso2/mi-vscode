@@ -22,7 +22,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
+
 import com.google.gson.JsonSyntaxException;
 import org.apache.commons.lang3.StringEscapeUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -49,6 +49,7 @@ import org.eclipse.lemminx.dom.DOMParser;
 import org.eclipse.lemminx.uriresolver.URIResolverExtensionManager;
 import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.Position;
+import org.eclipse.lsp4j.WorkspaceFolder;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
@@ -94,6 +95,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.logging.Level;
@@ -124,7 +126,13 @@ import javax.xml.transform.stream.StreamResult;
 public class Utils {
 
     private static final Logger logger = Logger.getLogger(Utils.class.getName());
-    private static FileSystem fileSystem;
+    private static final String FILE_ASSOCIATIONS = "fileAssociations";
+    private static final String PATTERN = "pattern";
+
+    private static final Map<String, Map<String, JsonObject>> UI_SCHEMA_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String, Mustache>> TEMPLATE_CACHE = new ConcurrentHashMap<>();
+
+    private static final Object JAR_RESOURCE_LOCK = new Object();
     private static final MustacheFactory mustacheFactory = new SynapseMustacheFactory();
 
     /**
@@ -883,17 +891,43 @@ public class Utils {
         return false;
     }
 
+    /**
+     * Loads and caches the UI schemas in {@code resourceFolderName} from the jar, giving each caller its own deep copy so one project cannot mutate what another reads.
+     *
+     * @param resourceFolderName the jar resource folder to read
+     * @return this caller's own map of schema name to schema
+     */
     public static Map<String, JsonObject> getUISchemaMap(String resourceFolderName) {
+
+        Map<String, JsonObject> cached = UI_SCHEMA_CACHE.get(resourceFolderName);
+        if (cached == null) {
+            synchronized (JAR_RESOURCE_LOCK) {
+                cached = UI_SCHEMA_CACHE.get(resourceFolderName);
+                if (cached == null) {
+                    cached = loadUISchemaMap(resourceFolderName);
+                    if (!cached.isEmpty()) {
+                        UI_SCHEMA_CACHE.put(resourceFolderName, cached);
+                    }
+                }
+            }
+        }
+        Map<String, JsonObject> schemas = new HashMap<>();
+        cached.forEach((name, schema) -> schemas.put(name, schema.deepCopy()));
+        return schemas;
+    }
+
+    private static Map<String, JsonObject> loadUISchemaMap(String resourceFolderName) {
         Map<String, JsonObject> jsonMap = new HashMap<>();
         try {
             URI resourceURI = Utils.class.getClassLoader().getResource(resourceFolderName).toURI();
-            fileSystem = FileSystems.newFileSystem(resourceURI, Map.of());
-            Path resourcePath = fileSystem.getPath(resourceFolderName);
-            Stream<Path> paths = Files.walk(resourcePath, 1);
-            paths.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".json"))
-                    .forEach(path -> processJsonFile(path, jsonMap));
-            fileSystem.close();
+            try (FileSystem fs = FileSystems.newFileSystem(resourceURI, Map.of())) {
+                Path resourcePath = fs.getPath(resourceFolderName);
+                try (Stream<Path> paths = Files.walk(resourcePath, 1)) {
+                    paths.filter(Files::isRegularFile)
+                            .filter(path -> path.toString().endsWith(".json"))
+                            .forEach(path -> processJsonFile(path, jsonMap));
+                }
+            }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to mediator UI schemas from resources.", e);;
         }
@@ -1113,17 +1147,41 @@ public class Utils {
         return false;
     }
 
+    /**
+     * Loads and caches the compiled mustache templates in {@code resourceFolderName} from the jar, reading the jar only once and returning each caller its own map.
+     *
+     * @param resourceFolderName the jar resource folder to read
+     * @return this caller's own map of template name to compiled template
+     */
     public static Map<String, Mustache> getTemplateMap(String resourceFolderName) {
+
+        Map<String, Mustache> cached = TEMPLATE_CACHE.get(resourceFolderName);
+        if (cached == null) {
+            synchronized (JAR_RESOURCE_LOCK) {
+                cached = TEMPLATE_CACHE.get(resourceFolderName);
+                if (cached == null) {
+                    cached = loadTemplateMap(resourceFolderName);
+                    if (!cached.isEmpty()) {
+                        TEMPLATE_CACHE.put(resourceFolderName, cached);
+                    }
+                }
+            }
+        }
+        return new HashMap<>(cached);
+    }
+
+    private static Map<String, Mustache> loadTemplateMap(String resourceFolderName) {
         Map<String, Mustache> templateMap = new HashMap<>();
         try {
             URI resourceURI = Utils.class.getClassLoader().getResource(resourceFolderName).toURI();
-            fileSystem = FileSystems.newFileSystem(resourceURI, Map.of());
-            Path templatesPath = fileSystem.getPath(resourceFolderName);
-            Stream<Path> paths = Files.walk(templatesPath, 1);
-            paths.filter(Files::isRegularFile)
-                    .filter(path -> path.toString().endsWith(".mustache"))
-                    .forEach(path -> loadTemplate(path, resourceFolderName, templateMap));
-            fileSystem.close();
+            try (FileSystem fs = FileSystems.newFileSystem(resourceURI, Map.of())) {
+                Path templatesPath = fs.getPath(resourceFolderName);
+                try (Stream<Path> paths = Files.walk(templatesPath, 1)) {
+                    paths.filter(Files::isRegularFile)
+                            .filter(path -> path.toString().endsWith(".mustache"))
+                            .forEach(path -> loadTemplate(path, resourceFolderName, templateMap));
+                }
+            }
         } catch (Exception e) {
             logger.log(Level.SEVERE, "Failed to load mustache templates from resources.", e);;
         }
@@ -1195,37 +1253,114 @@ public class Utils {
         return new File(uri).getAbsolutePath();
     }
 
-    public static Path updateSynapseCatalogSettings(InitializeParams params) throws IOException, URISyntaxException {
 
-        String projectUri = params.getRootPath();
-        Object initParams = params.getInitializationOptions();
-        Gson gson = new Gson();
-        JsonElement jsonElement = gson.toJsonTree(initParams);
-        if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has(Constant.SETTINGS)) {
-            JsonObject settings = jsonElement.getAsJsonObject().getAsJsonObject(Constant.SETTINGS);
-            Path schemaPath = copyXSDFiles(projectUri);
-            JsonElement updatedParams = updateSynapseCatalogSettings(settings, schemaPath);
-            JsonObject updatedSettings = new JsonObject();
-            updatedSettings.add(Constant.SETTINGS, updatedParams);
-            params.setInitializationOptions(updatedSettings);
-            return schemaPath;
 
-        }
-        return null;
-    }
-
-    public static JsonElement updateSynapseCatalogSettings(JsonObject settings, Path schemaPath)
+    public static Map<String, Path> updateSynapseFileAssociationSettings(InitializeParams params)
             throws IOException, URISyntaxException {
 
-        if (schemaPath != null) {
-            Path catalogPath = schemaPath.resolve("catalog.xml");
-            JsonArray catalogsArray = new JsonArray();
-            catalogsArray.add(new JsonPrimitive(catalogPath.toString()));
-            if (settings != null && settings.isJsonObject() && settings.has(Constant.XML)) {
-                settings.getAsJsonObject(Constant.XML).add(Constant.CATALOGS, catalogsArray);
+        logger.info("Updating Synapse file association settings");
+
+        List<String> folderUris = new ArrayList<>();
+        List<WorkspaceFolder> workspaceFolders = params.getWorkspaceFolders();
+        if (workspaceFolders != null && !workspaceFolders.isEmpty()) {
+            for (WorkspaceFolder folder : workspaceFolders) {
+                folderUris.add(folder.getUri());
             }
         }
+
+        Map<String, Path> workspaceSchemas = new HashMap<>();
+        for (String folderUri : folderUris) {
+            String projectUri = getAbsolutePath(folderUri);
+            Path schemaDir = copyXSDFiles(projectUri);
+            workspaceSchemas.put(folderUri, schemaDir);
+        }
+
+        Object initOptions = params.getInitializationOptions();
+        Gson gson = new Gson();
+        JsonElement jsonElement = gson.toJsonTree(initOptions);
+        if (jsonElement != null && jsonElement.isJsonObject() && jsonElement.getAsJsonObject().has(Constant.SETTINGS)) {
+            JsonObject settings = jsonElement.getAsJsonObject().getAsJsonObject(Constant.SETTINGS);
+            JsonElement updatedParams = updateSynapseFileAssociationSettings(settings, workspaceSchemas);
+            JsonObject updatedRoot = new JsonObject();
+            updatedRoot.add(Constant.SETTINGS, updatedParams);
+            params.setInitializationOptions(updatedRoot);
+        }
+
+        return workspaceSchemas;
+    }
+
+    public static JsonElement updateSynapseFileAssociationSettings(JsonObject settings,
+            Map<String, Path> workspaceSchemas) {
+
+        if (workspaceSchemas == null || workspaceSchemas.isEmpty()) {
+            return settings;
+        }
+
+        JsonArray fileAssociationsArray = new JsonArray();
+        for (Map.Entry<String, Path> entry : workspaceSchemas.entrySet()) {
+            String folderUri = entry.getKey();
+            Path schemaDir = entry.getValue();
+            Path xsdPath = schemaDir.resolve("synapse_config.xsd");
+
+            // Convert the folder URI to a filesystem path for the glob pattern,
+            String patternBase = folderUri;
+            try {
+                patternBase = Paths.get(new URI(folderUri)).toString().replace("\\", "/");
+            } catch (Exception e) {
+                logger.warning("Failed to convert folder URI to filesystem path: " + folderUri);
+                patternBase = folderUri.replace("\\", "/");
+            }
+
+            JsonObject association = new JsonObject();
+            association.addProperty(PATTERN, patternBase + "/**/*.xml");
+            association.addProperty("systemId", xsdPath.toUri().toString());
+            fileAssociationsArray.add(association);
+        }
+
+        if (settings != null && settings.isJsonObject() && settings.has(Constant.XML)) {
+            JsonObject xmlObj = settings.getAsJsonObject(Constant.XML);
+            // Merge with (not replace) the client-forwarded xml.fileAssociations, keeping theirs first so a user's more specific association still wins, and skipping entries we've already added so repeated calls don't create duplicates.
+            JsonArray mergedAssociations = new JsonArray();
+            JsonElement existingAssociations = xmlObj.get(FILE_ASSOCIATIONS);
+            if (existingAssociations != null && existingAssociations.isJsonArray()) {
+                for (JsonElement association : existingAssociations.getAsJsonArray()) {
+                    mergedAssociations.add(association);
+                }
+            }
+            for (JsonElement association : fileAssociationsArray) {
+                if (!containsAssociation(mergedAssociations, association)) {
+                    mergedAssociations.add(association);
+                }
+            }
+            xmlObj.add(FILE_ASSOCIATIONS, mergedAssociations);
+            // Drop xml.catalogs, since it's not user configuration but a single shared catalog that the per-project fileAssociations above already replace.
+            if (xmlObj.has(Constant.CATALOGS)) {
+                xmlObj.remove(Constant.CATALOGS);
+            }
+        }
+
         return settings;
+    }
+
+    /**
+     * Checks whether {@code associations} already holds an entry for the same {@code pattern}.
+     *
+     * @param associations the associations collected so far
+     * @param association  the association to look for
+     * @return true if an entry with the same pattern is already present
+     */
+    private static boolean containsAssociation(JsonArray associations, JsonElement association) {
+
+        if (!association.isJsonObject() || !association.getAsJsonObject().has(PATTERN)) {
+            return false;
+        }
+        JsonElement pattern = association.getAsJsonObject().get(PATTERN);
+        for (JsonElement existing : associations) {
+            if (existing.isJsonObject() && pattern.equals(existing.getAsJsonObject().get(PATTERN))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static String deriveResourceKeyFromFilePath(String filePath) {

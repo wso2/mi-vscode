@@ -14,68 +14,158 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
+import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Registry of per-project DB-driver {@link URLClassLoader}s, keyed by normalized project root, so
+ * drivers loaded for one project in the shared language-server process cannot evict or collide with another's.
+ */
 public class DynamicClassLoader {
 
-    private static URLClassLoader classLoader;
-    private static final Object lock = new Object();
-    private static Map<String, URL> currentUrls = new HashMap<>();
+    private static final Map<String, ProjectDrivers> registry = new ConcurrentHashMap<>();
 
-    /**
-     * Add DB drivers in a folder to the class loader
-     *
-     * @param jarDirectory path of the DB driver jars folder
-     */
-    public static void updateClassLoader(File jarDirectory) throws Exception {
-        synchronized (lock) {
-            File[] jarFiles = jarDirectory.listFiles((dir1, name) -> name.endsWith(".jar"));
+    /** Per-project driver classloader state, with all mutation synchronized on the instance. */
+    private static final class ProjectDrivers {
 
+        // Stable parent for every project's loader, rather than the calling thread's context
+        // classloader (which varies unpredictably across the shared server's request-pool threads).
+        private static final ClassLoader PARENT = DynamicClassLoader.class.getClassLoader();
+
+        private URLClassLoader classLoader;
+        // Keyed by canonical path rather than URL, since URL/File path equality is case-sensitive
+        // and breaks deduplication and removal on case-insensitive filesystems (e.g. Windows).
+        private final Map<String, URL> currentUrls = new HashMap<>();
+        // Canonical paths of jars present on disk when the loader was built, tracked so loader() can
+        // detect a driver that disappeared or reappeared outside updateJar, since a URLClassLoader
+        // permanently drops a URL the first time it fails to open it and never recovers on its own.
+        private Set<String> presentWhenBuilt = Set.of();
+
+        synchronized void addDirectory(File jarDirectory) throws Exception {
+            File[] jarFiles = jarDirectory.listFiles((dir, name) -> name.endsWith(".jar"));
             if (jarFiles == null || jarFiles.length == 0) {
                 return;
             }
-
-            Map<String, URL> newUrls = new HashMap<>();
+            boolean changed = false;
             for (File jarFile : jarFiles) {
-                newUrls.put(jarFile.getCanonicalPath(), jarFile.toURI().toURL());
+                String jarKey = jarFile.getCanonicalPath();
+                if (!currentUrls.containsKey(jarKey)) {
+                    currentUrls.put(jarKey, jarFile.toURI().toURL());
+                    changed = true;
+                }
             }
-
-            if (!currentUrls.keySet().equals(newUrls.keySet())) {
-                classLoader = new URLClassLoader(newUrls.values().toArray(new URL[0]),
-                        Thread.currentThread().getContextClassLoader());
-                currentUrls = newUrls;
+            if (changed) {
+                rebuild();
             }
         }
+
+        synchronized void updateJar(File jarFile, boolean addJar) throws Exception {
+            String jarKey = jarFile.getCanonicalPath();
+            boolean changed;
+            if (addJar) {
+                changed = currentUrls.putIfAbsent(jarKey, jarFile.toURI().toURL()) == null;
+            } else {
+                changed = currentUrls.remove(jarKey) != null;
+            }
+            if (changed) {
+                rebuild();
+            }
+        }
+
+        synchronized URLClassLoader loader() {
+            Set<String> present = presentJars();
+            if (classLoader == null || !present.equals(presentWhenBuilt)) {
+                rebuild(present);
+            }
+            return classLoader;
+        }
+
+        /** Canonical paths of the registered jars that are currently readable files on disk. */
+        private Set<String> presentJars() {
+            Set<String> present = new HashSet<>();
+            for (String jarKey : currentUrls.keySet()) {
+                if (new File(jarKey).isFile()) {
+                    present.add(jarKey);
+                }
+            }
+            return present;
+        }
+
+        private void rebuild() {
+            rebuild(presentJars());
+        }
+
+        // Missing jars stay in the URL array since currentUrls is the record of what's registered, and
+        // dropping them here would lose them for good once nothing re-registers a jar that reappears on disk.
+        private void rebuild(Set<String> present) {
+            classLoader = new URLClassLoader(currentUrls.values().toArray(new URL[0]), PARENT);
+            presentWhenBuilt = present;
+        }
+    }
+
+    private static ProjectDrivers forProject(String projectKey) {
+        return registry.computeIfAbsent(normalize(projectKey), key -> new ProjectDrivers());
     }
 
     /**
-     * Add or remove a DB driver from the class path
+     * Add DB drivers in a folder to the given project's class loader (union — never evicts
+     * drivers already loaded for this or any other project).
      *
-     * @param jarFile path of the DB driver jar
-     * @param addJar whether the jar should be added or removed
+     * @param projectKey   this project's root (URI or absolute path — see {@link #normalize})
+     * @param jarDirectory path of the DB driver jars folder
      */
-    public static void updateJarInClassLoader(File jarFile, boolean addJar) throws Exception {
-        synchronized (lock) {
-            String jarKey = jarFile.getCanonicalPath();
-            Map<String, URL> updatedUrls = new HashMap<>(currentUrls);
-            if (addJar) {
-                updatedUrls.putIfAbsent(jarKey, jarFile.toURI().toURL());
-            } else {
-                updatedUrls.remove(jarKey);
-            }
-            if (!updatedUrls.keySet().equals(currentUrls.keySet())) {
-                classLoader = new URLClassLoader(updatedUrls.values().toArray(new URL[0]),
-                        Thread.currentThread().getContextClassLoader());
-                currentUrls = updatedUrls;
-            }
-        }
+    public static void updateClassLoader(String projectKey, File jarDirectory) throws Exception {
+        forProject(projectKey).addDirectory(jarDirectory);
     }
 
-    public static URLClassLoader getClassLoader() {
-        return classLoader;
+    /**
+     * Add or remove a single DB driver from the given project's class path.
+     *
+     * @param projectKey this project's root (URI or absolute path — see {@link #normalize})
+     * @param jarFile    path of the DB driver jar
+     * @param addJar     whether the jar should be added or removed
+     */
+    public static void updateJarInClassLoader(String projectKey, File jarFile, boolean addJar) throws Exception {
+        forProject(projectKey).updateJar(jarFile, addJar);
+    }
+
+    /**
+     * @param projectKey this project's root (URI or absolute path — see {@link #normalize})
+     * @return the class loader scoped to this project's DB drivers
+     */
+    public static URLClassLoader getClassLoader(String projectKey) {
+        return forProject(projectKey).loader();
+    }
+
+    /**
+     * Drops the registry entry for a project (e.g. on project close) so a later reopen rebuilds cleanly,
+     * without closing the discarded {@link URLClassLoader} since a driver connection through it may still be in use.
+     *
+     * @param projectKey this project's root (URI or absolute path — see {@link #normalize})
+     */
+    public static void removeProject(String projectKey) {
+        registry.remove(normalize(projectKey));
+    }
+
+    /**
+     * Normalizes a project key via {@link WorkspaceManager#normalizeProjectPath(String)}, rather than a
+     * separate implementation, so the same project always maps to the same registry entry regardless of
+     * URI-vs-OS-path form or symlinks.
+     */
+    static String normalize(String projectKey) {
+        if (projectKey == null) {
+            return "";
+        }
+        return WorkspaceManager.normalizeProjectPath(projectKey);
     }
 }

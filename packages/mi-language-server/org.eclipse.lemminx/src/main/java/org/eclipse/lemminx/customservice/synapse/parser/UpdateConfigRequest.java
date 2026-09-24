@@ -14,7 +14,8 @@
 package org.eclipse.lemminx.customservice.synapse.parser;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class UpdateConfigRequest {
+public class UpdateConfigRequest extends AbstractProjectRequest {
     public List<ConfigDetails> configs;
 }

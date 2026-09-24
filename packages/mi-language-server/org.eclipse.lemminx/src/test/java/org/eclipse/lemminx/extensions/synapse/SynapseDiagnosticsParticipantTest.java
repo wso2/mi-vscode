@@ -14,8 +14,14 @@
 
 package org.eclipse.lemminx.extensions.synapse;
 
+import org.eclipse.lemminx.MockXMLLanguageServer;
 import org.eclipse.lemminx.SynapseLanguageService;
+import org.eclipse.lemminx.XMLTextDocumentService;
 import org.eclipse.lemminx.commons.TextDocument;
+import org.eclipse.lemminx.customservice.synapse.ProjectContext;
+import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
+import org.eclipse.lemminx.customservice.synapse.resourceFinder.AbstractResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.resourceFinder.NewProjectResourceFinder;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
 import org.eclipse.lemminx.dom.DOMDocument;
@@ -1675,6 +1681,8 @@ public class SynapseDiagnosticsParticipantTest {
     // ===== Cross-project reference resolution (pom.xml dependencies) =====
 
     private String originalUserHome;
+    private WorkspaceManager liveWorkspaceManager;
+    private final List<String> registeredProjectUris = new ArrayList<>();
 
     @AfterEach
     public void restoreUserHome() {
@@ -1682,19 +1690,45 @@ public class SynapseDiagnosticsParticipantTest {
             System.setProperty("user.home", originalUserHome);
             originalUserHome = null;
         }
-        SynapseLanguageService.setLoadedResourceFinder(null);
+        // Unregister all projects so the next test again resolves no project, as it would in a fresh process.
+        if (liveWorkspaceManager != null) {
+            registeredProjectUris.forEach(liveWorkspaceManager::removeProject);
+            liveWorkspaceManager = null;
+        }
+        registeredProjectUris.clear();
         SynapseDiagnosticsParticipant.clearSkipCrossFileValidation();
+        SynapseDiagnosticsParticipant.clearProjectUriOverride();
     }
 
     /**
-     * Simulates what {@link SynapseLanguageService#init} does for dependent projects:
-     * loads them via a real finder and publishes it so the diagnostics participant
-     * can see the resulting map through {@link SynapseLanguageService#getLoadedDependentResources()}.
+     * Returns the {@link WorkspaceManager} that {@link SynapseLanguageService#resolveProjectContext} resolves against, creating it on first use by constructing a real {@link SynapseLanguageService} exactly as production does.
      */
-    private void loadDependentResourcesForProject(Path projectPath) {
+    private WorkspaceManager liveWorkspaceManager() {
+        if (liveWorkspaceManager == null) {
+            MockXMLLanguageServer server = new MockXMLLanguageServer();
+            new SynapseLanguageService((XMLTextDocumentService) server.getTextDocumentService(), server);
+            liveWorkspaceManager = server.getWorkspaceManager();
+        }
+        return liveWorkspaceManager;
+    }
+
+    /**
+     * Registers {@code projectPath} as an open project with its dependent (.car) resources preloaded, via a real {@link ProjectContext} whose resource finder alone is overridden to skip the costly {@code initProject}; must be called after {@code user.home} is redirected since the finder reads the dependency cache from under it.
+     */
+    private void registerProjectWithDependencies(Path projectPath) {
         NewProjectResourceFinder finder = new NewProjectResourceFinder();
+        finder.setConnectorHolder(new ConnectorHolder());
         finder.loadDependentResources(projectPath.toString());
-        SynapseLanguageService.setLoadedResourceFinder(finder);
+
+        ProjectContext context = new ProjectContext(projectPath.toString(), false, "4.4.0") {
+            @Override
+            public AbstractResourceFinder getResourceFinder() {
+                return finder;
+            }
+        };
+
+        liveWorkspaceManager().addProject(projectPath.toString(), context);
+        registeredProjectUris.add(projectPath.toString());
     }
 
     /**
@@ -1737,7 +1771,7 @@ public class SynapseDiagnosticsParticipantTest {
         Files.writeString(depSequence,
                 "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"fromDep\"><log/></sequence>");
 
-        loadDependentResourcesForProject(consumer);
+        registerProjectWithDependencies(consumer);
         List<Diagnostic> diags = diagnoseAtPath(xml, apiXml);
         List<Diagnostic> unresolved = diagnosticsWithCode(diags, "UnresolvedArtifactReference");
         assertTrue(unresolved.isEmpty(),
@@ -1766,11 +1800,53 @@ public class SynapseDiagnosticsParticipantTest {
         Files.writeString(depSequence,
                 "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"somethingElse\"><log/></sequence>");
 
-        loadDependentResourcesForProject(consumer);
+        registerProjectWithDependencies(consumer);
         List<Diagnostic> diags = diagnoseAtPath(xml, apiXml);
         List<Diagnostic> unresolved = diagnosticsWithCode(diags, "UnresolvedArtifactReference");
         assertEquals(1, unresolved.size());
         assertTrue(unresolved.get(0).getMessage().contains("reallyDoesNotExist"));
+    }
+
+    /**
+     * Verifies dependent artifacts are scoped per project: a document in one open project must not resolve against another open project's {@code .car} dependencies.
+     */
+    @Test
+    public void testDependencyOfOneProjectDoesNotResolveInAnother(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        // Only 'withDep' has a dependency supplying 'fromDep'; 'noDep' has none.
+        Path withDep = tempDir.resolve("withDep");
+        Path noDep = tempDir.resolve("noDep");
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"fromDep\"/></inSequence>"
+                + "</resource></api>";
+
+        String hash = Utils.getHash(withDep.toString());
+        Path depSequence = tempDir.resolve(".wso2-mi/integration-project-dependencies")
+                .resolve("withDep_" + hash)
+                .resolve("Extracted/dep/src/main/wso2mi/artifacts/sequences/fromDep-1.0.0.xml");
+        Files.createDirectories(depSequence.getParent());
+        Files.writeString(depSequence,
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"fromDep\"><log/></sequence>");
+
+        registerProjectWithDependencies(withDep);
+        registerProjectWithDependencies(noDep);
+
+        // Sanity check: the reference does resolve for the project that owns the dependency.
+        List<Diagnostic> owning = diagnoseAtPath(xml,
+                withDep.resolve("src/main/wso2mi/artifacts/apis/cvh.xml"));
+        assertTrue(diagnosticsWithCode(owning, "UnresolvedArtifactReference").isEmpty(),
+                "'fromDep' must resolve in the project whose dependency declares it");
+
+        // The actual assertion: the same reference must stay unresolved in the other project.
+        List<Diagnostic> foreign = diagnoseAtPath(xml,
+                noDep.resolve("src/main/wso2mi/artifacts/apis/cvh.xml"));
+        List<Diagnostic> unresolved = diagnosticsWithCode(foreign, "UnresolvedArtifactReference");
+        assertEquals(1, unresolved.size(),
+                "'fromDep' belongs to another project's dependencies and must not resolve here");
+        assertTrue(unresolved.get(0).getMessage().contains("fromDep"));
     }
 
     // ===== skipCrossFileValidation opt-out (Change 1) =====
@@ -1906,5 +1982,136 @@ public class SynapseDiagnosticsParticipantTest {
         participant.doDiagnostics(docB, diagsB, null, () -> {});
         assertTrue(diagnosticsWithCode(diagsB, "DuplicateArtifactName").isEmpty(),
                 "Stale cross-file duplicate state must not leak to a request with no project index");
+    }
+
+    // ===== projectUri routing for label-URI (Copilot) requests =====
+
+    /**
+     * Runs diagnostics on a code string whose URI is a bare label rather than a path, as the MI
+     * Copilot flow sends, optionally naming the project the way {@code codeDiagnostic} does.
+     */
+    private List<Diagnostic> diagnoseAsLabel(String xml, String label, String projectUri) {
+        try {
+            SynapseDiagnosticsParticipant.setProjectUriOverride(projectUri);
+            TextDocument textDocument = new TextDocument(xml, label);
+            DOMDocument document = DOMParser.getInstance().parse(textDocument, null);
+            List<Diagnostic> diagnostics = new ArrayList<>();
+            new SynapseDiagnosticsParticipant().doDiagnostics(document, diagnostics, null, () -> {});
+            return diagnostics;
+        } finally {
+            SynapseDiagnosticsParticipant.clearProjectUriOverride();
+        }
+    }
+
+    /** Builds a project whose only 'fromDep' sequence comes from an extracted .car dependency. */
+    private Path projectWithDepSequence(Path tempDir, String name) throws Exception {
+        Path project = tempDir.resolve(name);
+        Path depSequence = tempDir.resolve(".wso2-mi/integration-project-dependencies")
+                .resolve(name + "_" + Utils.getHash(project.toString()))
+                .resolve("Extracted/dep/src/main/wso2mi/artifacts/sequences/fromDep-1.0.0.xml");
+        Files.createDirectories(depSequence.getParent());
+        Files.writeString(depSequence,
+                "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"fromDep\"><log/></sequence>");
+        Files.createDirectories(project.resolve("src/main/wso2mi/artifacts/apis"));
+        registerProjectWithDependencies(project);
+        return project;
+    }
+
+    private static final String REFERENCES_FROM_DEP =
+            "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                    + "<resource methods=\"GET\" uri-template=\"/\">"
+                    + "<inSequence><sequence key=\"fromDep\"/></inSequence>"
+                    + "</resource></api>";
+
+    /**
+     * A Copilot snippet is labelled after the artifact's name attribute, so its URI sits under no
+     * project root. Naming the project must route it, letting it see that project's .car dependencies.
+     * The snippet also references a genuinely missing artifact, so the assertion distinguishes a built
+     * index that resolved 'fromDep' from no index at all (which would report nothing either way).
+     */
+    @Test
+    public void testLabelUriResolvesDependencyWhenProjectUriNamed(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        Path project = projectWithDepSequence(tempDir, "consumer");
+
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\"><inSequence>"
+                + "<sequence key=\"fromDep\"/><sequence key=\"reallyDoesNotExist\"/>"
+                + "</inSequence></resource></api>";
+        List<String> unresolved = diagnosticsWithCode(
+                diagnoseAsLabel(xml, "cvh.xml", project.toString()), "UnresolvedArtifactReference")
+                .stream().map(Diagnostic::getMessage).collect(Collectors.toList());
+        assertEquals(1, unresolved.size(),
+                "The named project must build an index that flags only the missing artifact, but got: "
+                        + unresolved);
+        assertTrue(unresolved.get(0).contains("reallyDoesNotExist"),
+                "'fromDep' comes from the named project's dependencies and must resolve");
+    }
+
+    /** The same snippet, still routed by projectUri, must keep flagging a genuinely missing artifact. */
+    @Test
+    public void testLabelUriStillFlagsUnknownArtifactWhenProjectUriNamed(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        Path project = projectWithDepSequence(tempDir, "consumer");
+
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"reallyDoesNotExist\"/></inSequence>"
+                + "</resource></api>";
+        List<Diagnostic> unresolved =
+                diagnosticsWithCode(diagnoseAsLabel(xml, "cvh.xml", project.toString()),
+                        "UnresolvedArtifactReference");
+        assertEquals(1, unresolved.size(), "Routing must not mask a genuinely unknown artifact");
+        assertTrue(unresolved.get(0).getMessage().contains("reallyDoesNotExist"));
+    }
+
+    /**
+     * Without a projectUri the label resolves no project at all, so no artifact index is built and
+     * cross-file checks contribute nothing. This is the gap the projectUri plumbing closes.
+     */
+    @Test
+    public void testLabelUriWithoutProjectUriBuildsNoIndex(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        projectWithDepSequence(tempDir, "consumer");
+
+        String xml = "<api xmlns=\"" + SYNAPSE_NS + "\" name=\"cvh\" context=\"/cvh\">"
+                + "<resource methods=\"GET\" uri-template=\"/\">"
+                + "<inSequence><sequence key=\"reallyDoesNotExist\"/></inSequence>"
+                + "</resource></api>";
+        assertTrue(diagnosticsWithCode(diagnoseAsLabel(xml, "cvh.xml", null),
+                        "UnresolvedArtifactReference").isEmpty(),
+                "An unrouted label request has no project index, so it reports no cross-file findings");
+    }
+
+    /**
+     * The override is a fallback, never an override: a document whose URI does match a registered
+     * project must be answered from that project even when the request names a different one.
+     */
+    @Test
+    public void testDocumentUriWinsOverNamedProject(@TempDir Path tempDir) throws Exception {
+        originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+
+        Path withDep = projectWithDepSequence(tempDir, "withDep");
+        Path noDep = tempDir.resolve("noDep");
+        Files.createDirectories(noDep.resolve("src/main/wso2mi/artifacts/apis"));
+        registerProjectWithDependencies(noDep);
+
+        // The document lives in noDep; the request names withDep, which does supply 'fromDep'.
+        try {
+            SynapseDiagnosticsParticipant.setProjectUriOverride(withDep.toString());
+            List<Diagnostic> unresolved = diagnosticsWithCode(
+                    diagnoseAtPath(REFERENCES_FROM_DEP,
+                            noDep.resolve("src/main/wso2mi/artifacts/apis/cvh.xml")),
+                    "UnresolvedArtifactReference");
+            assertEquals(1, unresolved.size(),
+                    "A document owned by noDep must not borrow withDep's dependencies");
+            assertTrue(unresolved.get(0).getMessage().contains("fromDep"));
+        } finally {
+            SynapseDiagnosticsParticipant.clearProjectUriOverride();
+        }
     }
 }

@@ -14,11 +14,13 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
 /**
  * Request to add or update a dependency override in connector-config.json.
  * Fields that are null leave the corresponding values unchanged (or unset for new entries).
  */
-public class UpdateConnectorDependencyRequest {
+public class UpdateConnectorDependencyRequest extends AbstractProjectRequest {
 
     /** Required. Connector Maven artifactId (e.g. "mi-connector-file"). */
     public String connectorArtifactId;
@@ -43,4 +45,5 @@ public class UpdateConnectorDependencyRequest {
 
     /** When true, marks this override as an intentionally added dependency with no corresponding entry in descriptor.yml. */
     public Boolean additionalDependency;
+
 }

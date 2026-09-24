@@ -13,9 +13,10 @@
  */
 package org.eclipse.lemminx.customservice.synapse.parser;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 import org.eclipse.lsp4j.TextEdit;
 
-public class DeployPluginDetails {
+public class DeployPluginDetails extends AbstractProjectRequest {
 
     private String truststorePath;
     private String truststorePassword;

@@ -15,8 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.parser;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class UpdatePropertyRequest {
+public class UpdatePropertyRequest extends AbstractProjectRequest {
 
     public List<PropertyDetails> properties;
 }

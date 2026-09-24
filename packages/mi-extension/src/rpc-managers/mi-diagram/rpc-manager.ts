@@ -389,6 +389,7 @@ import { getAPIMetadata } from "../../util/template-engine/mustach-templates/API
 import { WICommandIds, ICreateNewIntegrationCmdParams } from "@wso2/wso2-platform-core";
 import { MiVisualizerRpcManager } from "../mi-visualizer/rpc-manager";
 import { DebuggerConfig } from "../../debugger/config";
+import { SELECTED_SERVER_PATH } from "../../debugger/constants";
 import { getKubernetesConfiguration, getKubernetesDataConfiguration } from "../../util/template-engine/mustach-templates/KubernetesConfiguration";
 import { parseStringPromise, Builder } from "xml2js";
 import { MILanguageClient } from "../../lang-client/activator";
@@ -607,18 +608,32 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
         return null;
     }
 
+    // The single shared LS process launches the *initiating* project's MI runtime for a try-out
+    // session, so it needs that project's own configured server path on every try-out request.
+    private getConfiguredServerPath(): string {
+        const config = workspace.getConfiguration('MI', Uri.file(this.projectUri));
+        return config.get<string>(SELECTED_SERVER_PATH) || "";
+    }
+
+    // Catch and return errors as a response rather than rejecting, since a rejection here would leave the webview's Run button stuck spinning until the panel is reopened.
     async tryOutMediator(params: MediatorTryOutRequest): Promise<MediatorTryOutResponse> {
-        return new Promise(async (resolve) => {
+        try {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.tryOutMediator(params);
-            resolve(res);
-        });
+            return await langClient.tryOutMediator({
+                ...params,
+                projectUri: this.projectUri,
+                serverPath: this.getConfiguredServerPath()
+            });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return { error: message } as MediatorTryOutResponse;
+        }
     }
 
     async shutDownTryoutServer(): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.shutdownTryoutServer();
+            const res = await langClient.shutdownTryoutServer(this.projectUri);
             resolve(res);
         });
     }
@@ -637,7 +652,11 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
             const payload = fs.readFileSync(payloadPath, "utf8");
             params.inputPayload = payload
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getMediatorInputOutputSchema(params);
+            const res = await langClient.getMediatorInputOutputSchema({
+                ...params,
+                projectUri: this.projectUri,
+                serverPath: this.getConfiguredServerPath()
+            });
             resolve(res);
         });
     }
@@ -774,7 +793,7 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
             let response: GenerateAPIResponse = { apiXml: "", endpointXml: "" };
             if (!xmlData) {
                 const langClient = await MILanguageClient.getInstance(this.projectUri);
-                const projectDetailsRes = await langClient?.getProjectDetails();
+                const projectDetailsRes = await langClient?.getProjectDetails(this.projectUri);
                 const runtimeVersion = projectDetailsRes.primaryDetails.runtimeVersion.value;
                 const isRegistrySupported = compareVersions(runtimeVersion, RUNTIME_VERSION_440) < 0;
 
@@ -1676,6 +1695,7 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
             const sequenceList = await langClient.getAvailableResources({
                 documentIdentifier: this.projectUri,
                 resourceType: "sequence",
+                projectUri: this.projectUri,
             });
 
             const endpoints: string[] = [];
@@ -4203,7 +4223,7 @@ ${endpointAttributes}
                 try {
                     await fs.promises.copyFile(connectorPath, inboundDestinationPath);
 
-                    const updateResult = await langClient.updateInboundConnectors(path.basename(connectorPath));
+                    const updateResult = await langClient.updateInboundConnectors(this.projectUri, path.basename(connectorPath));
                     if (updateResult !== "success") {
                         deleteInboundZip();
                         return { success: false, error: updateResult || "Failed to import inbound endpoint." };
@@ -4217,7 +4237,7 @@ ${endpointAttributes}
                 }
             }
 
-            const isDuplicate = await langClient.isDuplicateConnector(connectorPath);
+            const isDuplicate = await langClient.isDuplicateConnector(connectorPath, this.projectUri);
             const parsedConnectorName = isDuplicate?.parsedConnectorName;
             if (!parsedConnectorName || !parsedConnectorName.trim()) {
                 return { success: false, error: 'Unable to determine the connector name from the selected zip file. Please verify the file is a valid connector.' };
@@ -4431,7 +4451,11 @@ ${endpointAttributes}
                 registryResources: responses.flatMap(r => r?.registryResources ?? [])
             };
         } else {
-            return (await MILanguageClient.getInstance(this.projectUri)).getAvailableResources(params);
+            // Stamp this manager's project on the request since webview callers (e.g. Keylookup dropdowns) don't know their project and would otherwise fall back to the default workspace folder, missing this project's .car dependency artifacts.
+            return (await MILanguageClient.getInstance(this.projectUri)).getAvailableResources({
+                ...params,
+                projectUri: params.projectUri ?? this.projectUri
+            });
         }
     }
 
@@ -4897,7 +4921,8 @@ ${endpointAttributes}
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.saveInboundEPUischema({
                 connectorName: params.connectorName,
-                uiSchema: params.uiSchema
+                uiSchema: params.uiSchema,
+                projectUri: this.projectUri
             });
 
             resolve(res);
@@ -4909,7 +4934,8 @@ ${endpointAttributes}
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.getInboundEPUischema({
                 connectorName: params.connectorName,
-                documentPath: params.documentPath
+                documentPath: params.documentPath,
+                projectUri: this.projectUri
             });
             resolve(res);
         });
@@ -5167,7 +5193,7 @@ ${keyValuesXML}`;
     async getAllResourcePaths(): Promise<GetAllResourcePathsResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getResourceFiles();
+            const res = await langClient.getResourceFiles(this.projectUri);
             resolve({ resourcePaths: res });
         });
     }
@@ -5175,7 +5201,7 @@ ${keyValuesXML}`;
     async getConfigurableEntries(): Promise<GetConfigurableEntriesResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getConfigurableEntries();
+            const res = await langClient.getConfigurableEntries(this.projectUri);
             resolve({ configurableEntries: res });
         });
     }
@@ -6282,7 +6308,7 @@ ${keyValuesXML}`;
 
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const response = await langClient?.testDbConnection(req);
+            const response = await langClient?.testDbConnection({ ...req, projectUri: this.projectUri });
             resolve({ success: response ? response.success : false });
         });
     }
@@ -6348,7 +6374,7 @@ ${keyValuesXML}`;
     async checkDBDriver(className: string): Promise<CheckDBDriverResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.checkDBDriver(className);
+            const res = await langClient.checkDBDriver(className, this.projectUri);
             resolve(res);
         });
     }
@@ -6356,7 +6382,7 @@ ${keyValuesXML}`;
     async addDBDriver(params: AddDriverRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.addDBDriver(params);
+            const res = await langClient.addDBDriver({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6364,7 +6390,7 @@ ${keyValuesXML}`;
     async removeDBDriver(params: AddDriverRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.removeDBDriver(params);
+            const res = await langClient.removeDBDriver({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6372,7 +6398,7 @@ ${keyValuesXML}`;
     async modifyDBDriver(params: AddDriverRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.modifyDBDriver(params);
+            const res = await langClient.modifyDBDriver({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6381,7 +6407,7 @@ ${keyValuesXML}`;
         const { documentUri, position, ...genQueryParams } = params;
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const xml = await langClient.generateQueries(genQueryParams);
+            const xml = await langClient.generateQueries({ ...genQueryParams, projectUri: this.projectUri });
 
             if (!xml) {
                 log('Failed to generate DSS Queries.');
@@ -6408,7 +6434,7 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.fetchTables({
-                ...params, tableData: "", datasourceName: ""
+                ...params, tableData: "", datasourceName: "", projectUri: this.projectUri
             });
             resolve(res);
         });
@@ -6465,7 +6491,7 @@ ${keyValuesXML}`;
     async getLocalInboundConnectors(): Promise<LocalInboundConnectorsResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            let response = await langClient.getLocalInboundConnectors();
+            let response = await langClient.getLocalInboundConnectors(this.projectUri);
             resolve(response);
         });
     }
@@ -6473,7 +6499,7 @@ ${keyValuesXML}`;
     async getConnectionSchema(param: GetConnectionSchemaRequest): Promise<GetConnectionSchemaResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            let response = await langClient.getConnectionSchema(param);
+            let response = await langClient.getConnectionSchema({ ...param, projectUri: this.projectUri });
             resolve(response);
         });
     }
@@ -6511,7 +6537,7 @@ ${keyValuesXML}`;
     async testConnectorConnection(params: TestConnectorConnectionRequest): Promise<TestConnectorConnectionResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.testConnectorConnection(params);
+            const res = await langClient.testConnectorConnection({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6636,7 +6662,7 @@ ${keyValuesXML}`;
     async getValueOfEnvVariable(variableName: string): Promise<string> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const response = await langClient.getConfigurableList();
+            const response = await langClient.getConfigurableList(this.projectUri);
             const envVariable = response.find(variable => variable.key === variableName);
             if (envVariable && envVariable.value != null && envVariable.value !== "") {
                 resolve(envVariable.value);
@@ -6843,7 +6869,8 @@ ${keyValuesXML}`;
                     operationName: params.operationName,
                     fieldName: params.fieldName,
                     selectedValue: params.selectedValue,
-                    connection: params.connection
+                    connection: params.connection,
+                    projectUri: this.projectUri
                 });
 
                 if (!response || !response.columns || !response.columns.length) {
@@ -6863,7 +6890,7 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
             const res = await langClient.getStoredProcedures({
-                ...params, tableData: "", datasourceName: ""
+                ...params, tableData: "", datasourceName: "", projectUri: this.projectUri
             });
             resolve(res);
         });
@@ -6872,7 +6899,7 @@ ${keyValuesXML}`;
     async downloadDriverForConnector(params: DriverDownloadRequest): Promise<DriverDownloadResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.downloadDriverForConnector(params);
+            const res = await langClient.downloadDriverForConnector({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6881,7 +6908,7 @@ ${keyValuesXML}`;
 
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const response = await langClient?.loadDriverAndTestConnection(req);
+            const response = await langClient?.loadDriverAndTestConnection({ ...req, projectUri: this.projectUri });
             resolve({ success: response ? response.success : false });
         });
     }
@@ -6890,7 +6917,9 @@ ${keyValuesXML}`;
         return new Promise(async (resolve) => {
 
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getDriverMavenCoordinates(params);
+            // params.filePath is blank until the driver has been downloaded, so the server cannot
+            // route this request by it — name the project explicitly, as the other driver RPCs do.
+            const res = await langClient.getDriverMavenCoordinates({ ...params, projectUri: this.projectUri });
             resolve(res);
 
         });
@@ -6972,7 +7001,7 @@ ${keyValuesXML}`;
     async getInputOutputMappings(params: GenerateMappingsParamsRequest): Promise<string[]> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getInputOutputMappings(params);
+            const res = await langClient.getInputOutputMappings({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6980,7 +7009,7 @@ ${keyValuesXML}`;
     async getConnectorDependencies(params: GetConnectorDependenciesRequest): Promise<GetConnectorDependenciesResponse> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getConnectorDependencies(params);
+            const res = await langClient.getConnectorDependencies({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6988,7 +7017,7 @@ ${keyValuesXML}`;
     async updateConnectorDependencyOverride(params: UpdateConnectorDependencyOverrideRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.updateConnectorDependencyOverride(params);
+            const res = await langClient.updateConnectorDependencyOverride({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -6996,7 +7025,7 @@ ${keyValuesXML}`;
     async resetConnectorDependencyOverrides(params: ResetConnectorDependencyOverridesRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.resetConnectorDependencyOverrides(params);
+            const res = await langClient.resetConnectorDependencyOverrides({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -7004,7 +7033,7 @@ ${keyValuesXML}`;
     async updateConnectorFlags(params: UpdateConnectorFlagsRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.updateConnectorFlags(params);
+            const res = await langClient.updateConnectorFlags({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -7012,7 +7041,7 @@ ${keyValuesXML}`;
     async updateGlobalConnectorFlags(params: UpdateGlobalConnectorFlagsRequest): Promise<boolean> {
         return new Promise(async (resolve) => {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.updateGlobalConnectorFlags(params);
+            const res = await langClient.updateGlobalConnectorFlags({ ...params, projectUri: this.projectUri });
             resolve(res);
         });
     }
@@ -7187,7 +7216,7 @@ ${keyValuesXML}`;
 
 async function exposeVersionedServices(projectUri: string): Promise<boolean> {
     const langClient = await MILanguageClient.getInstance(projectUri);
-    const projectDetailsRes = await langClient?.getProjectDetails();
+    const projectDetailsRes = await langClient?.getProjectDetails(projectUri);
     const isVersionedDeploymentEnabled = projectDetailsRes?.buildDetails?.versionedDeployment?.value;
     if (!isVersionedDeploymentEnabled) {
         return false;

@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.inbound.conector;
 
-public class InboundConnectorParam {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class InboundConnectorParam extends AbstractProjectRequest {
 
     public String connectorId;
     public String connectorName;

@@ -179,7 +179,7 @@ export function createManageConnectorExecute(
             if (isAdd) {
                 ensureOperationNotAborted(mainAbortSignal, 'loading existing dependencies');
                 const langClient = await MILanguageClient.getInstance(projectPath);
-                const projectDetails = await langClient.getProjectDetails();
+                const projectDetails = await langClient.getProjectDetails(projectPath);
                 existingDependencies = projectDetails.dependencies || { connectorDependencies: [], otherDependencies: [] };
                 logDebug(`[${toolName}] Existing connector dependencies: ${existingDependencies.connectorDependencies?.length || 0}`);
             }

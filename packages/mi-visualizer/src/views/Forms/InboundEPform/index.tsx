@@ -169,20 +169,28 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
             connectorName: connector.id
         });
 
-        setConnectorSchema(response?.uiSchema);
-    }
-
-    const selectStoreConnector = async (connector: any) => {
-        const localMatch = localConnectors.find((c: any) => c.name === connector.connectorName);
-        if (!localMatch) {
+        if (!response?.uiSchema) {
+            // Without this the card just looks unresponsive: the form stays on the connector list
+            // with nothing to explain why.
             rpcClient.getMiVisualizerRpcClient().showNotification({
-                message: `The "${connector.connectorName}" inbound-endpoint cannot be downloaded. Please make sure you are using the latest version of the extension.`,
-                type: "warning",
-                modal: true
+                message: `Could not load the ${connector.name} inbound endpoint configuration`,
+                type: "error"
             });
             return;
         }
-        const response = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: localMatch.id });
+
+        setConnectorSchema(response.uiSchema);
+    }
+
+    const selectStoreConnector = async (connector: any) => {
+        // A store connector that hasn't been downloaded yet has no local entry — the normal case in a fresh project — so prompt for the download instead of erroring on a missing id.
+        const localConnector = localConnectors?.find((c: any) => c.name === connector.connectorName);
+        if (!localConnector) {
+            requiresDownload(connector);
+            return;
+        }
+
+        const response = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: localConnector.id });
 
         if (response?.uiSchema) {
             setConnectorSchema(response?.uiSchema);
@@ -232,18 +240,27 @@ export function InboundEPWizard(props: InboundEPWizardProps) {
     };
 
     const handleAcceptDownload = () => {
-        const localMatch = localConnectors.find((c: any) => c.name === inboundOnconfirmation.connectorName);
-        if (!localMatch) {
-            rpcClient.getMiVisualizerRpcClient().showNotification({
-                message: `The "${inboundOnconfirmation.connectorName}" event integration is not recognized by this extension. Please make sure you are using the latest version of the extension.`,
-                type: "warning",
-                modal: true
-            });
-            declineDownload();
-            return;
-        }
         acceptDownload(async () => {
-            const schema = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: localMatch.id });
+            // The connector only becomes local as a result of this download, so its id has to come
+            // from a list fetched afterwards — the one rendered before never had an entry for it.
+            const response = await rpcClient.getMiDiagramRpcClient().getLocalInboundConnectors();
+            const connectors = response["inbound-connector-data"]?.filter(
+                (connector: any) => !HIDDEN_INBOUND_CONNECTORS.test(connector.name)) ?? [];
+            setLocalConnectors(connectors);
+
+            // Still missing after a successful download: the zip carries no uischema this extension
+            // can render, so no amount of retrying here will help — say so instead of failing silently.
+            const downloaded = connectors.find((c: any) => c.name === inboundOnconfirmation.connectorName);
+            if (!downloaded) {
+                rpcClient.getMiVisualizerRpcClient().showNotification({
+                    message: `The "${inboundOnconfirmation.connectorName}" event integration is not recognized by this extension. Please make sure you are using the latest version of the extension.`,
+                    type: "warning",
+                    modal: true
+                });
+                return;
+            }
+
+            const schema = await rpcClient.getMiDiagramRpcClient().getInboundEPUischema({ connectorName: downloaded.id });
             setConnectorSchema(schema?.uiSchema);
         });
     };

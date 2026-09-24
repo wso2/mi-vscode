@@ -17,6 +17,7 @@ package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.customservice.synapse.InvalidConfigurationException;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.TryOutUtils;
 import org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor.SchemaVisitor;
 import org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor.SchemaVisitorFactory;
@@ -26,6 +27,7 @@ import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTr
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.SyntaxTreeGenerator;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.inbound.InboundEndpoint;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.utils.SyntaxTreeUtils;
 import org.eclipse.lemminx.customservice.synapse.utils.ConfigFinder;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
@@ -40,10 +42,12 @@ public class ServerLessTryoutHandler {
     Path TEMP_FOLDER = Path.of(System.getProperty("user.home"), ".wso2-mi", "expression-temp");
     private static final String TEMP_FILE_NAME = "temp.xml";
     private final String projectUri;
+    private final ConnectorHolder connectorHolder;
 
-    public ServerLessTryoutHandler(String projectUri) {
+    public ServerLessTryoutHandler(String projectUri, ConnectorHolder connectorHolder) {
 
         this.projectUri = projectUri;
+        this.connectorHolder = connectorHolder;
     }
 
     public MediatorTryoutInfo handle(MediatorTryoutRequest request) {
@@ -71,7 +75,7 @@ public class ServerLessTryoutHandler {
                         request.getInputPayload(), null);
             }
             DOMDocument domDocument = Utils.getDOMDocument(new File(visitFilePath));
-            STNode node = SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
+            STNode node = buildTree(domDocument);
             MediatorTryoutInfo mediatorTryoutInfo = createInitialMediatorTryoutInfo(request);
             if (node != null) {
                 visitNode(node, request, mediatorTryoutInfo);
@@ -88,7 +92,19 @@ public class ServerLessTryoutHandler {
             throw new IllegalArgumentException("FilePath is null");
         }
         DOMDocument domDocument = Utils.getDOMDocument(new File(filePath));
-        return SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement());
+        return buildTree(domDocument);
+    }
+
+    /**
+     * Builds the syntax tree for {@code domDocument} scoped to this handler's project, since the document is often a temp working copy whose path would otherwise resolve to no project and parse every connector mediator as invalid.
+     *
+     * @param domDocument the document to parse
+     * @return the root node, or null if the document has no recognised root element
+     */
+    private STNode buildTree(DOMDocument domDocument) {
+
+        return SyntaxTreeUtils.withProjectPath(projectUri,
+                () -> SyntaxTreeGenerator.buildTree(domDocument.getDocumentElement()));
     }
 
     private MediatorTryoutInfo createInitialMediatorTryoutInfo(MediatorTryoutRequest request) {
@@ -104,7 +120,7 @@ public class ServerLessTryoutHandler {
 
     private void visitNode(STNode node, MediatorTryoutRequest request, MediatorTryoutInfo mediatorTryoutInfo) {
 
-        SchemaVisitor visitor = SchemaVisitorFactory.getSchemaVisitor(node, projectUri);
+        SchemaVisitor visitor = SchemaVisitorFactory.getSchemaVisitor(node, projectUri, connectorHolder);
         if (visitor != null) {
             visitor.visit(node, mediatorTryoutInfo, request);
         }

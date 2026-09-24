@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class ModifyDriverRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class ModifyDriverRequestParams extends AbstractProjectRequest {
 
     public String addDriverPath;
     public String removeDriverPath;

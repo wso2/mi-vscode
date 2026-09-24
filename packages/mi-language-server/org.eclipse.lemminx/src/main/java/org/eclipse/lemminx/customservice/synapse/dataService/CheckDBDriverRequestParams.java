@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class CheckDBDriverRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class CheckDBDriverRequestParams extends AbstractProjectRequest {
 
     public String className;
 }

@@ -14,14 +14,17 @@
 
 package org.eclipse.lemminx.customservice.synapse.parser.connectorConfig;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
 /**
  * Request to update global connector flags in connector-config.json.
  */
-public class UpdateGlobalConnectorFlagsRequest {
+public class UpdateGlobalConnectorFlagsRequest extends AbstractProjectRequest {
 
     /** When non-null, sets whether all driver JARs are omitted globally. */
     public Boolean omitAllDrivers;
 
     /** When non-null, sets whether all connector ZIPs are excluded from the CAR globally. */
     public Boolean omitAllConnectors;
+
 }

@@ -15,8 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
 import java.util.Map;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class TestConnectionRequest {
+public class TestConnectionRequest extends AbstractProjectRequest {
 
     private String connectorName;
     private String connectionType;

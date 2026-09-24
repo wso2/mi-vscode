@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.db;
 
-public class DBConnectionTestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class DBConnectionTestParams extends AbstractProjectRequest {
 
     public String dbType;
     public String username;
