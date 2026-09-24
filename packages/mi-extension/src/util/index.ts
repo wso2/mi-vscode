@@ -82,22 +82,29 @@ export function copyDockerResources(resourcePath: string, targetPath: string) {
 
 export async function copyMavenWrapper(resourcePath: string, targetPath: string, isMigration: boolean = false) {
 	const mavenWrapperPropertiesPath = path.join(targetPath, '.mvn', 'wrapper');
+	const mavenWrapperPropertiesFile = path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties');
+	const mvnwCmdFile = path.join(targetPath, 'mvnw.cmd');
+	const mvnwFile = path.join(targetPath, 'mvnw');
+
+	const hasExistingWrapperFiles = fs.existsSync(mavenWrapperPropertiesFile)
+		|| fs.existsSync(mvnwCmdFile)
+		|| fs.existsSync(mvnwFile);
+
 	fs.mkdirSync(mavenWrapperPropertiesPath, { recursive: true });
 	const copyMavenWrapperFiles = () => {
-		fs.copyFileSync(path.join(resourcePath, 'mvnw.cmd'), path.join(targetPath, 'mvnw.cmd'));
-		fs.copyFileSync(path.join(resourcePath, 'mvnw'), path.join(targetPath, 'mvnw'));
+		copyFileIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile);
+		copyFileIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile);
 	};
-	
+
 	const useDefaultMvnWrapperForMigration = isMigration && workspace.getConfiguration("MI").get<boolean>('useDefaultMavenForMigration');
-	fs.copyFileSync(path.join(useDefaultMvnWrapperForMigration ? 
-		path.join(resourcePath, 'migration') : resourcePath, 
-		'maven-wrapper.properties'), 
-		path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties'));
+	copyFileIfMissing(path.join(useDefaultMvnWrapperForMigration ?
+		path.join(resourcePath, 'migration') : resourcePath,
+		'maven-wrapper.properties'), mavenWrapperPropertiesFile);
 	if (useDefaultMvnWrapperForMigration) {
 		copyMavenWrapperFiles();
 	} else {
 		const isMavenInstalled = await isMavenInstalledGlobally();
-		if (isMavenInstalled) {
+		if (isMavenInstalled && !hasExistingWrapperFiles) {
 			const success = await runMavenWrapperCommand(targetPath);
 			if (!success) {
 				copyMavenWrapperFiles();
@@ -317,4 +324,10 @@ export function getDataServiceXmlWrapper(props: DataServiceArgs) {
 
 export function getDssDataSourceXmlWrapper(props: Datasource) {
 	return getDataSourceXml(props);
+}
+
+function copyFileIfMissing(src: string, dest: string) {
+	if (!fs.existsSync(dest)) {
+		fs.copyFileSync(src, dest);
+	}
 }
