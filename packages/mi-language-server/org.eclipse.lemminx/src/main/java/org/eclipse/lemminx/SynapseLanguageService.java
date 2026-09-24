@@ -1558,8 +1558,11 @@ public class SynapseLanguageService implements ISynapseLanguageService {
     @Override
     public CompletableFuture<ConnectorDetails> isDuplicateConnector(ConnectorDetails connectorDetails) {
 
-        // connectorPath is the zip's path on disk — the loader opens it with new ZipFile(..).
-        ProjectContext ctx = resolveByPath(connectorDetails.connectorPath);
+        // Routed by the project the request names, never by connectorPath: that is a zip the user picked
+        // from anywhere on disk (the loader just opens it with new ZipFile(..)), so it usually sits outside
+        // every registered project, and when it does sit inside one it need not be the project being
+        // imported into. The duplicate check has to run against the target project either way.
+        ProjectContext ctx = resolveByProjectUri(connectorDetails);
         return CompletableFuture.supplyAsync(() -> ctx != null
                 ? ctx.getConnectorLoader().isDuplicateConnector(connectorDetails.connectorPath) : connectorDetails);
     }

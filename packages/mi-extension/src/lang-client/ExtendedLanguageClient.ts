@@ -601,8 +601,10 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/getDriverMavenCoordinates", params);
     }
 
-    async isDuplicateConnector(params: string): Promise<any> {
-        return this.sendRequest("synapse/isDuplicateConnector", { connectorPath: params });
+    async isDuplicateConnector(connectorPath: string, projectUri: string): Promise<any> {
+        // projectUri is what routes this, not connectorPath: the zip lives wherever the user picked it,
+        // which is normally outside every project, and the duplicate check belongs to the target project.
+        return this.sendRequest("synapse/isDuplicateConnector", { connectorPath, projectUri });
     }
 
     async getConnectorDependencies(params: GetConnectorDependenciesRequest): Promise<GetConnectorDependenciesResponse> {
