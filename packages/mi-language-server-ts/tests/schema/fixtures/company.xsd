@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- xs:import — brings in AddressType from a different namespace -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:addr="http://example.com/address">
+
+  <xs:import namespace="http://example.com/address"
+             schemaLocation="address.xsd"/>
+
+  <xs:element name="company">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="name"        type="xs:string"/>
+        <xs:element name="headquarter" type="addr:AddressType"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

@@ -1,0 +1,6 @@
+# Compiled WASM build outputs
+wasm/
+
+# Third-party source and toolchain directories (cloned on demand by build-wasm.sh)
+native/xerces-c/
+tools/emsdk/

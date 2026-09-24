@@ -1,0 +1,8 @@
+/node_modules
+.claude
+.DS_Store
+github_issues.md
+.idea
+/dist
+/scripts
+/.vscode
