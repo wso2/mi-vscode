@@ -21,7 +21,7 @@ import { getVsCodeButton, switchToIFrame } from "@wso2/playwright-vscode-tester"
 import { AddArtifact } from "../AddArtifact";
 import { ProjectExplorer } from "../ProjectExplorer";
 import { Overview } from "../Overview";
-import { copyFile, page } from "../../Utils";
+import { copyFile, page, executePaletteCommandSafely } from "../../Utils";
 import { MACHINE_VIEW } from '@wso2/mi-core';
 import path from "path";
 import os from "os";
@@ -180,7 +180,7 @@ export class API {
         console.log("Found swagger view frame");
         // Save changes
         // Save all files
-        await page.executePaletteCommand('File: Save All Files');
+        await executePaletteCommandSafely(page.page, 'File: Save All Files');
         const swaggerFrame = swaggerView.locator('div#root');
         console.log("Waiting for swagger frame");
         await swaggerFrame.waitFor();
@@ -195,7 +195,7 @@ export class API {
         await swaggerView.getByRole('button', { name: 'Execute' }).click();
         console.log("Clicked on execute");
         await page.page.waitForTimeout(1000);
-        await page.executePaletteCommand('View: Close All Editor Groups');
+        await executePaletteCommandSafely(page.page, 'View: Close All Editor Groups');
         // wait for the editor to close
         await page.page.waitForTimeout(1000);
         try {

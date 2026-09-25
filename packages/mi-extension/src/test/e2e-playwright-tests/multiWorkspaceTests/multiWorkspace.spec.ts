@@ -17,7 +17,7 @@
  */
 
 import { test } from '@playwright/test';
-import { clearNotificationAlerts, dismissUnexpectedCreateFolderPrompt, initTest, page, showNotifications } from '../Utils';
+import { clearNotificationAlerts, dismissUnexpectedCreateFolderPrompt, initTest, page, showNotifications, executePaletteCommandSafely } from '../Utils';
 import { ProjectExplorer } from '../components/ProjectExplorer';
 import { Overview } from '../components/Overview';
 import { AddArtifact } from '../components/AddArtifact';
@@ -138,7 +138,7 @@ export default function createTests() {
             await test.step('Add API to second project', async () => {
                 console.log("Adding API to second project");
                 // Wait for the project explorer to be ready
-                await page.executePaletteCommand('Reload Window');
+                await executePaletteCommandSafely(page.page, 'Reload Window');
                 console.log("Reloaded window");
                 const project1Explorer = new ProjectExplorer(page.page);
                 console.log("Initializing project explorer");
@@ -146,7 +146,7 @@ export default function createTests() {
                 console.log("Navigated to project1 overview");
                 // Timeout to ensure the project explorer is loaded
                 await page.page.waitForTimeout(500);
-                await page.executePaletteCommand('View: Close All Editors');
+                await executePaletteCommandSafely(page.page, 'View: Close All Editors');
                 console.log("Closed editor groups");
                 const projectExplorer = new ProjectExplorer(page.page);
                 console.log("Initializing project explorer");

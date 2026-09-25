@@ -17,7 +17,7 @@
  */
 
 import { Locator, Page } from "@playwright/test";
-import { ExtendedPage } from "@wso2/playwright-vscode-tester";
+import { executePaletteCommandSafely } from "../Utils";
 
 export class ProjectExplorer {
     private explorer!: Locator;
@@ -64,7 +64,7 @@ export class ProjectExplorer {
     }
 
     private async focusProjectExplorer() {
-        await new ExtendedPage(this.page).executePaletteCommand('Focus on MI Project Explorer View');
+        await executePaletteCommandSafely(this.page, 'Focus on MI Project Explorer View');
         await this.page.waitForTimeout(500);
     }
 

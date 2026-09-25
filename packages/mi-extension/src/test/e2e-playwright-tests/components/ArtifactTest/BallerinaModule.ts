@@ -21,7 +21,7 @@ import { switchToIFrame } from "@wso2/playwright-vscode-tester";
 import { ProjectExplorer } from "../ProjectExplorer";
 import { AddArtifact } from "../AddArtifact";
 import { Overview } from "../Overview";
-import { clearNotificationAlerts, page } from "../../Utils";
+import { clearNotificationAlerts, page, executePaletteCommandSafely } from "../../Utils";
 import { ServiceDesigner } from "../ServiceDesigner";
 import { Form } from '../Form';
 import { Diagram } from '../Diagram';
@@ -167,7 +167,7 @@ export class BallerinaModule {
 
     public async removeBallerinaExtension() {
         await page.page.waitForTimeout(1000);
-        await page.executePaletteCommand('View: Close All Editor Groups');
+        await executePaletteCommandSafely(page.page, 'View: Close All Editor Groups');
         await page.page.keyboard.press('Control+Shift+X');
         await page.page.keyboard.type('WSO2 Integrator BI');
         const biExt = page.page.getByText('WSO2 Integrator: BI');
@@ -181,7 +181,7 @@ export class BallerinaModule {
         } catch {
             console.log("Could not find Unstall button clicking it");
         }
-        await page.executePaletteCommand("Developer: Reload Window");
+        await executePaletteCommandSafely(page.page, "Developer: Reload Window");
         await page.selectSidebarItem('WSO2 Integrator: MI');
     }
 }
