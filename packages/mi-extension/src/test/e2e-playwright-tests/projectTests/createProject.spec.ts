@@ -21,7 +21,7 @@ import { Welcome } from "./../components/Welcome";
 import { API } from "./../components/ArtifactTest/APITests";
 import { ProjectExplorer } from "./../components/ProjectExplorer";
 import { Overview } from "./../components/Overview";
-import { createProject, page, waitUntilPomContains, initTest} from '../Utils';
+import { createProject, page, waitUntilPomContains, initTest, executePaletteCommandSafely } from '../Utils';
 import path from "path";
 import fs from 'fs';
 const dataFolder = path.join( __dirname, '..', 'data');
@@ -46,7 +46,7 @@ export default function createTests() {
 
             await test.step("Create New Project from Sample", async () => {
                 console.log('Starting to create a new project from sample');
-                await page.executePaletteCommand("MI: Create New Project");
+                await executePaletteCommandSafely(page.page, "MI: Create New Project");
                 const welcomePage = new Welcome(page);
                 await welcomePage.init("Welcome to MI");
                 console.log('Creating new project from sample');
@@ -63,11 +63,11 @@ export default function createTests() {
 
             await test.step("Open Existing Project Tests", async () => {
                 console.log('Starting to open an existing project');
-                await page.executePaletteCommand("MI: Open Project");
+                await executePaletteCommandSafely(page.page, "MI: Open Project");
                 const fileInput = await page.page?.waitForSelector('.quick-input-header');
                 const textInput = await fileInput?.waitForSelector('input[type="text"]');
                 console.log('Filling in the project path');
-                await textInput?.fill(newProjectPath + '/newProject/');
+                await textInput?.fill(path.join(newProjectPath, 'newProject'));
                 const openBtn = await fileInput?.waitForSelector('a.monaco-button:has-text("Open MI Project")');
                 await openBtn?.click();
                 const newWindowButton = page.page.getByRole('button', { name: 'New Window' });
@@ -87,7 +87,7 @@ export default function createTests() {
 
             await test.step("Create New Project with Advanced Config Tests", async () => {
                 console.log('Starting to create a new project with advanced configuration');
-                await page.executePaletteCommand('Workspaces: Close Workspace');
+                await executePaletteCommandSafely(page.page, 'Workspaces: Close Workspace');
                 console.log("Closed Workspace");
                 await createProject(page, 'newProjectWithAdConfig', '4.4.0', true);
                 console.log("Project Created");
