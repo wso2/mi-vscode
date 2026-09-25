@@ -91,17 +91,17 @@ export async function copyMavenWrapper(resourcePath: string, targetPath: string,
 		|| fs.existsSync(mvnwFile);
 
 	fs.mkdirSync(mavenWrapperPropertiesPath, { recursive: true });
-	const copyMavenWrapperFiles = () => {
-		copyFileIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile);
-		copyFileIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile);
+	const copyMavenWrapperFiles = (overwrite: boolean = false) => {
+		copyFileIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile, overwrite);
+		copyFileIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile, overwrite);
 	};
 
 	const useDefaultMvnWrapperForMigration = isMigration && workspace.getConfiguration("MI").get<boolean>('useDefaultMavenForMigration');
 	copyFileIfMissing(path.join(useDefaultMvnWrapperForMigration ?
 		path.join(resourcePath, 'migration') : resourcePath,
-		'maven-wrapper.properties'), mavenWrapperPropertiesFile);
+		'maven-wrapper.properties'), mavenWrapperPropertiesFile, useDefaultMvnWrapperForMigration);
 	if (useDefaultMvnWrapperForMigration) {
-		copyMavenWrapperFiles();
+		copyMavenWrapperFiles(true);
 	} else {
 		const isMavenInstalled = await isMavenInstalledGlobally();
 		if (isMavenInstalled && !hasExistingWrapperFiles) {
@@ -326,8 +326,8 @@ export function getDssDataSourceXmlWrapper(props: Datasource) {
 	return getDataSourceXml(props);
 }
 
-function copyFileIfMissing(src: string, dest: string) {
-	if (!fs.existsSync(dest)) {
+function copyFileIfMissing(src: string, dest: string, overwrite: boolean = false) {
+	if (overwrite || !fs.existsSync(dest)) {
 		fs.copyFileSync(src, dest);
 	}
 }

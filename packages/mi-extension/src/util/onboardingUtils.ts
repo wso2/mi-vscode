@@ -88,15 +88,33 @@ export async function isMiProject(projectPath: string): Promise<boolean> {
     }
 }
 
+// Tracks ongoing wrapper setups so concurrent callers for the same project share one copy
+// instead of racing (e.g. workspace-wide setup and a project's own state machine init).
+const mavenWrapperSetupPromises = new Map<string, Promise<void>>();
+
 export async function ensureMavenWrapper(projectUri: string): Promise<void> {
-    const hasWrapper = fs.existsSync(path.join(projectUri, 'mvnw'))
-        && fs.existsSync(path.join(projectUri, 'mvnw.cmd'))
-        && fs.existsSync(path.join(projectUri, '.mvn', 'wrapper', 'maven-wrapper.properties'));
-    if (!hasWrapper) {
-        await copyMavenWrapper(
-            extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
-            projectUri
-        );
+    const currentProcess = mavenWrapperSetupPromises.get(projectUri);
+    if (currentProcess) {
+        return currentProcess;
+    }
+
+    const setupPromise = (async () => {
+        const hasWrapper = fs.existsSync(path.join(projectUri, 'mvnw'))
+            && fs.existsSync(path.join(projectUri, 'mvnw.cmd'))
+            && fs.existsSync(path.join(projectUri, '.mvn', 'wrapper', 'maven-wrapper.properties'));
+        if (!hasWrapper) {
+            await copyMavenWrapper(
+                extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
+                projectUri
+            );
+        }
+    })();
+
+    mavenWrapperSetupPromises.set(projectUri, setupPromise);
+    try {
+        await setupPromise;
+    } finally {
+        mavenWrapperSetupPromises.delete(projectUri);
     }
 }
 

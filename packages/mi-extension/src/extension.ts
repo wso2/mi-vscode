@@ -40,6 +40,8 @@ import { isConsolidatedProject, isMiProject, ensureMavenWrapper } from './util/o
 const os = require('os');
 const fs = require('fs');
 
+const MAVEN_WRAPPER_SETUP_CONCURRENCY = 5;
+
 export async function activate(context: vscode.ExtensionContext) {
 	extension.context = context;
 
@@ -77,7 +79,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	if (workspace.workspaceFolders) {
-		ensureMavenWrapperForWorkspace(workspace.workspaceFolders);
+		void ensureMavenWrapperForWorkspace(workspace.workspaceFolders);
 	}
 
 	workspace.onDidChangeWorkspaceFolders(async (event) => {
@@ -85,7 +87,7 @@ export async function activate(context: vscode.ExtensionContext) {
 			for (const addedProject of event.added) {
 				getStateMachine(addedProject.uri.fsPath);
 			}
-			ensureMavenWrapperForWorkspace(event.added);
+			void ensureMavenWrapperForWorkspace(event.added);
 		}
 		if (event.removed.length > 0) {
 			for (const removedProject of event.removed) {
@@ -150,13 +152,23 @@ export function checkForWso2IntegratorExt() {
 	return true;
 }
 
+async function runWithConcurrencyLimit<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
+	let index = 0;
+	const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+		while (index < items.length) {
+			await task(items[index++]);
+		}
+	});
+	await Promise.all(workers);
+}
+
 /**
  * Ensures the maven wrapper exists for every MI project folder, without waiting for the
  * Overview page to be opened. Also covers a consolidated project's root.
  */
 async function ensureMavenWrapperForWorkspace(folders: readonly vscode.WorkspaceFolder[]): Promise<void> {
 	const handledConsolidatedRoots = new Set<string>();
-	for (const folder of folders) {
+	await runWithConcurrencyLimit(folders, MAVEN_WRAPPER_SETUP_CONCURRENCY, async folder => {
 		const folderPath = folder.uri.fsPath;
 		try {
 			if (await isMiProject(folderPath)) {
@@ -181,7 +193,7 @@ async function ensureMavenWrapperForWorkspace(folders: readonly vscode.Workspace
 				console.error(`Failed to set up maven wrapper for consolidated root ${parent}`, err);
 			}
 		}
-	}
+	});
 }
 
 async function replaceWithSubProjects(folder: vscode.WorkspaceFolder) {
