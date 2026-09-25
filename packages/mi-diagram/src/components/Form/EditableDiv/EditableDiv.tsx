@@ -67,6 +67,33 @@ const EditableDiv: React.FC<EditableDivProps> = ({
         }
     };
 
+    const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const el = divRef.current;
+        if (!contentEditable || !el || !e.clipboardData.types.includes("text/plain")) {
+            return;
+        }
+        const text = e.clipboardData.getData("text/plain");
+
+        const selection = window.getSelection();
+        let range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+        if (!selection || !range || !el.contains(range.commonAncestorContainer)) {
+            range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+        }
+        range.deleteContents();
+        const textNode = document.createTextNode(text);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.setEndAfter(textNode);
+        if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+        handleInput();
+    };
+
     return (
         <>
             {(label || icon) && (
@@ -81,11 +108,15 @@ const EditableDiv: React.FC<EditableDivProps> = ({
                 onInput={handleInput}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
+                onPaste={handlePaste}
                 style={{
                     borderRadius: "8px",
                     padding: "2px",
                     fontFamily: "sans-serif",
                     whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
+                    maxWidth: "100%",
+                    boxSizing: "border-box",
                     outline: "none",
                 }}
             />
