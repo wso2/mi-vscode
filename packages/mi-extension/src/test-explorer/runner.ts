@@ -294,7 +294,7 @@ async function startTestServer(serverPath: string, projectRoot: string, printToO
                 }
             }
 
-            const cp = runCommand(serverCommand, projectRoot, onData, onError, undefined, printer);
+            const cp = runCommand(serverCommand, projectRoot, onData, onError, onClose, printer);
 
             function onData(data: string) {
                 if (data.includes("WSO2 Micro Integrator started in")) {
@@ -309,6 +309,11 @@ async function startTestServer(serverPath: string, projectRoot: string, printToO
                 if (isErrorLevelLog(data)) {
                     window.showErrorMessage(data);
                     reject(data);
+                }
+            }
+            function onClose(code: number) {
+                if (!serverStarted) {
+                    reject("MI test server exited before startup completed.");
                 }
             }
 
