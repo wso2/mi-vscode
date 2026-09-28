@@ -180,8 +180,8 @@ export function runHandler(request: TestRunRequest, cancellation: CancellationTo
                     } else {
                         const strs = test.id.split("/");
                         strs.pop();
-                        const suiteName = strs.join("/");
-                        testResults = testsJson[suiteName];
+                        const suiteName = normalize(strs.join("/"));
+                        testResults = Object.entries(testsJson).find(([key]) => normalize(key) === suiteName)?.[1];
                         testCases = [[test.id, test]]
                     }
 
@@ -397,6 +397,19 @@ async function runTests(testNames: string, projectRoot: string, triggerId: strin
 }
 
 /**
+ * Return true if the output contains an ERROR-level line written to stderr.
+ */
+function isErrorLevelLog(data: string): boolean {
+    return data.split('\n').some((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+            return false;
+        }
+        return /\bERROR\b/.test(trimmed) || /Exception in thread/.test(trimmed);
+    });
+}
+
+/**
  * Run terminal command.
  * @param command Command to run.
  * @param pathToRun Path to execute the command.
@@ -441,8 +454,19 @@ export function runCommand(command, pathToRun?: string,
             let errorData = '';
             cp.stderr.on('data', (data) => {
                 errorData += data;
+                if (printToOutput) {
+                    data.split('\n').forEach((line: string) => {
+                        if (line.trim()) {
+                            printToOutput(line, isErrorLevelLog(line));
+                        }
+                    });
+                }
             });
-            cp.stderr.on('end', () => onError(errorData));
+            cp.stderr.on('end', () => {
+                if (isErrorLevelLog(errorData)) {
+                    onError(errorData);
+                }
+            });
         }
 
         cp.on('error', (data: string) => {
