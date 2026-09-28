@@ -306,8 +306,10 @@ async function startTestServer(serverPath: string, projectRoot: string, printToO
                 }
             }
             function onError(data: string) {
-                window.showErrorMessage(data);
-                reject(data);
+                if (isErrorLevelLog(data)) {
+                    window.showErrorMessage(data);
+                    reject(data);
+                }
             }
 
         } catch (error) {
@@ -339,8 +341,10 @@ async function compileProject(projectRoot: string, printToOutput?: (line: string
             }
         }
         const onError = (data: string) => {
-            window.showErrorMessage(data);
-            reject(data);
+            if (isErrorLevelLog(data)) {
+                window.showErrorMessage(data);
+                reject(data);
+            }
         }
         const onClose = (code: number) => {
             if (code !== 0 && !finished) {
@@ -462,11 +466,7 @@ export function runCommand(command, pathToRun?: string,
                     });
                 }
             });
-            cp.stderr.on('end', () => {
-                if (isErrorLevelLog(errorData)) {
-                    onError(errorData);
-                }
-            });
+            cp.stderr.on('end', () => onError(errorData));
         }
 
         cp.on('error', (data: string) => {
