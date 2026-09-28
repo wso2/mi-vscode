@@ -54,25 +54,30 @@ export async function activate(context: vscode.ExtensionContext) {
 		.filter((tab) => (tab.input as any)?.viewType?.includes("micro-integrator."));
 	vscode.window.tabGroups.close(orphanedTabs);
 
+	// Filter out sub-projects that openConsolidatedAsWorkspace is asynchronously removing.
+	let excludedPaths = new Set<string>();
 	if (workspace.workspaceFolders) {
-		// Reopening as a consolidated workspace reloads the window
-		const reopening = await openConsolidatedAsWorkspace(context);
-		if (reopening) {
+		// Reopening as a consolidated workspace reloads the window.
+		const result = await openConsolidatedAsWorkspace(context);
+		if (result.stop) {
 			return;
 		}
+		excludedPaths = result.excludedPaths;
 	}
 
-	const oldProjects = workspace.workspaceFolders
+	const activeFolders = workspace.workspaceFolders?.filter(folder => !excludedPaths.has(folder.uri.fsPath));
+
+	const oldProjects = activeFolders
 		? (await Promise.all(
-			workspace.workspaceFolders.map(async folder => {
+			activeFolders.map(async folder => {
 				const isOld = await isOldProjectOrWorkspace(folder.uri.fsPath);
 				if (isOld) getStateMachine(folder.uri.fsPath);
 				return isOld ? folder : null;
 			})
 		)).filter((folder): folder is vscode.WorkspaceFolder => folder !== null)
 		: [];
-	const newProjects = workspace.workspaceFolders
-		? workspace.workspaceFolders.filter(folder => !oldProjects.includes(folder))
+	const newProjects = activeFolders
+		? activeFolders.filter(folder => !oldProjects.includes(folder))
 		: [];
 
 	const firstProject = newProjects?.[0]?.uri?.fsPath || 
@@ -176,47 +181,70 @@ export function checkForWso2IntegratorExt() {
  */
 async function rejectIsolatedSubProjects(addedFolders: readonly vscode.WorkspaceFolder[]): Promise<vscode.WorkspaceFolder[]> {
 	const valid: vscode.WorkspaceFolder[] = [];
+	const rejectedPaths = new Set<string>();
 	const warnedRoots = new Set<string>();
 	const currentFolderPaths = (workspace.workspaceFolders ?? []).map(f => f.uri.fsPath);
+	const getCachedSubUris = makeSubUrisCache();
 
 	for (const folder of addedFolders) {
 		const folderPath = folder.uri.fsPath;
 		const parent = path.dirname(folderPath);
-		if (isConsolidatedProject(parent) && !(await isConsolidatedRootComplete(parent, currentFolderPaths))) {
-			if (!warnedRoots.has(parent)) {
-				warnedRoots.add(parent);
-				const details = await readConsolidatedProjectDetails(parent);
-				const projectName = details?.artifactId?.trim() || path.basename(parent);
-				vscode.window.showErrorMessage(
-					`This project is a part of the consolidated project "${projectName}" and cannot be added to a workspace on its own.`,
-					{ modal: true }
-				);
+		const subUris = isConsolidatedProject(parent) ? await getCachedSubUris(parent) : [];
+		// Only enforce completeness for folders that are actually declared modules.
+		const isDeclaredModule = subUris.some(uri => uri.fsPath === folderPath);
+		if (isDeclaredModule) {
+			const { missingFromDisk, missingFromWorkspace } = classifyMissingModules(parent, currentFolderPaths);
+			if (missingFromDisk.length > 0 || missingFromWorkspace.length > 0) {
+				if (!warnedRoots.has(parent)) {
+					warnedRoots.add(parent);
+					const details = await readConsolidatedProjectDetails(parent);
+					const projectName = details?.artifactId?.trim() || path.basename(parent);
+					if (missingFromDisk.length > 0) {
+						const missingNames = missingFromDisk.map(modulePath => path.basename(modulePath)).join(', ');
+						vscode.window.showErrorMessage(
+							`The consolidated project "${projectName}" is missing module(s) "${missingNames}" on disk and cannot be used until they're restored.`,
+							{ modal: true }
+						);
+					} else {
+						vscode.window.showErrorMessage(
+							`This project is a part of the consolidated project "${projectName}" and cannot be added to a workspace on its own.`,
+							{ modal: true }
+						);
+					}
+				}
+				rejectedPaths.add(folderPath);
+				continue;
 			}
-			const index = workspace.workspaceFolders?.findIndex(f => f.uri.fsPath === folderPath) ?? -1;
-			if (index !== -1) {
-				workspace.updateWorkspaceFolders(index, 1);
-			}
-			continue;
 		}
 		valid.push(folder);
+	}
+
+	if (rejectedPaths.size > 0) {
+		const remaining = (workspace.workspaceFolders ?? []).filter(f => !rejectedPaths.has(f.uri.fsPath));
+		workspace.updateWorkspaceFolders(0, workspace.workspaceFolders?.length ?? 0, ...remaining.map(f => ({ uri: f.uri, name: f.name })));
 	}
 
 	return valid;
 }
 
 /**
- * Discover the sub-project folders of a consolidated project root.
+ * All module paths declared in a consolidated project's pom.xml, on disk or not.
  */
-async function getSubProjectUris(folderPath: string): Promise<vscode.Uri[]> {
-	let declaredModules: string[];
+function getDeclaredModulePaths(folderPath: string): string[] {
 	try {
 		const pom = parseConsolidatedProjectPom(path.join(folderPath, 'pom.xml'));
-		declaredModules = getModules(pom.project);
+		return getModules(pom.project).map(name => path.join(folderPath, name));
 	} catch (err) {
 		console.error('Could not read modules from consolidated project pom.xml', err);
 		return [];
 	}
+}
 
+/**
+ * Discover a consolidated project root's sub-project folders that exist on disk.
+ */
+async function getSubProjectUris(folderPath: string): Promise<vscode.Uri[]> {
+	const declaredModules = getDeclaredModulePaths(folderPath).map(p => path.basename(p));
 	const entries = await fs.promises.readdir(folderPath, { withFileTypes: true });
 	const subUris: vscode.Uri[] = [];
 
@@ -234,60 +262,118 @@ async function getSubProjectUris(folderPath: string): Promise<vscode.Uri[]> {
 }
 
 /**
- * Return true if every sub-project declared by a consolidated project's pom.xml is present
- * among the given folder paths.
+ * Splits a consolidated project's missing modules into ones present on disk but
+ * not open and ones missing from disk.
  */
-async function isConsolidatedRootComplete(consolidatedRoot: string, presentFolderPaths: string[]): Promise<boolean> {
-	const subUris = await getSubProjectUris(consolidatedRoot);
-	return subUris.every(uri => presentFolderPaths.includes(uri.fsPath));
+function classifyMissingModules(root: string, presentFolderPaths: string[]): { missingFromDisk: string[]; missingFromWorkspace: string[] } {
+	const missing = getDeclaredModulePaths(root).filter(modulePath => !presentFolderPaths.includes(modulePath));
+	return {
+		missingFromDisk: missing.filter(modulePath => !fs.existsSync(modulePath)),
+		missingFromWorkspace: missing.filter(modulePath => fs.existsSync(modulePath)),
+	};
 }
 
 /**
- * Generates a named .code-workspace for a consolidated project.
- * Returns true if the window is reopening into it.
+ * Caches getSubProjectUris() per root, since a batch of folders can share one.
  */
-async function openConsolidatedAsWorkspace(context: vscode.ExtensionContext): Promise<boolean> {
+function makeSubUrisCache() {
+	const cache = new Map<string, Promise<vscode.Uri[]>>();
+	return (root: string) => {
+		let subUris = cache.get(root);
+		if (!subUris) {
+			subUris = getSubProjectUris(root);
+			cache.set(root, subUris);
+		}
+		return subUris;
+	};
+}
+
+type ConsolidatedWorkspaceResult = {
+	// True if the window is reloading or closing — caller should return immediately.
+	stop: boolean;
+	// Folders already removed from the workspace; treat as absent for the rest of activation.
+	excludedPaths: Set<string>;
+};
+
+/**
+ * Generates a named .code-workspace for a consolidated project, or removes any
+ * sub-project opened without its siblings.
+ */
+async function openConsolidatedAsWorkspace(context: vscode.ExtensionContext): Promise<ConsolidatedWorkspaceResult> {
+	const proceed: ConsolidatedWorkspaceResult = { stop: false, excludedPaths: new Set() };
 	try {
 		const folders = workspace.workspaceFolders;
 		if (!folders || folders.length === 0) {
-			return false;
+			return proceed;
 		}
 
-		// Build the target folder set and collect the consolidated root(s).
+		// Build the target folder set by collecting consolidated root(s) and which folder belongs to which.
+		const getCachedSubUris = makeSubUrisCache();
 		const consolidatedRoots = new Set<string>();
 		const folderPaths: string[] = [];
+		const rootByFolderPath = new Map<string, string>();
 		for (const folder of folders) {
 			const folderPath = folder.uri.fsPath;
 			if (isConsolidatedProject(folderPath)) {
 				// Consolidated root opened directly: expand into its sub-projects.
 				consolidatedRoots.add(folderPath);
-				const subUris = await getSubProjectUris(folderPath);
+				rootByFolderPath.set(folderPath, folderPath);
+				const subUris = await getCachedSubUris(folderPath);
 				folderPaths.push(...subUris.map(uri => uri.fsPath));
 			} else {
 				folderPaths.push(folderPath);
-				// A restored untitled workspace lists the sub-projects rather than
-				// the consolidated root — detect it via the parent directory.
+				// A restored untitled workspace lists sub-projects instead of the root.
+				// Detect via the parent directory, but only if it's a declared module.
 				const parent = path.dirname(folderPath);
 				if (isConsolidatedProject(parent)) {
-					consolidatedRoots.add(parent);
+					const subUris = await getCachedSubUris(parent);
+					if (subUris.some(uri => uri.fsPath === folderPath)) {
+						consolidatedRoots.add(parent);
+						rootByFolderPath.set(folderPath, parent);
+					}
 				}
 			}
 		}
 
 		if (consolidatedRoots.size === 0 || folderPaths.length === 0) {
-			return false;
+			return proceed;
 		}
 
-		// A sub-project only works correctly alongside its siblings.
+		// A sub-project only works alongside its siblings. Collect all affected folders
+		// first so multiple incomplete roots are resolved in one update.
+		const excludedPaths = new Set<string>();
 		for (const root of consolidatedRoots) {
-			if (!(await isConsolidatedRootComplete(root, folderPaths))) {
-				return await blockIsolatedSubProjectOpen(root);
+			const { missingFromDisk, missingFromWorkspace } = classifyMissingModules(root, folderPaths);
+			if (missingFromDisk.length === 0 && missingFromWorkspace.length === 0) {
+				continue;
 			}
+			const affectedPaths = [...rootByFolderPath.entries()].filter(([, r]) => r === root).map(([p]) => p);
+
+			if (missingFromDisk.length > 0) {
+				await showBrokenConsolidatedProjectError(root, missingFromDisk);
+			} else {
+				// A missing-but-existing sibling can still be fixed by opening the root.
+				const reopened = await promptOpenConsolidatedProject(root);
+				if (reopened) {
+					return { stop: true, excludedPaths: new Set() };
+				}
+			}
+			affectedPaths.forEach(p => excludedPaths.add(p));
+		}
+
+		if (excludedPaths.size > 0) {
+			if (excludedPaths.size === folders.length) {
+				await vscode.commands.executeCommand('workbench.action.closeFolder');
+				return { stop: true, excludedPaths: new Set() };
+			}
+			const remaining = folders.filter(f => !excludedPaths.has(f.uri.fsPath));
+			workspace.updateWorkspaceFolders(0, folders.length, ...remaining.map(f => ({ uri: f.uri, name: f.name })));
+			return { stop: false, excludedPaths };
 		}
 
 		// Already a saved, complete workspace file — nothing to regenerate.
 		if (workspace.workspaceFile && workspace.workspaceFile.scheme !== 'untitled') {
-			return false;
+			return proceed;
 		}
 
 		// Name the workspace after the first consolidated project.
@@ -315,18 +401,31 @@ async function openConsolidatedAsWorkspace(context: vscode.ExtensionContext): Pr
 		}
 
 		await vscode.commands.executeCommand('vscode.openFolder', workspaceFileUri, false);
-		return true;
+		return { stop: true, excludedPaths: new Set() };
 	} catch (err) {
 		console.error('Error opening consolidated project as workspace', err);
-		return false;
+		return proceed;
 	}
 }
 
 /**
- * Warns that a sub-project was opened without its siblings and offers to open the
- * consolidated project instead. Always returns true to skip initializing it.
+ * Shown when a declared module is missing from disk entirely — unfixable by reopening.
  */
-async function blockIsolatedSubProjectOpen(consolidatedRoot: string): Promise<boolean> {
+async function showBrokenConsolidatedProjectError(consolidatedRoot: string, missingModulePaths: string[]): Promise<void> {
+	const details = await readConsolidatedProjectDetails(consolidatedRoot);
+	const projectName = details?.artifactId?.trim() || path.basename(consolidatedRoot);
+	const missingNames = missingModulePaths.map(modulePath => path.basename(modulePath)).join(', ');
+	await vscode.window.showErrorMessage(
+		`The consolidated project "${projectName}" is missing module(s) "${missingNames}" on disk. Restore them before opening this project.`,
+		{ modal: true }
+	);
+}
+
+/**
+ * Warns that a sub-project was opened without its siblings and offers to open the
+ * consolidated project instead.
+ */
+async function promptOpenConsolidatedProject(consolidatedRoot: string): Promise<boolean> {
 	const details = await readConsolidatedProjectDetails(consolidatedRoot);
 	const projectName = details?.artifactId?.trim() || path.basename(consolidatedRoot);
 	const selection = await vscode.window.showErrorMessage(
@@ -336,11 +435,9 @@ async function blockIsolatedSubProjectOpen(consolidatedRoot: string): Promise<bo
 	);
 	if (selection === 'Open Consolidated Project') {
 		await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(consolidatedRoot), false);
-	} else {
-		// Avoid stranding the window in an inert half-state.
-		await vscode.commands.executeCommand('workbench.action.closeFolder');
+		return true;
 	}
-	return true;
+	return false;
 }
 
 /**
