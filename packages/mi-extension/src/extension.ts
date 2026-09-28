@@ -233,7 +233,9 @@ async function rejectIsolatedSubProjects(addedFolders: readonly vscode.Workspace
 function getDeclaredModulePaths(folderPath: string): string[] {
 	try {
 		const pom = parseConsolidatedProjectPom(path.join(folderPath, 'pom.xml'));
-		return getModules(pom.project).map(name => path.join(folderPath, name));
+		return getModules(pom.project)
+			.map(name => path.join(folderPath, name))
+			.filter(modulePath => !fs.existsSync(path.join(modulePath, '.docker-build')));
 	} catch (err) {
 		console.error('Could not read modules from consolidated project pom.xml', err);
 		return [];
@@ -250,7 +252,7 @@ async function getSubProjectUris(folderPath: string): Promise<vscode.Uri[]> {
 
 	for (const entry of entries) {
 		const subPath = path.join(folderPath, entry.name);
-		if (!entry.isDirectory() || entry.name.startsWith('.') || fs.existsSync(path.join(subPath, '.docker-build'))) {
+		if (!entry.isDirectory() || entry.name.startsWith('.')) {
 			continue;
 		}
 		if (declaredModules.includes(entry.name) && fs.existsSync(path.join(subPath, 'pom.xml'))) {
