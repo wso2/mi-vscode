@@ -59,6 +59,9 @@ export const COMMANDS = {
     EDIT_K8_CONFIGURATION_COMMAND: 'MI.edit-k8-configuration',
     IMPORT_FROM_CAPP: "MI.importProjectFromCapp",
     BUILD_PROJECT: "MI.build-project",
+    BUILD_AND_RUN_PROJECT: "MI.build-and-run",
+    RESUME_DEBUG_SESSION: "MI.resume-debug-session",
+    RESUME_TEST_RUN: "MI.resume-test-run",
     CREATE_DOCKER_IMAGE: "MI.create-docker-image",
     REMOTE_DEPLOY_PROJECT: "MI.remote-deploy-project",
 }
