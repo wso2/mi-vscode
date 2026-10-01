@@ -193,16 +193,15 @@ async function rejectIsolatedSubProjects(addedFolders: readonly vscode.Workspace
 		// Only enforce completeness for folders that are actually declared modules.
 		const isDeclaredModule = subUris.some(uri => uri.fsPath === folderPath);
 		if (isDeclaredModule) {
-			const { missingFromDisk, missingFromWorkspace } = classifyMissingModules(parent, currentFolderPaths);
-			if (missingFromDisk.length > 0 || missingFromWorkspace.length > 0) {
+			const { missingFromDisk, missingPom, missingFromWorkspace } = classifyMissingModules(parent, currentFolderPaths);
+			if (missingFromDisk.length > 0 || missingPom.length > 0 || missingFromWorkspace.length > 0) {
 				if (!warnedRoots.has(parent)) {
 					warnedRoots.add(parent);
 					const details = await readConsolidatedProjectDetails(parent);
 					const projectName = details?.artifactId?.trim() || path.basename(parent);
-					if (missingFromDisk.length > 0) {
-						const missingNames = missingFromDisk.map(modulePath => path.basename(modulePath)).join(', ');
+					if (missingFromDisk.length > 0 || missingPom.length > 0) {
 						vscode.window.showErrorMessage(
-							`The consolidated project "${projectName}" is missing module(s) "${missingNames}" on disk and cannot be used until they're restored.`,
+							`${describeBrokenModules(projectName, missingFromDisk, missingPom)} It cannot be opened until they're restored.`,
 							{ modal: true }
 						);
 					} else {
@@ -235,7 +234,7 @@ function getDeclaredModulePaths(folderPath: string): string[] {
 		const pom = parseConsolidatedProjectPom(path.join(folderPath, 'pom.xml'));
 		return getModules(pom.project)
 			.map(name => path.join(folderPath, name))
-			.filter(modulePath => !fs.existsSync(path.join(modulePath, '.docker-build')));
+			.filter(modulePath => path.basename(modulePath) !== 'docker-build');
 	} catch (err) {
 		console.error('Could not read modules from consolidated project pom.xml', err);
 		return [];
@@ -243,36 +242,41 @@ function getDeclaredModulePaths(folderPath: string): string[] {
 }
 
 /**
- * Discover a consolidated project root's sub-project folders that exist on disk.
+ * Returns a consolidated project root's declared sub-project folders that exist on disk.
  */
 async function getSubProjectUris(folderPath: string): Promise<vscode.Uri[]> {
-	const declaredModules = getDeclaredModulePaths(folderPath).map(p => path.basename(p));
-	const entries = await fs.promises.readdir(folderPath, { withFileTypes: true });
-	const subUris: vscode.Uri[] = [];
-
-	for (const entry of entries) {
-		const subPath = path.join(folderPath, entry.name);
-		if (!entry.isDirectory() || entry.name.startsWith('.')) {
-			continue;
-		}
-		if (declaredModules.includes(entry.name) && fs.existsSync(path.join(subPath, 'pom.xml'))) {
-			subUris.push(vscode.Uri.file(subPath));
-		}
-	}
-
-	return subUris;
+	return getDeclaredModulePaths(folderPath)
+		.filter(modulePath => fs.existsSync(path.join(modulePath, 'pom.xml')))
+		.map(modulePath => vscode.Uri.file(modulePath));
 }
 
 /**
- * Splits a consolidated project's missing modules into ones present on disk but
- * not open and ones missing from disk.
+ * Splits a consolidated project's missing modules into ones missing from disk,
+ * missing a pom.xml and present but not open.
  */
-function classifyMissingModules(root: string, presentFolderPaths: string[]): { missingFromDisk: string[]; missingFromWorkspace: string[] } {
+function classifyMissingModules(root: string, presentFolderPaths: string[]): { missingFromDisk: string[]; missingPom: string[]; missingFromWorkspace: string[] } {
 	const missing = getDeclaredModulePaths(root).filter(modulePath => !presentFolderPaths.includes(modulePath));
+	const hasPom = (modulePath: string) => fs.existsSync(path.join(modulePath, 'pom.xml'));
 	return {
 		missingFromDisk: missing.filter(modulePath => !fs.existsSync(modulePath)),
-		missingFromWorkspace: missing.filter(modulePath => fs.existsSync(modulePath)),
+		missingPom: missing.filter(modulePath => fs.existsSync(modulePath) && !hasPom(modulePath)),
+		missingFromWorkspace: missing.filter(hasPom),
 	};
+}
+
+/**
+ * Describes a consolidated project's broken modules to create an error message.
+ */
+function describeBrokenModules(projectName: string, missingFromDisk: string[], missingPom: string[]): string {
+	const names = (modulePaths: string[]) => modulePaths.map(modulePath => path.basename(modulePath)).join(', ');
+	const problems: string[] = [];
+	if (missingFromDisk.length > 0) {
+		problems.push(`module(s) "${names(missingFromDisk)}" missing on disk`);
+	}
+	if (missingPom.length > 0) {
+		problems.push(`module(s) "${names(missingPom)}" without a pom.xml`);
+	}
+	return `The consolidated project "${projectName}" has ${problems.join(' and ')}.`;
 }
 
 /**
@@ -345,14 +349,14 @@ async function openConsolidatedAsWorkspace(context: vscode.ExtensionContext): Pr
 		// first so multiple incomplete roots are resolved in one update.
 		const excludedPaths = new Set<string>();
 		for (const root of consolidatedRoots) {
-			const { missingFromDisk, missingFromWorkspace } = classifyMissingModules(root, folderPaths);
-			if (missingFromDisk.length === 0 && missingFromWorkspace.length === 0) {
+			const { missingFromDisk, missingPom, missingFromWorkspace } = classifyMissingModules(root, folderPaths);
+			if (missingFromDisk.length === 0 && missingPom.length === 0 && missingFromWorkspace.length === 0) {
 				continue;
 			}
 			const affectedPaths = [...rootByFolderPath.entries()].filter(([, r]) => r === root).map(([p]) => p);
 
-			if (missingFromDisk.length > 0) {
-				await showBrokenConsolidatedProjectError(root, missingFromDisk);
+			if (missingFromDisk.length > 0 || missingPom.length > 0) {
+				await showBrokenConsolidatedProjectError(root, missingFromDisk, missingPom);
 			} else {
 				// A missing-but-existing sibling can still be fixed by opening the root.
 				const reopened = await promptOpenConsolidatedProject(root);
@@ -411,14 +415,13 @@ async function openConsolidatedAsWorkspace(context: vscode.ExtensionContext): Pr
 }
 
 /**
- * Shown when a declared module is missing from disk entirely — unfixable by reopening.
+ * Shown when a declared module is missing from disk or has no pom.xml — unfixable by reopening.
  */
-async function showBrokenConsolidatedProjectError(consolidatedRoot: string, missingModulePaths: string[]): Promise<void> {
+async function showBrokenConsolidatedProjectError(consolidatedRoot: string, missingFromDisk: string[], missingPom: string[]): Promise<void> {
 	const details = await readConsolidatedProjectDetails(consolidatedRoot);
 	const projectName = details?.artifactId?.trim() || path.basename(consolidatedRoot);
-	const missingNames = missingModulePaths.map(modulePath => path.basename(modulePath)).join(', ');
 	await vscode.window.showErrorMessage(
-		`The consolidated project "${projectName}" is missing module(s) "${missingNames}" on disk. Restore them before opening this project.`,
+		`${describeBrokenModules(projectName, missingFromDisk, missingPom)} Restore them before opening this project.`,
 		{ modal: true }
 	);
 }
