@@ -640,11 +640,10 @@ export async function executeTasks(projectUri: string, serverPath: string, isDeb
 }
 
 export async function getServerPath(projectUri: string): Promise<string | undefined> {
-    const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));
     const currentPath = getServerPathFromConfig(projectUri);
     if (!currentPath) {
-        await vscode.commands.executeCommand(COMMANDS.CHANGE_SERVER_PATH);
-        const updatedPath = config.get(SELECTED_SERVER_PATH) as string;
+        await vscode.commands.executeCommand(COMMANDS.CHANGE_SERVER_PATH, projectUri);
+        const updatedPath = getServerPathFromConfig(projectUri);
         if (updatedPath) {
             return path.normalize(updatedPath);
         }
