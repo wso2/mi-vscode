@@ -33,8 +33,8 @@ module.exports = {
         if (deps['hono']) deps['hono'] = '4.12.18'; // CVE-2026-44455 (JSX injection), CVE-2026-44456 (bodyLimit bypass)
         if (deps['@hono/node-server']) deps['@hono/node-server'] = '1.19.13';
         if (deps['@tootallnate/once']) deps['@tootallnate/once'] = '3.0.1';
-        if (deps['dompurify']) deps['dompurify'] = '3.4.13'; // security fixes
-        if (deps['axios']) deps['axios'] = '1.18.0'; // security fixes
+        if (deps['dompurify']) deps['dompurify'] = '3.4.16'; // security fixes
+        if (deps['axios']) deps['axios'] = '1.20.0'; // security fixes
         if (deps['body-parser']) deps['body-parser'] = '1.20.6';
         if (deps['http-proxy-middleware']) deps['http-proxy-middleware'] = '3.0.7'; // security fixes
         if (deps['ip-address']) { // security fix: force patch within 10.x range only to avoid breaking consumers on earlier majors
