@@ -105,17 +105,10 @@ export function AddInboundConnector(props: AddInboundConnectorProps) {
             const attributeNames = getGenericAttributeNames(formData);
             const parameterNames = getParameterNames(formData);
 
-            // Populate Attributes
-            attributeNames.forEach((attributeName: string) => {
-                if (model.hasOwnProperty(attributeName)) {
-                    setValue(getNameForController(attributeName), model[attributeName]);
-                }
-            });
-
             let additionalParams: any[] = [];
             // Populate Paramters
             model.parameters[0]?.parameter?.forEach((param: any) => {
-                // Check attributeNames as well to handle scenarios where mandatory attributes 
+                // Check attributeNames as well to handle scenarios where mandatory attributes
                 // are not included in the ui-schema but exists in the xml configuration as a parameter
                 if (parameterNames.includes(param.name) || attributeNames.includes(param.name)) {
                     setValue(getNameForController(param.name), getParameterValue(param));
@@ -124,6 +117,13 @@ export function AddInboundConnector(props: AddInboundConnectorProps) {
                         name: param.name,
                         value: getParameterValue(param)
                     });
+                }
+            });
+
+            // Populate Attributes
+            attributeNames.forEach((attributeName: string) => {
+                if (model.hasOwnProperty(attributeName)) {
+                    setValue(getNameForController(attributeName), model[attributeName]);
                 }
             });
 
