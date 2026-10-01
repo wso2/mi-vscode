@@ -477,10 +477,10 @@ const Entry: React.FC<EntryProps> = ({ icon, name, description, onClick, goToVie
                     <Icon name={icon} iconSx={iconSx} isCodicon={isCodicon} />
                 </div>
             )}
-            <div style={{ flex: 2, fontWeight: 'bold' }}>
+            <div style={{ flex: 1, minWidth: 0, marginRight: '24px', fontWeight: 'bold', overflowWrap: 'anywhere' }}>
                 {name}
             </div>
-            <div style={{ flex: 9, display: 'flex' }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
                 <div style={{ flex: 6 }}>{description}</div>
                 {isMainSequence && <div style={{ flex: 2 }}>
                     <div style={{
