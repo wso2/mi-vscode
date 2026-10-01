@@ -456,7 +456,9 @@ public class MissingChildElementCodeActionTest extends AbstractCacheBasedTest {
 				ca(d, createData("test.xml", required_elements_missing_expectedCodeActionResolver.PARTICIPANT_ID,
 						"letter")),
 				ca(d, createData("test.xml", required_elements_missing_expectedCodeActionResolver.PARTICIPANT_ID,
-						"memo")));
+						"memo")),
+				ca(d, createData("test.xml", required_elements_missing_expectedCodeActionResolver.PARTICIPANT_ID,
+						"slideshow")));
 
 		CodeAction unresolved1 = actual.get(1);
 		testResolveCodeActionsFor(xml, unresolved1, settings, ls, ca(d,
