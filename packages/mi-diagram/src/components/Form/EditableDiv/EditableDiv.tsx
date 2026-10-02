@@ -77,7 +77,9 @@ const EditableDiv: React.FC<EditableDivProps> = ({
             )}
             <div
                 ref={divRef}
-                contentEditable={contentEditable ? contentEditable : false}
+                // Casting as @types/react 18.2 doesn't allow "plaintext-only". 
+                // VS Code webviews support it but the type definitions are outdated
+                contentEditable={(contentEditable ? "plaintext-only" : false) as React.HTMLAttributes<HTMLDivElement>["contentEditable"]}
                 onInput={handleInput}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
@@ -86,6 +88,7 @@ const EditableDiv: React.FC<EditableDivProps> = ({
                     padding: "2px",
                     fontFamily: "sans-serif",
                     whiteSpace: "pre-wrap",
+                    overflowWrap: "anywhere",
                     outline: "none",
                 }}
             />
