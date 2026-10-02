@@ -94,6 +94,9 @@ export async function askForProject(): Promise<string> {
             }
         }
     }
+    if (projects.size === 1) {
+        return Array.from(projects.values())[0];
+    }
     const quickPick = await window.showQuickPick(
         Array.from(projects.keys()),
         {
