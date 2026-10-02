@@ -84,7 +84,7 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
     });
 
     commands.registerCommand(COMMANDS.EDIT_TEST_SUITE, (entry: TestItem) => {
-        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestSuite, documentUri: entry.id });
+        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestSuite, documentUri: entry.id, projectUri: getProjectRoot(Uri.file(entry.id)) });
         console.log('Update Test suite');
     });
 
@@ -102,7 +102,7 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
         }
         const { availableTestCases, testSuiteType } = data;
 
-        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestCase, documentUri: fileUri.fsPath, customProps: { availableTestCases, testSuiteType } });
+        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestCase, documentUri: fileUri.fsPath, projectUri: getProjectRoot(fileUri), customProps: { availableTestCases, testSuiteType } });
         console.log('Add Test Case');
     });
 
@@ -114,7 +114,8 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
         }
         const fileUri = `${id.split('.xml/')[0]}.xml`;
         const testCaseName = id.split('.xml/')[1];
-        const langClient = await MILanguageClient.getInstance(getProjectRoot(Uri.parse(fileUri))!);
+        const projectUri = getProjectRoot(Uri.file(fileUri));
+        const langClient = await MILanguageClient.getInstance(projectUri!);
         const st = await langClient.getSyntaxTree({
             documentIdentifier: {
                 uri: fileUri
@@ -151,7 +152,7 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
         const { availableTestCases, testSuiteType } = data;
         const availableTestCasesFiltered = availableTestCases.filter((testCase) => testCase !== unitTestST.name);
 
-        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestCase, documentUri: entry.uri?.fsPath, customProps: { testCase, availableTestCases: availableTestCasesFiltered, testSuiteType, range: unitTestST?.range } });
+        openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.TestCase, documentUri: entry.uri?.fsPath, projectUri, customProps: { testCase, availableTestCases: availableTestCasesFiltered, testSuiteType, range: unitTestST?.range } });
         console.log('Update Test Case');
     });
 

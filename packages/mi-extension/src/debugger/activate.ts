@@ -142,8 +142,10 @@ export function activateDebugger(context: vscode.ExtensionContext) {
     });
 
     // Register command to change the WSO2 Integrator: MI server path
-    vscode.commands.registerCommand(COMMANDS.CHANGE_SERVER_PATH, async () => {
-        const projectUri = await askForProject();
+    vscode.commands.registerCommand(COMMANDS.CHANGE_SERVER_PATH, async (projectUri?: string) => {
+        if (!projectUri) {
+            projectUri = await askForProject();
+        }
         if (!projectUri) {
             return;
         }
