@@ -301,7 +301,7 @@ export function UnsupportedProject(props: UnsupportedProjectProps) {
                 {`Unsupported ${projectType} Detected`}
             </Headline>
             <Body variant='body3'>
-              {`This ${projectType} was identified as being created with Integration Studio. The MI VSCode extension has limited
+              {`This ${projectType} was identified as being created with Integration Studio. The WSO2 Integrator: MI VS Code Extension has limited
               functionality for these projects.`}
             </Body>
             <Body variant='body3'>

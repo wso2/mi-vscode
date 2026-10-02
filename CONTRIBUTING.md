@@ -1,6 +1,6 @@
-# Contributing to MI for VS Code
+# Contributing to WSO2 Integrator: MI VS Code Extension
 
-Thank you for your interest in contributing. This repository is focused on Micro Integrator for VS Code and its supporting local packages.
+Thank you for your interest in contributing. This repository is focused on the WSO2 Integrator: MI VS Code Extension and its supporting local packages.
 
 ---
 
@@ -94,4 +94,4 @@ Thank you for your interest in contributing. This repository is focused on Micro
 
 ---
 
-Thank you for helping us improve MI for VS Code.
+Thank you for helping us improve the WSO2 Integrator: MI VS Code Extension.
