@@ -3442,7 +3442,8 @@ ${endpointAttributes}
             throw new Error('No workspace folders');
         }
 
-        if (workspaceFolders.length !== new Set(workspaceFolders.map(f => f.name)).size) {
+        const basenames = workspaceFolders.map(f => path.basename(f.uri.fsPath));
+        if (new Set(basenames.map(name => name.toLowerCase())).size !== basenames.length) {
             vscode.window.showErrorMessage('Duplicate folder names found in the workspace.');
             throw new Error('Duplicate folder names');
         }
@@ -3478,7 +3479,7 @@ ${endpointAttributes}
                     const pomUri = vscode.Uri.joinPath(folder.uri, 'pom.xml');
                     try {
                         await vscode.workspace.fs.stat(pomUri);
-                        return folder.name;
+                        return path.basename(folder.uri.fsPath);
                     } catch {
                         return null;
                     }

@@ -60,7 +60,7 @@ runs:
       if: ${{ inputs.isPreRelease == 'false' }}
       id: pr
       run: |
-        pr=$(gh pr create -B "stable/mi" -H "${{ inputs.version }}" --title "Merge \"${{ inputs.version }}\" into \"stable/mi\"" --body '$subject')
+        pr=$(gh pr create -B "${{ github.ref_name }}" -H "${{ inputs.version }}" --title "Merge \"${{ inputs.version }}\" into \"${{ github.ref_name }}\"" --body '$subject')
         echo "prURL=$pr" >> $GITHUB_OUTPUT
       env:
         GH_TOKEN: ${{ github.token }}
