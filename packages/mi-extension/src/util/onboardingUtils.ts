@@ -108,7 +108,7 @@ export async function setupEnvironment(projectUri: string, isOldProject: boolean
         if (isMISet && isJavaSet) {
             const isUpdateRequested = await isServerUpdateRequested(projectUri);
             await updateCarPluginVersion(projectUri);
-            const config = vscode.workspace.getConfiguration('MI', vscode.Uri.parse(projectUri));
+            const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));
             const currentState = config.inspect<string>("useLocalMaven");
             if (currentState?.workspaceFolderValue === undefined) {
                 config.update("useLocalMaven", currentState?.globalValue ?? false, vscode.ConfigurationTarget.WorkspaceFolder);
@@ -663,8 +663,8 @@ export async function setPathsInWorkSpace(request: SetPathRequest): Promise<Path
                 }
             }
             if (response.status !== 'not-valid') {
-                config.update(SELECTED_JAVA_HOME, validJavaHome, vscode.ConfigurationTarget.WorkspaceFolder);
-                extension.context.globalState.update(SELECTED_JAVA_HOME, validJavaHome);
+                await config.update(SELECTED_JAVA_HOME, validJavaHome, vscode.ConfigurationTarget.WorkspaceFolder);
+                await extension.context.globalState.update(SELECTED_JAVA_HOME, validJavaHome);
 
             } else {
                 vscode.window.showErrorMessage('Invalid Java Home path or Unsupported version. Please set a valid Java Home path. ');
@@ -681,9 +681,9 @@ export async function setPathsInWorkSpace(request: SetPathRequest): Promise<Path
                 }
             }
             if (response.status !== 'not-valid') {
-                config.update(SELECTED_SERVER_PATH, validServerPath, vscode.ConfigurationTarget.WorkspaceFolder);
-                extension.context.globalState.update(SELECTED_SERVER_PATH, validServerPath);
-                config.update('suppressServerUpdateNotification', true, vscode.ConfigurationTarget.WorkspaceFolder);
+                await config.update(SELECTED_SERVER_PATH, validServerPath, vscode.ConfigurationTarget.WorkspaceFolder);
+                await extension.context.globalState.update(SELECTED_SERVER_PATH, validServerPath);
+                await config.update('suppressServerUpdateNotification', true, vscode.ConfigurationTarget.WorkspaceFolder);
             } else {
                 vscode.window.showErrorMessage('Invalid WSO2 Integrator: MI path or Unsupported version. Please set a valid WSO2 Integrator: MI path');
             }
