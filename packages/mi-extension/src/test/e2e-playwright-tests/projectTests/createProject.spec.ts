@@ -67,7 +67,7 @@ export default function createTests() {
                 const fileInput = await page.page?.waitForSelector('.quick-input-header');
                 const textInput = await fileInput?.waitForSelector('input[type="text"]');
                 console.log('Filling in the project path');
-                await textInput?.fill(newProjectPath + '/newProject/');
+                await textInput?.fill(path.join(newProjectPath, 'newProject'));
                 const openBtn = await fileInput?.waitForSelector('a.monaco-button:has-text("Open MI Project")');
                 await openBtn?.click();
                 const newWindowButton = page.page.getByRole('button', { name: 'New Window' });
