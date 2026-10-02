@@ -17,7 +17,7 @@
  */
 
 import * as vscode from 'vscode';
-import { CancellationToken, DebugConfiguration, ProviderResult, Uri, window, workspace, WorkspaceFolder } from 'vscode';
+import { CancellationToken, DebugConfiguration, ProviderResult, Uri, ViewColumn, window, workspace, WorkspaceFolder } from 'vscode';
 import { MiDebugAdapter } from './debugAdapter';
 import { COMMANDS } from '../constants';
 import { extension } from '../MIExtensionContext';
@@ -29,14 +29,77 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { SELECTED_SERVER_PATH, SELECTED_JAVA_HOME } from './constants';
 import { buildBallerinaModule, isConsolidatedProject, setPathsInWorkSpace, verifyJavaHomePath, verifyMIPath } from '../util/onboardingUtils';
-import { MACHINE_VIEW, POPUP_EVENT_TYPE } from '@wso2/mi-core';
+import { MACHINE_VIEW, POPUP_EVENT_TYPE, PomNodeDetails, webviewReady } from '@wso2/mi-core';
 import { askForProject } from '../util/workspace';
-import { webviews } from '../visualizer/webview';
+import { VisualizerWebview, webviews } from '../visualizer/webview';
+import { RPCLayer } from '../RPCLayer';
 import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
 import { createAggregatePomInRoot, dockerBuildDockerfileContent } from '../util/templates';
 import { copyDockerResources, copyMavenWrapper } from '../util';
 import { getModules, parseConsolidatedProjectPom, updateCopyModulesInAggregatePom, updatePomModules } from './pomResolver';
 
+
+// Skips re-prompting when a config is replayed via COMMANDS.RESUME_DEBUG_SESSION.
+const SKIP_CONFIGURABLES_CHECK = '__miSkipConfigurablesCheck';
+
+// Prompts for missing configurable values. Returns true to proceed immediately; false if
+// cancelled, or if the "Define Values" webview was opened.
+export async function checkMissingConfigurablesAndPrompt(
+    projectPaths: string[],
+    resumeCommand: string,
+    resumeArgs: any[]
+): Promise<boolean> {
+    const projectsConfigs: { projectUri: string; configurables: PomNodeDetails[] }[] = [];
+    let hasMissingConfigurables = false;
+    for (const projectPath of projectPaths) {
+        try {
+            const configurables = await getConfigurableEntries(projectPath);
+            if (configurables.some(c => !c.value)) {
+                hasMissingConfigurables = true;
+            }
+            projectsConfigs.push({ projectUri: projectPath, configurables });
+        } catch (error) {
+            window.showErrorMessage(`Failed to check configurables for project '${path.basename(projectPath)}': ${error instanceof Error ? error.message : error}`);
+            return false;
+        }
+    }
+
+    // Only prompt if something's actually missing.
+    if (!hasMissingConfigurables) {
+        return true;
+    }
+
+    const DEFINE_VALUES = 'Define Configurables';
+    const CONTINUE_ANYWAY = 'Continue Anyway';
+    const choice = await window.showWarningMessage(
+        'Some configurable values are missing for this project. You can define them now or continue without setting them.',
+        { modal: true },
+        DEFINE_VALUES,
+        CONTINUE_ANYWAY
+    );
+
+    if (choice === CONTINUE_ANYWAY) {
+        return true;
+    }
+
+    if (choice !== DEFINE_VALUES) {
+        // Dialog dismissed/cancelled.
+        return false;
+    }
+
+    // Prefer the active webview, then any open one among these projects, else open a new panel.
+    const activeProjectUri = [...webviews.entries()].find(([, w]) => w.getWebview()?.active)?.[0];
+    const hostProjectUri =
+        (activeProjectUri && projectPaths.includes(activeProjectUri) ? activeProjectUri : undefined)
+        ?? projectPaths.find(p => webviews.has(p))
+        ?? projectsConfigs[0].projectUri;
+    await ensureWebviewReady(hostProjectUri);
+    openPopupView(hostProjectUri, POPUP_EVENT_TYPE.OPEN_VIEW, {
+        view: MACHINE_VIEW.ManageConfigurables,
+        customProps: { projectsConfigs, mode: 'run', allProjectUris: projectPaths, resumeCommand, resumeArgs }
+    });
+    return false;
+}
 
 class MiConfigurationProvider implements vscode.DebugConfigurationProvider {
 
@@ -72,13 +135,16 @@ class MiConfigurationProvider implements vscode.DebugConfigurationProvider {
             }
         }
 
-        for (const projectPath of config.projectList as string[]) {
-            if (!(await confirmConfigurableValues(projectPath))) {
-                return undefined;
-            }
+        if (config[SKIP_CONFIGURABLES_CHECK]) {
+            return config;
         }
 
-        return config;
+        const shouldProceed = await checkMissingConfigurablesAndPrompt(
+            config.projectList as string[],
+            COMMANDS.RESUME_DEBUG_SESSION,
+            [config, folder?.uri.fsPath]
+        );
+        return shouldProceed ? config : undefined;
     }
 }
 
@@ -278,11 +344,18 @@ export function activateDebugger(context: vscode.ExtensionContext) {
     });
 
 
-    context.subscriptions.push(vscode.commands.registerCommand(COMMANDS.BUILD_AND_RUN_PROJECT, async (args: any) => {
-        const webview = [...webviews.values()].find(webview => webview.getWebview()?.active);
-        let projectUri: string | undefined = undefined;
-        if (webview && webview?.getProjectUri()) {
-            projectUri = webview.getProjectUri();
+    context.subscriptions.push(vscode.commands.registerCommand(COMMANDS.BUILD_AND_RUN_PROJECT, async (...args: any[]) => {
+        vscode.commands.executeCommand('setContext', 'MI.isRunning', 'true');
+        // Resume a known project list as-is if given. Native invocations may pass other args,
+        // so require all-string entries.
+        const explicitProjectUris = args.length > 0 && args.every(a => typeof a === 'string') ? args as string[] : [];
+        const explicitProjectList = explicitProjectUris.length > 0 ? explicitProjectUris : undefined;
+        let projectUri: string | undefined = explicitProjectList?.[0];
+        if (!projectUri) {
+            const webview = [...webviews.values()].find(webview => webview.getWebview()?.active);
+            if (webview && webview?.getProjectUri()) {
+                projectUri = webview.getProjectUri();
+            }
         }
         if (!projectUri) {
             projectUri = await askForProject();
@@ -318,6 +391,10 @@ export function activateDebugger(context: vscode.ExtensionContext) {
                 config.internalConsoleOptions = 'neverOpen';
             }
 
+            if (explicitProjectList) {
+                config.projectList = explicitProjectList;
+            }
+
             // Inject WSO2_AI env vars first (so .env can override them)
             try {
                 const wso2AiEnvVars = await getWSO2AIEnvVariables();
@@ -344,13 +421,24 @@ export function activateDebugger(context: vscode.ExtensionContext) {
             }
 
             try {
-                await vscode.debug.startDebugging(projectWorkspace, config);
+                const started = await vscode.debug.startDebugging(projectWorkspace, config);
+                if (!started) {
+                    vscode.commands.executeCommand('setContext', 'MI.isRunning', 'false');
+                }
             } catch (err) {
+                vscode.commands.executeCommand('setContext', 'MI.isRunning', 'false');
                 vscode.window.showErrorMessage(`Failed to run without debugging: ${err}`);
             }
         } else {
+            vscode.commands.executeCommand('setContext', 'MI.isRunning', 'false');
             vscode.window.showErrorMessage('No workspace folder found');
         }
+    }));
+
+    // Replays the exact DebugConfiguration that was interrupted by the missing-configurables prompt.
+    context.subscriptions.push(vscode.commands.registerCommand(COMMANDS.RESUME_DEBUG_SESSION, async (resumeConfig: vscode.DebugConfiguration, resumeFolderUri?: string) => {
+        const folder = resumeFolderUri ? workspace.getWorkspaceFolder(Uri.file(resumeFolderUri)) : undefined;
+        await vscode.debug.startDebugging(folder, { ...resumeConfig, [SKIP_CONFIGURABLES_CHECK]: true });
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand(COMMANDS.TERMINATE_SERVER, async () => {
@@ -426,32 +514,22 @@ export function activateDebugger(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.debug.registerDebugAdapterDescriptorFactory('mi', factory));
 }
 
-async function confirmConfigurableValues(projectUri: string): Promise<boolean> {
-    const configurables = await getConfigurableEntries(projectUri);
-    const missing = configurables.filter(config => !config.value);
-    if (missing.length === 0) {
-        return true;
+// Make sure an already-open, already-loaded webview panel exists.
+async function ensureWebviewReady(projectUri: string): Promise<void> {
+    if (webviews.has(projectUri)) {
+        webviews.get(projectUri)?.getWebview()?.reveal(ViewColumn.Active);
+        return;
     }
 
-    const proceed = 'Proceed';
-    const addValues = 'Add Values';
-    const response = await vscode.window.showWarningMessage(
-        `There are configurables with no value in the .env file of the project '${path.basename(projectUri)}'. How do you want to proceed?`,
-        { modal: true },
-        proceed,
-        addValues
-    );
+    const panel = new VisualizerWebview(MACHINE_VIEW.Overview, projectUri, extension.webviewReveal);
+    webviews.set(projectUri, panel);
 
-    if (response === proceed) {
-        return true;
-    }
-    if (response === addValues) {
-        openPopupView(projectUri, POPUP_EVENT_TYPE.OPEN_VIEW, {
-            view: MACHINE_VIEW.ManageConfigurables,
-            customProps: { configs: configurables }
+    const messenger = RPCLayer._messengers.get(projectUri);
+    if (messenger) {
+        await new Promise<void>((resolve) => {
+            messenger.onNotification(webviewReady, () => resolve());
         });
     }
-    return false;
 }
 
 class InlineDebugAdapterFactory implements vscode.DebugAdapterDescriptorFactory {

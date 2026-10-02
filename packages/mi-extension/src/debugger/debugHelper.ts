@@ -27,7 +27,7 @@ import { SELECTED_SERVER_PATH, INCORRECT_SERVER_PATH_MSG } from './constants';
 import { reject } from 'lodash';
 import axios from 'axios';
 import * as net from 'net';
-import { MACHINE_VIEW } from '@wso2/mi-core';
+import { MACHINE_VIEW, PomNodeDetails } from '@wso2/mi-core';
 import { getStateMachine } from '../stateMachine';
 import { logDebug, LogLevel } from '../util/logger';
 import * as toml from "@iarna/toml";
@@ -875,11 +875,9 @@ export async function killProcessByPort(port: number): Promise<void> {
             return;
         }
 
-        // Iterate over the found processes and kill each
-        for (const processInfo of list) {
-            const pid = processInfo.pid;
-            treeKill(pid, 'SIGKILL');
-        }
+        await Promise.all(list.map(processInfo => new Promise<void>((resolve) => {
+            treeKill(processInfo.pid, 'SIGKILL', () => resolve());
+        })));
     } catch (error) {
         vscode.window.showErrorMessage(`Error finding or killing process on port ${port}: ${(error as Error).message}`);
     }
@@ -913,8 +911,11 @@ async function compareFilesByMD5(file1: string, file2: string): Promise<boolean>
     });
 }
 
-export async function getConfigurableEntries(projectUri: string): Promise<{key: string; type: string; value: string; range: any; }[]> {
+export async function getConfigurableEntries(projectUri: string): Promise<PomNodeDetails[]> {
     const langClient = await MILanguageClient.getInstance(projectUri);
     const res = await langClient.getConfigurableList();
-    return res;
+    return res.map(entry => ({
+        ...entry,
+        range: Array.isArray(entry.range) ? entry.range[0] : entry.range
+    }));
 }

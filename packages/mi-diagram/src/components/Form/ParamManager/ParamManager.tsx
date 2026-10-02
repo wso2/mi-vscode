@@ -471,8 +471,10 @@ export function ParamManager(props: ParamManagerProps) {
             const paramKeys = updatedParameters.map(param => {
                 return param?.paramValues[0]?.value;
             });
-            const hasUniqueKeys = new Set(paramKeys).size === paramKeys.length;
-            if (!hasUniqueKeys) {
+            // Only flag this row if its own key is duplicated, not just any row in the table.
+            const currentKey = paramConfig.parameters[0]?.value;
+            const occurrences = paramKeys.filter(key => key === currentKey).length;
+            if (currentKey && occurrences > 1) {
                 currentFieldErrorMessage = "Key should be unique";
             }
         }

@@ -122,6 +122,21 @@ export interface PomNodeDetails {
     key?: string;
     displayValue?: string;
     range?: STRange | STRange[];
+    envRange?: STRange;
+    deleted?: boolean;
+}
+
+export interface ConfigLineEdit {
+    key: string;
+    text: string;
+    range?: STRange;
+    deleted: boolean;
+}
+
+export interface TestResumeGroup {
+    projectRoot: string;
+    testIds: string[];
+    triggerID: string;
 }
 
 export interface PrimaryDetails {
@@ -202,6 +217,7 @@ export interface UpdatePomValuesRequest {
 
 export interface UpdateConfigValuesRequest {
     configValues: PomNodeDetails[];
+    projectUri?: string;
 }
 
 export interface UpdatePropertiesRequest {
@@ -343,11 +359,6 @@ export interface OpenRecentProjectRequest {
     path: string;
 }
 
-export interface AddConfigurableRequest {
-    projectUri: string;
-    configurableName: string;
-    configurableType: string;
-}
 
 export interface OpenViewRequest {
     type: EVENT_TYPE | POPUP_EVENT_TYPE;
