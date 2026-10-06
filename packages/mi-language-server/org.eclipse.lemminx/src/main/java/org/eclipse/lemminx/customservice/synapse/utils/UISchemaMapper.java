@@ -243,7 +243,6 @@ public class UISchemaMapper {
         data.addProperty(Constant.PROTOCOL, ib.getProtocol());
         data.addProperty(Constant.CLASS, ib.getClazz());
         data.addProperty(Constant.ON_ERROR, ib.getOnError());
-        data.addProperty(Constant.SUSPEND, ib.isSuspend());
         data.addProperty(Constant.STATISTICS, ib.getStatistics() != null ? ib.getStatistics().toString() : null);
         data.addProperty(Constant.TRACE, ib.getTrace() != null ? ib.getTrace().toString() : null);
         InboundEndpointParameters[] parametersList = ib.getParameters();
@@ -258,6 +257,10 @@ public class UISchemaMapper {
                     }
                 }
             }
+        }
+        // Added after parameters so the suspend attribute, when defined, takes precedence over a suspend parameter
+        if (ib.isSuspend() != null) {
+            data.addProperty(Constant.SUSPEND, ib.isSuspend());
         }
         return mapInputToUISchema(data, uiSchema);
     }
