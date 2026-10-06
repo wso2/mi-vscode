@@ -122,7 +122,8 @@ export function AddInboundConnector(props: AddInboundConnectorProps) {
 
             // Populate Attributes
             attributeNames.forEach((attributeName: string) => {
-                if (model.hasOwnProperty(attributeName)) {
+                // Attributes take precedence over parameters, but only when defined in the xml
+                if (model[attributeName] !== undefined && model[attributeName] !== null) {
                     setValue(getNameForController(attributeName), model[attributeName]);
                 }
             });

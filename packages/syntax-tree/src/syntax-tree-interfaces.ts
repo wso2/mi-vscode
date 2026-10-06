@@ -448,7 +448,7 @@ export interface InboundEndpoint extends STNode {
     sequenceURI: string | undefined;
     protocol: string;
     onError: string;
-    suspend: boolean;
+    suspend?: boolean;
     clazz: string;
     statistics: string;
     trace: string;
