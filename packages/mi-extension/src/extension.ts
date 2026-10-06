@@ -52,7 +52,15 @@ export async function activate(context: vscode.ExtensionContext) {
 	const orphanedTabs = vscode.window.tabGroups.all
 		.flatMap((tabGroup) => tabGroup.tabs)
 		.filter((tab) => (tab.input as any)?.viewType?.includes("micro-integrator."));
-	vscode.window.tabGroups.close(orphanedTabs);
+	await vscode.window.tabGroups.close(orphanedTabs);
+
+	const emptyGroups = vscode.window.tabGroups.all.filter((tabGroup) => tabGroup.tabs.length === 0);
+	if (emptyGroups.length > 0) {
+		const groupsToClose = emptyGroups.length === vscode.window.tabGroups.all.length
+			? emptyGroups.slice(1)
+			: emptyGroups;
+		await vscode.window.tabGroups.close(groupsToClose);
+	}
 
 	// Filter out sub-projects that openConsolidatedAsWorkspace is asynchronously removing.
 	let excludedPaths = new Set<string>();

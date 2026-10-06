@@ -884,6 +884,10 @@
           "when": "!WI.isWiRuntime || (WI.isWiRuntime && config.integrator.selectedProfile == 'WSO2 Integrator: MI')"
         },
         {
+          "command": "MI.project-explorer.open-workspace-overview",
+          "when": "!WI.isWiRuntime || (WI.isWiRuntime && config.integrator.selectedProfile == 'WSO2 Integrator: MI')"
+        },
+        {
           "command": "MI.project-explorer.project-delete",
           "when": "!WI.isWiRuntime || (WI.isWiRuntime && config.integrator.selectedProfile == 'WSO2 Integrator: MI')"
         },
