@@ -174,6 +174,10 @@ import {
     UpdateDefaultEndpointResponse,
     UpdateResourceQueryParamsRequest,
     UpdateResourceQueryParamsResponse,
+    RenameResourceInSwaggerRequest,
+    RenameResourceInSwaggerResponse,
+    PrepareSwaggerForEditRequest,
+    PrepareSwaggerForEditResponse,
     UpdateFailoverEPRequest,
     UpdateFailoverEPResponse,
     UpdateHttpEndpointRequest,
@@ -327,6 +331,8 @@ import {
     updateRecipientEndpoint,
     updateRegistryMetadata,
     updateResourceQueryParams,
+    renameResourceInSwagger,
+    prepareSwaggerForEdit,
     updateSwaggerFromAPI,
     updateTemplateEndpoint,
     updateTestCase,
@@ -1056,6 +1062,14 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
 
     updateResourceQueryParams(params: UpdateResourceQueryParamsRequest): Promise<UpdateResourceQueryParamsResponse> {
         return this._messenger.sendRequest(updateResourceQueryParams, HOST_EXTENSION, params);
+    }
+
+    prepareSwaggerForEdit(params: PrepareSwaggerForEditRequest): Promise<PrepareSwaggerForEditResponse> {
+        return this._messenger.sendRequest(prepareSwaggerForEdit, HOST_EXTENSION, params);
+    }
+
+    renameResourceInSwagger(params: RenameResourceInSwaggerRequest): Promise<RenameResourceInSwaggerResponse> {
+        return this._messenger.sendRequest(renameResourceInSwagger, HOST_EXTENSION, params);
     }
 
     updateTestSuite(params: UpdateTestSuiteRequest): Promise<UpdateTestSuiteResponse> {

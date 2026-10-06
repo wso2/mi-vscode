@@ -34,9 +34,9 @@ export async function replaceFullContentToFile(documentUri: string, content: str
         edit.createFile(Uri.file(documentUri), { contents: new TextEncoder().encode(content) });
         isNewFile = true;
     } else {
-        const fileContent = fs.readFileSync(documentUri, 'utf-8');
-        const lineCount = fileContent.split('\n').length;
-        const fullRange = new Range(new Position(0, 0), new Position(lineCount, 0));
+        // Use the in-memory document's range
+        const existingDocument = await workspace.openTextDocument(Uri.file(documentUri));
+        const fullRange = new Range(new Position(0, 0), existingDocument.positionAt(existingDocument.getText().length));
 
         edit.replace(Uri.file(documentUri), fullRange, content);
     }

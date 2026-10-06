@@ -104,6 +104,8 @@ import {
     UpdateAPIFromSwaggerRequest,
     UpdateAddressEndpointRequest,
     UpdateResourceQueryParamsRequest,
+    RenameResourceInSwaggerRequest,
+    PrepareSwaggerForEditRequest,
     UpdateConnectorRequest,
     UpdateDefaultEndpointRequest,
     UpdateFailoverEPRequest,
@@ -255,6 +257,8 @@ import {
     updateAPIFromSwagger,
     updateAddressEndpoint,
     updateResourceQueryParams,
+    renameResourceInSwagger,
+    prepareSwaggerForEdit,
     updateConnectors,
     updateDefaultEndpoint,
     updateFailoverEndpoint,
@@ -509,6 +513,8 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onNotification(updateSwaggerFromAPI, (args: SwaggerTypeRequest) => rpcManger.updateSwaggerFromAPI(args));
     messenger.onNotification(updateAPIFromSwagger, (args: UpdateAPIFromSwaggerRequest) => rpcManger.updateAPIFromSwagger(args));
     messenger.onRequest(updateResourceQueryParams, (args: UpdateResourceQueryParamsRequest) => rpcManger.updateResourceQueryParams(args));
+    messenger.onRequest(prepareSwaggerForEdit, (args: PrepareSwaggerForEditRequest) => rpcManger.prepareSwaggerForEdit(args));
+    messenger.onRequest(renameResourceInSwagger, (args: RenameResourceInSwaggerRequest) => rpcManger.renameResourceInSwagger(args));
     messenger.onRequest(updateTestSuite, (args: UpdateTestSuiteRequest) => rpcManger.updateTestSuite(args));
     messenger.onRequest(updateTestCase, (args: UpdateTestCaseRequest) => rpcManger.updateTestCase(args));
     messenger.onRequest(updateMockService, (args: UpdateMockServiceRequest) => rpcManger.updateMockService(args));
