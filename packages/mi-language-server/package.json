@@ -1,6 +1,6 @@
 {
   "name": "language-server",
-  "version": "0.24.0-wso2v90",
+  "version": "0.24.0-wso2v97",
   "private": true,
   "scripts": {
     "build": "node ./scripts/build-and-copy.js"
