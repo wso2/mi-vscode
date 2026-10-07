@@ -124,10 +124,12 @@ export interface PomNodeDetails {
     range?: STRange | STRange[];
     envRange?: STRange;
     deleted?: boolean;
+    originalKey?: string;
 }
 
 export interface ConfigLineEdit {
     key: string;
+    originalKey?: string;
     text: string;
     range?: STRange;
     deleted: boolean;

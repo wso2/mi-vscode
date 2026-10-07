@@ -33,7 +33,6 @@ import { MACHINE_VIEW, POPUP_EVENT_TYPE, PomNodeDetails, webviewReady } from '@w
 import { askForProject } from '../util/workspace';
 import { VisualizerWebview, webviews } from '../visualizer/webview';
 import { RPCLayer } from '../RPCLayer';
-import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
 import { createAggregatePomInRoot, dockerBuildDockerfileContent } from '../util/templates';
 import { copyDockerResources, copyMavenWrapper } from '../util';
 import { getModules, parseConsolidatedProjectPom, updateCopyModulesInAggregatePom, updatePomModules } from './pomResolver';
@@ -363,7 +362,6 @@ export function activateDebugger(context: vscode.ExtensionContext) {
         if (projectUri) {
             const projectWorkspace = workspace.getWorkspaceFolder(Uri.file(projectUri));
             const launchJsonPath = path.join(projectUri, '.vscode', 'launch.json');
-            const envPath = path.join(projectUri, '.env');
             let config: vscode.DebugConfiguration | undefined = undefined;
 
             if (fs.existsSync(launchJsonPath)) {
@@ -395,31 +393,6 @@ export function activateDebugger(context: vscode.ExtensionContext) {
                 config.projectList = explicitProjectList;
             }
 
-            // Inject WSO2_AI env vars first (so .env can override them)
-            try {
-                const wso2AiEnvVars = await getWSO2AIEnvVariables();
-                if (Object.keys(wso2AiEnvVars).length > 0) {
-                    config.env = { ...wso2AiEnvVars, ...config.env };
-                }
-            } catch (error) {
-                // Silently ignore - user may not be logged in
-            }
-
-            if (fs.existsSync(envPath)) {
-                const envFileContent = fs.readFileSync(envPath, 'utf-8');
-                const envVariables = envFileContent.split('\n').reduce((acc, line) => {
-                    const [key, ...values] = line.split('=');
-                    const value = values.join('=').trim();
-                    if (key && value) {
-                        acc[key.trim()] = value;
-                    }
-                    return acc;
-                }, {} as { [key: string]: string });
-
-                // Adding env variables
-                config.env = { ...config.env, ...envVariables };
-            }
-
             try {
                 const started = await vscode.debug.startDebugging(projectWorkspace, config);
                 if (!started) {
@@ -437,8 +410,17 @@ export function activateDebugger(context: vscode.ExtensionContext) {
 
     // Replays the exact DebugConfiguration that was interrupted by the missing-configurables prompt.
     context.subscriptions.push(vscode.commands.registerCommand(COMMANDS.RESUME_DEBUG_SESSION, async (resumeConfig: vscode.DebugConfiguration, resumeFolderUri?: string) => {
+        vscode.commands.executeCommand('setContext', 'MI.isRunning', 'true');
         const folder = resumeFolderUri ? workspace.getWorkspaceFolder(Uri.file(resumeFolderUri)) : undefined;
-        await vscode.debug.startDebugging(folder, { ...resumeConfig, [SKIP_CONFIGURABLES_CHECK]: true });
+        try {
+            const started = await vscode.debug.startDebugging(folder, { ...resumeConfig, [SKIP_CONFIGURABLES_CHECK]: true });
+            if (!started) {
+                vscode.commands.executeCommand('setContext', 'MI.isRunning', 'false');
+            }
+        } catch (err) {
+            vscode.commands.executeCommand('setContext', 'MI.isRunning', 'false');
+            vscode.window.showErrorMessage(`Failed to resume the session: ${err}`);
+        }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand(COMMANDS.TERMINATE_SERVER, async () => {

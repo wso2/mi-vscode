@@ -523,6 +523,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
 
         await applyConfigLineEdits(configFilePath, entries.map(entry => ({
             key: entry.key,
+            originalKey: entry.originalKey,
             text: `${entry.key}:${entry.type}`,
             // Already normalized to a single Range in getConfigurableEntries (debugHelper.ts).
             range: entry.range as STRange | undefined,
@@ -534,6 +535,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
             .filter(entry => entry.deleted || entry.envRange || entry.value)
             .map(entry => ({
                 key: entry.key,
+                originalKey: entry.originalKey,
                 text: `${entry.key}=${entry.value}`,
                 range: entry.envRange,
                 // No value means nothing to store in .env. Therefore treated as a deletion.
@@ -1370,21 +1372,38 @@ async function applyConfigLineEdits(
     const appended = new Map<string, string>();
     let changed = false;
 
-    for (const configEdit of edits) {
+    const findKeyLine = (key: string): number | undefined => {
+        for (let i = 0; i < document.lineCount; i++) {
+            if (extractKey(document.lineAt(i).text) === key) {
+                return i;
+            }
+        }
+        return undefined;
+    };
+
+    // Each line is edited only once
+    const editedLines = new Set<number>();
+    // Renames added first so they keep their original line
+    const orderedEdits = [...edits.filter(e => e.originalKey), ...edits.filter(e => !e.originalKey)];
+
+    for (const configEdit of orderedEdits) {
+        // For a rename, the line in the file still holds the original key
+        const currentKey = configEdit.originalKey ?? configEdit.key;
         let lineIndex = configEdit.range ? configEdit.range.start.line - 1 : undefined;
         // Only trust the change if the key at that line still matches.
         if (lineIndex === undefined || lineIndex < 0 || lineIndex >= document.lineCount
-            || extractKey(document.lineAt(lineIndex).text) !== configEdit.key) {
-            lineIndex = undefined;
-            for (let i = 0; i < document.lineCount; i++) {
-                if (extractKey(document.lineAt(i).text) === configEdit.key) {
-                    lineIndex = i;
-                    break;
-                }
+            || extractKey(document.lineAt(lineIndex).text) !== currentKey) {
+            lineIndex = findKeyLine(currentKey);
+            if (lineIndex === undefined && currentKey !== configEdit.key) {
+                lineIndex = findKeyLine(configEdit.key);
             }
+        }
+        if (lineIndex !== undefined && editedLines.has(lineIndex)) {
+            lineIndex = undefined;
         }
 
         if (lineIndex !== undefined) {
+            editedLines.add(lineIndex);
             const line = document.lineAt(lineIndex);
             if (configEdit.deleted) {
                 edit.delete(uri, line.rangeIncludingLineBreak);

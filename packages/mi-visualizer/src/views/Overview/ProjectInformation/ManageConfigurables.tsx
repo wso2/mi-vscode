@@ -269,13 +269,20 @@ function ManageConfigurablesForm(props: ManageConfigurablesProps) {
         const upserts = rows.map((row) => {
             const keyField = row[0];
             const originalIndex: number | undefined = keyField.additionalData?.originalIndex;
+            let originalKey: string | undefined;
             if (originalIndex !== undefined) {
                 presentOriginalIndexes.add(originalIndex);
+                // Renamed rows are updated in place by matching the original key
+                const loadedKey = configurables[originalIndex]?.key;
+                if (loadedKey && loadedKey !== keyField.value) {
+                    originalKey = loadedKey;
+                }
             } else {
                 newRowKeys.add(keyField.value);
             }
             return {
                 key: keyField.value,
+                originalKey,
                 type: row[1].value,
                 value: row[2].value,
                 range: keyField.additionalData?.range,
