@@ -2,6 +2,16 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.   
 
+## [4.1.6] - 2026-10-07          
+
+### Fixed   
+
+Fixed: mvnw files are not getting generated till the project overview is opened ([#1611](https://github.com/wso2/mi-vscode/issues/1611))        
+Fixed: Fill with AI does not properly wrap the content ([#1615](https://github.com/wso2/mi-vscode/issues/1615))        
+Fixed: Unit test execution issue when running on WIndows ([#1624](https://github.com/wso2/mi-vscode/issues/1624))    
+Fixed: Suspend is set as a parameter instead an attribute in the inbound-endpoint xml ([#1625](https://github.com/wso2/mi-vscode/issues/1625))       
+Fixed: Intermittent OpenAPI spec corruptions when managing API resources          
+
 ## [4.1.5] - 2026-09-09          
 
 ### Fixed   
