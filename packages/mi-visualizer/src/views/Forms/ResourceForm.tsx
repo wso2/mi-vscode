@@ -38,6 +38,7 @@ import { Resolver, useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { FormKeylookup, ParamManager, ParamConfig, ParamField } from "@wso2/mi-diagram";
 import { QueryParamInfo } from "@wso2/mi-core";
+import { useVisualizerContext } from "@wso2/mi-rpc-client";
 
 // Styles
 const ActionContainer = styled.div`
@@ -171,6 +172,21 @@ const initialValues: ResourceType = {
     bindsTo: "",
 };
 
+type ResourceSignature = {
+    path: string;
+    methods: string[];
+};
+
+// Path params are compared by position only, since /orders/{id} and /orders/{orderId} match the same requests.
+// A trailing slash is dropped as Synapse does, so /orders/ and /orders are the same resource.
+const normalizeResourcePath = (path: string | undefined): string => {
+    const normalized = (path ?? "").split("?")[0].replace(/\{[^}]*\}/g, "{}");
+    return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+};
+
+const getSelectedMethods = (methods: ResourceType["methods"]): string[] =>
+    Object.entries(methods ?? {}).filter(([, enabled]) => enabled).map(([method]) => method);
+
 const queryParamFields: ParamField[] = [
     { id: 0, type: "TextField", label: "Key", isRequired: true },
     { id: 1, type: "Checkbox", label: "Required" },
@@ -226,6 +242,7 @@ const bindsToToParamConfig = (bindsTo: string, options: string[]): ParamConfig =
 };
 
 export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, bindsToOptions = [], existingQueryParams = [] }: ResourceFormProps) => {
+    const { rpcClient } = useVisualizerContext();
     const {
         control,
         handleSubmit,
@@ -250,6 +267,8 @@ export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, 
     const [paramValue, setParamValue] = useState("");
     const [bindsToParams, setBindsToParams] = useState<ParamConfig>(bindsToToParamConfig("", bindsToOptions));
     const [queryParams, setQueryParams] = useState<ParamConfig>(queryParamsToParamConfig(existingQueryParams));
+    const [otherResources, setOtherResources] = useState<ResourceSignature[]>([]);
+    const [isResourceLookupPending, setIsResourceLookupPending] = useState(false);
 
     const handleBindsToChange = (config: ParamConfig) => {
         const normalized: ParamConfig = {
@@ -274,6 +293,15 @@ export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, 
         };
         setQueryParams(normalized);
     };
+
+    const resourcePath = urlStyle === "uri-template" ? watch("uriTemplate") : watch("urlMapping");
+    const selectedMethods = getSelectedMethods(watch("methods"));
+    const duplicateResource = urlStyle === "none" ? undefined : otherResources.find((resource) =>
+        resource.path === normalizeResourcePath(resourcePath) &&
+        resource.methods.some((method) => selectedMethods.includes(method)));
+    const duplicateResourceError = duplicateResource
+        ? "Another resource with this path already handles one of the selected methods"
+        : undefined;
 
     const serializeQueryParams = (params: QueryParamInfo[]): string =>
         params.map((param) => `${param.name}:${param.required}`).sort().join(",");
@@ -341,6 +369,44 @@ export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, 
         }
     }, [formData, isOpen, bindsToOptionsKey, existingQueryParamsKey])
 
+    useEffect(() => {
+        if (!isOpen || !documentUri) {
+            return;
+        }
+        let cancelled = false;
+        setOtherResources([]);
+        setIsResourceLookupPending(true);
+        rpcClient.getMiDiagramRpcClient().getSyntaxTree({ documentUri }).then((st) => {
+            const resources: ResourceSignature[] = ((st as any)?.syntaxTree?.api?.resource ?? []).map((resource: any) => ({
+                path: normalizeResourcePath(resource.uriTemplate || resource.urlMapping),
+                methods: (resource.methods ?? []).map((method: string) => method.toLowerCase()),
+            }));
+            if (formData) {
+                // The resource being edited doesn't conflict with itself.
+                const originalPath = normalizeResourcePath(
+                    formData.urlStyle === "url-mapping" ? formData.urlMapping : formData.uriTemplate);
+                const originalMethods = getSelectedMethods(formData.methods).sort().join(" ");
+                const index = resources.findIndex((resource) =>
+                    resource.path === originalPath && [...resource.methods].sort().join(" ") === originalMethods);
+                if (index > -1) {
+                    resources.splice(index, 1);
+                }
+            }
+            if (!cancelled) {
+                setOtherResources(resources);
+                setIsResourceLookupPending(false);
+            }
+        }).catch(() => {
+            if (!cancelled) {
+                setOtherResources([]);
+                setIsResourceLookupPending(false);
+            }
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen, documentUri, formData]);
+
     return (
         <SidePanel
             isOpen={isOpen}
@@ -376,7 +442,7 @@ export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, 
                                     label="Resource Path"
                                     size={150}
                                     {...register("uriTemplate")}
-                                    errorMsg={errors.uriTemplate?.message}
+                                    errorMsg={errors.uriTemplate?.message ?? duplicateResourceError}
                                 />
                             )}
                             {urlStyle === "url-mapping" && (
@@ -385,7 +451,7 @@ export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, 
                                     label="Resource Path"
                                     size={150}
                                     {...register("urlMapping")}
-                                    errorMsg={errors.urlMapping?.message}
+                                    errorMsg={errors.urlMapping?.message ?? duplicateResourceError}
                                 />
                             )}
                             {urlStyle !== "none" && (
@@ -552,7 +618,7 @@ export const ResourceForm = ({ isOpen, documentUri, onCancel, onSave, formData, 
                                 <Button
                                     appearance="primary"
                                     onClick={handleSubmit(handleResourceSubmit)}
-                                    disabled={!isValid || (!isDirty && !isQueryParamsDirty)}
+                                    disabled={!isValid || isResourceLookupPending || !!duplicateResourceError || (!isDirty && !isQueryParamsDirty)}
                                 >
                                     {formData ? "Update" : "Create"}
                                 </Button>

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { cloneDeep } from "lodash";
+import { cloneDeep, isEqual } from "lodash";
 import { COMMANDS, SWAGGER_PATH_TEMPLATE, SWAGGER_REL_DIR } from "../constants";
 import { SwaggerFromAPIResponse, QueryParamInfo } from "@wso2/mi-core";
 import { workspace, window } from "vscode";
@@ -229,6 +229,10 @@ const recursivePathMerge = (
             result[key] = recursivePathMerge(oldObj[key], newObj[key], mergeTemplate.body[key]);
         } else if (newObj[key] && !oldObj[key]) {
             result[key] = newObj[key];
+        } else if (!newObj[key] && mergeTemplate.body[key]?.type === "array") {
+            // Missing in the generated swagger means empty (e.g. all path params removed), so drop the old one.
+            // Query params are added back later by mergeGeneratedSwagger.
+            delete result[key];
         }
     }
     return result;
@@ -251,10 +255,10 @@ export const getResourceInfo = (props: SwaggerUtilProps): ResourceInfoResponse =
 
     // Find newly added resources
     for (const resource in existingSwagger.paths) {
-        if (!generatedSwagger.paths[resource]) {
+        if (!generatedSwagger.paths?.[resource]) {
             added.push({
                 path: resource,
-                methods: Object.keys(existingSwagger.paths[resource]).map((method) => method.toUpperCase()),
+                methods: Object.keys(existingSwagger.paths[resource] ?? {}).map((method) => method.toUpperCase()),
             });
         } else {
             for (const method in existingSwagger.paths[resource]) {
@@ -270,7 +274,7 @@ export const getResourceInfo = (props: SwaggerUtilProps): ResourceInfoResponse =
 
     // Find removed resources
     for (const resource in generatedSwagger.paths) {
-        if (!existingSwagger.paths[resource]) {
+        if (!existingSwagger.paths?.[resource]) {
             removed.push({
                 path: resource,
                 methods: Object.keys(generatedSwagger.paths[resource]).map((method) => method.toUpperCase()),
@@ -302,56 +306,123 @@ export const extractQueryParams = (swagger: Swagger): Record<string, Record<stri
     return result;
 };
 
+const HTTP_METHODS = new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
+
+const parameterKey = (param: any): string => param?.$ref ?? `${param?.in}:${param?.name}`;
+
 /**
- * Moves a resource's swagger entry to its new path key (e.g. after a uri-template change),
- * preserving its operation data. On conflict with a pre-existing entry at the new key, the
- * old (pre-rename) data wins.
+ * Copies path-level parameters onto an operation, as the language server does when it regenerates the
+ * swagger. Parameters the operation already declares take precedence.
  */
-const renameResourcePathInSwagger = (swagger: any, oldResourcePath: string | undefined, newResourcePath: string): void => {
-    if (!oldResourcePath || oldResourcePath === newResourcePath) {
-        return;
+const withPathLevelParameters = (operation: any, pathParameters: any): any => {
+    if (!Array.isArray(pathParameters) || pathParameters.length === 0) {
+        return operation;
     }
-    const oldMethods = swagger.paths?.[oldResourcePath];
-    if (!oldMethods) {
-        return;
-    }
-    swagger.paths[newResourcePath] = { ...(swagger.paths[newResourcePath] ?? {}), ...oldMethods };
-    delete swagger.paths[oldResourcePath];
+    const ownParameters: any[] = operation.parameters ?? [];
+    const ownKeys = new Set(ownParameters.map(parameterKey));
+    const inherited = pathParameters.filter((param: any) => !ownKeys.has(parameterKey(param)));
+    return inherited.length > 0 ? { ...operation, parameters: [...inherited, ...ownParameters] } : operation;
 };
 
 /**
+ * Moves the given methods of a resource to its new path key (e.g. after a uri-template change),
+ * preserving their operation data and path-level parameters. Other methods sharing the old path stay
+ * there, and operations already at the new path are kept.
+ */
+const renameResourcePathInSwagger = (
+        swagger: any,
+        oldResourcePath: string,
+        newResourcePath: string,
+        methods: string[]): boolean => {
+    const oldPathItem = swagger.paths?.[oldResourcePath];
+    if (oldResourcePath === newResourcePath || !oldPathItem) {
+        return false;
+    }
+    const newPathItem = swagger.paths[newResourcePath] ?? {};
+    let moved = false;
+    for (const method of methods) {
+        if (oldPathItem[method] && !newPathItem[method]) {
+            newPathItem[method] = withPathLevelParameters(oldPathItem[method], oldPathItem.parameters);
+            delete oldPathItem[method];
+            moved = true;
+        }
+    }
+    if (!moved) {
+        return false;
+    }
+    swagger.paths[newResourcePath] = newPathItem;
+    if (!Object.keys(oldPathItem).some((key) => HTTP_METHODS.has(key))) {
+        // Nothing left at the old path, so carry over its other fields (summary, description, etc.).
+        // Its parameters were already copied onto the moved operations.
+        for (const [key, value] of Object.entries(oldPathItem)) {
+            if (key !== "parameters" && !UNSAFE_OBJECT_KEYS.has(key) && newPathItem[key] === undefined) {
+                newPathItem[key] = value;
+            }
+        }
+        delete swagger.paths[oldResourcePath];
+    }
+    return true;
+};
+
+/**
+ * Renames a resource's path key in the given swagger YAML. Returns the updated YAML, or undefined
+ * if there was nothing to rename.
+ */
+export const renameResourcePathInSwaggerYaml = (
+        existingSwaggerYaml: string,
+        oldResourcePath: string,
+        newResourcePath: string,
+        methods: string[]): string | undefined => {
+    const swagger = parse(existingSwaggerYaml);
+    if (!renameResourcePathInSwagger(swagger, oldResourcePath, newResourcePath, methods)) {
+        return undefined;
+    }
+    return stringify(swagger, { aliasDuplicateObjects: false });
+};
+
+/**
+ * Builds a query parameter from an existing one (if any), keeping its OpenAPI-only fields.
+ */
+const buildQueryParameter = (param: QueryParamInfo, existingParam?: any): any => ({
+    ...existingParam,
+    name: param.name,
+    in: "query",
+    required: param.required,
+    schema: existingParam?.schema ?? { type: "string" },
+});
+
+/**
  * Replaces the "in: query" parameters of the given resource path/methods with the provided list,
- * leaving path/body parameters and every other field of the swagger document untouched.
+ * leaving path/body parameters and every other field of the swagger document untouched. Query
+ * parameters that already exist keep their other fields (description, schema, etc.).
  */
 export const updateQueryParamsInSwagger = (
         existingSwaggerYaml: string,
         resourcePath: string,
         methods: string[],
         queryParams: QueryParamInfo[],
-        onlyUpdateExisting: boolean = false,
-        oldResourcePath?: string): string => {
+        onlyUpdateExisting: boolean = false): string => {
     const swagger = parse(existingSwaggerYaml);
     swagger.paths = swagger.paths ?? {};
-    renameResourcePathInSwagger(swagger, oldResourcePath, resourcePath);
     if (onlyUpdateExisting && !swagger.paths[resourcePath]) {
         return existingSwaggerYaml;
     }
     swagger.paths[resourcePath] = swagger.paths[resourcePath] ?? {};
-
-    const newQueryParams = queryParams.map((param) => ({
-        name: param.name,
-        in: "query",
-        required: param.required,
-        schema: { type: "string" },
-    }));
 
     for (const method of methods) {
         if (onlyUpdateExisting && !swagger.paths[resourcePath][method]) {
             continue;
         }
         const operation = swagger.paths[resourcePath][method] ?? { responses: { default: { description: "Default response" } } };
-        const remainingParams = (operation.parameters ?? []).filter((param: any) => param.in !== "query");
-        const mergedParams = [...remainingParams, ...newQueryParams.map((param) => ({ ...param, schema: { ...param.schema } }))];
+        const parameters: any[] = operation.parameters ?? [];
+        const remainingParams = parameters.filter((param: any) => param.in !== "query");
+        const existingQueryParams = new Map(parameters
+            .filter((param: any) => param.in === "query")
+            .map((param: any) => [param.name, param]));
+        const mergedParams = [
+            ...remainingParams,
+            ...queryParams.map((param) => buildQueryParameter(param, existingQueryParams.get(param.name))),
+        ];
         if (mergedParams.length > 0) {
             operation.parameters = mergedParams;
         } else {
@@ -387,6 +458,46 @@ export const mergeGeneratedSwagger = (existingSwaggerYaml: string, generatedSwag
     return yamlContent;
 };
 
+export type UnsavedSwaggerResolution = "clean" | "saved" | "discarded" | "cancelled";
+
+// Swagger files saved by resolveUnsavedSwaggerChanges, whose save-triggered API comparison is skipped.
+export const swaggerSavesSkippingComparison = new Set<string>();
+
+/**
+ * Swagger writers work on the file on disk. If it is open with unsaved changes, asks the user to save or
+ * discard them first. Dismissing the dialog saves them, unless the caller can cancel its change.
+ */
+export async function resolveUnsavedSwaggerChanges(
+        swaggerPath: string,
+        canCancel: boolean = false): Promise<UnsavedSwaggerResolution> {
+    const document = workspace.textDocuments.find((doc) => doc.uri.fsPath === swaggerPath);
+    if (!document?.isDirty) {
+        return "clean";
+    }
+    const selection = await window.showWarningMessage(
+        `${path.basename(swaggerPath)} has unsaved changes. Save or discard them to update it with the API changes.`,
+        { modal: true },
+        "Save",
+        "Discard"
+    );
+    if (selection === "Discard") {
+        // Revert only works on the active editor.
+        await window.showTextDocument(document);
+        await vscode.commands.executeCommand("workbench.action.files.revert");
+        return document.isDirty ? "cancelled" : "discarded";
+    }
+    if (!selection && canCancel) {
+        return "cancelled";
+    }
+    // The comparison would run before the API change is applied; the caller's update syncs them instead.
+    swaggerSavesSkippingComparison.add(swaggerPath);
+    if (!(await document.save())) {
+        swaggerSavesSkippingComparison.delete(swaggerPath);
+        return "cancelled";
+    }
+    return "saved";
+}
+
 /**
  * Copies the "in: query" parameters from a source swagger definition (e.g. an imported OpenAPI
  * spec) into the generated swagger file for the given API, leaving all other fields untouched.
@@ -405,7 +516,7 @@ export async function copyQueryParamsFromSource(apiPath: string, sourceSwaggerPa
         return;
     }
     const swaggerPath = path.join(projectUri, SWAGGER_REL_DIR, `${path.basename(apiPath, ".xml")}.yaml`);
-    if (!fs.existsSync(swaggerPath)) {
+    if (!fs.existsSync(swaggerPath) || (await resolveUnsavedSwaggerChanges(swaggerPath)) === "cancelled") {
         return;
     }
 
@@ -418,6 +529,16 @@ export async function copyQueryParamsFromSource(apiPath: string, sourceSwaggerPa
     await replaceFullContentToFile(swaggerPath, swaggerContent);
 }
 
+const mergeWithGeneratedSwagger = async (apiPath: string, projectUri: string, swaggerPath: string): Promise<string | undefined> => {
+    const existingSwaggerYaml = fs.existsSync(swaggerPath) ? fs.readFileSync(swaggerPath, 'utf-8') : undefined;
+    const langClient = await MILanguageClient.getInstance(projectUri);
+    const response = await langClient.swaggerFromAPI({ apiPath: apiPath, ...(existingSwaggerYaml && { swaggerPath: swaggerPath }) });
+    const freshlyGeneratedSwagger = response.swagger;
+    return existingSwaggerYaml
+        ? mergeGeneratedSwagger(existingSwaggerYaml, freshlyGeneratedSwagger)
+        : freshlyGeneratedSwagger;
+};
+
 /**
  * Core of generateSwagger, without acquiring the file lock. Only call from within an action
  * already passed to withSwaggerFileLock for the same swaggerPath; otherwise call generateSwagger().
@@ -427,13 +548,20 @@ export async function generateSwaggerCore(apiPath: string, projectUri: string, s
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
     }
+    let merged = await mergeWithGeneratedSwagger(apiPath, projectUri, swaggerPath);
     const existingSwaggerYaml = fs.existsSync(swaggerPath) ? fs.readFileSync(swaggerPath, 'utf-8') : undefined;
-    const langClient = await MILanguageClient.getInstance(projectUri);
-    const response = await langClient.swaggerFromAPI({ apiPath: apiPath, ...(existingSwaggerYaml && { swaggerPath: swaggerPath }) });
-    const freshlyGeneratedSwagger = response.swagger;
-    const merged = existingSwaggerYaml
-        ? mergeGeneratedSwagger(existingSwaggerYaml, freshlyGeneratedSwagger)
-        : freshlyGeneratedSwagger;
+    // Most API saves (e.g. mediator edits) leave the definition as is; no need to prompt for those.
+    if (merged && existingSwaggerYaml && isEqual(parse(merged), parse(existingSwaggerYaml))) {
+        return merged;
+    }
+    const resolution = await resolveUnsavedSwaggerChanges(swaggerPath);
+    if (resolution === "cancelled") {
+        return undefined;
+    }
+    if (resolution === "saved") {
+        // The saved editor content is now the existing definition to merge into.
+        merged = await mergeWithGeneratedSwagger(apiPath, projectUri, swaggerPath);
+    }
     if (merged) {
         fs.writeFileSync(swaggerPath, merged);
     }

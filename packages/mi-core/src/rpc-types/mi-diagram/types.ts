@@ -1906,13 +1906,32 @@ export interface UpdateResourceQueryParamsRequest {
     apiName: string;
     apiPath: string;
     resourcePath: string;
-    oldResourcePath?: string;
     methods: string[];
     queryParams: QueryParamInfo[];
 }
 
+export interface PrepareSwaggerForEditRequest {
+    apiPath: string;
+}
+
+export interface PrepareSwaggerForEditResponse {
+    proceed: boolean;
+}
+
+export interface RenameResourceInSwaggerRequest {
+    apiPath: string;
+    oldResourcePath: string;
+    newResourcePath: string;
+    methods: string[];
+}
+
+export interface RenameResourceInSwaggerResponse {
+    proceed: boolean;
+}
+
 export interface UpdateResourceQueryParamsResponse {
     queryParams: QueryParamInfo[];
+    updated: boolean;
 }
 
 export interface UpdateTestSuiteRequest {
