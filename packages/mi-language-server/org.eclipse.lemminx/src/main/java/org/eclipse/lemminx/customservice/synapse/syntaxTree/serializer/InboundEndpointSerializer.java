@@ -54,7 +54,7 @@ public class InboundEndpointSerializer {
         if (inboundEndpoint.getOnError() != null) {
             inboundEndpointElt.addAttribute("onError", inboundEndpoint.getOnError(), null);
         }
-        inboundEndpointElt.addAttribute("suspend", String.valueOf(inboundEndpoint.isSuspend()), null);
+        inboundEndpointElt.addAttribute("suspend", String.valueOf(Boolean.TRUE.equals(inboundEndpoint.isSuspend())), null);
         if (inboundEndpoint.getClazz() != null) {
             inboundEndpointElt.addAttribute("class", inboundEndpoint.getClazz(), null);
         }
