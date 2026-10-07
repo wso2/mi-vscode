@@ -25,7 +25,6 @@ import * as vscode from 'vscode';
 import { deleteRegistryResource } from "./fileOperations";
 import { MILanguageClient } from "../lang-client/activator";
 import { parse, stringify } from "yaml";
-import { replaceFullContentToFile } from "./workspace";
 
 const fs = require('fs');
 
@@ -526,7 +525,7 @@ export async function copyQueryParamsFromSource(apiPath: string, sourceSwaggerPa
             swaggerContent = updateQueryParamsInSwagger(swaggerContent, resourcePath, [method], queryParams, true);
         }
     }
-    await replaceFullContentToFile(swaggerPath, swaggerContent);
+    fs.writeFileSync(swaggerPath, swaggerContent);
 }
 
 const mergeWithGeneratedSwagger = async (apiPath: string, projectUri: string, swaggerPath: string): Promise<string | undefined> => {
