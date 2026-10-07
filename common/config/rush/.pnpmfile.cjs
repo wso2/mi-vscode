@@ -165,7 +165,7 @@ module.exports = {
           deps['picomatch'] = newVersion;
         }
         if (deps['linkify-it']) deps['linkify-it'] = '5.0.2';
-        if (deps['shell-quote']) deps['shell-quote'] = '1.9.0';
+        if (deps['shell-quote']) deps['shell-quote'] = '1.11.0';
         if (deps['svgo']) deps['svgo'] = '4.1.0';
         if (deps['yaml']) {
           const currentVersion = deps['yaml'];
