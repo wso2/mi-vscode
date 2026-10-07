@@ -28,7 +28,7 @@ import { debounce } from 'lodash';
 import path from 'path';
 import { removeFromHistory } from '../history';
 import { RPCLayer } from '../RPCLayer';
-import { deleteSwagger, generateSwagger } from '../util/swagger';
+import { deleteSwagger, generateSwagger, swaggerSavesSkippingComparison } from '../util/swagger';
 import { VisualizerWebview, webviews } from './webview';
 import * as fs from 'fs';
 import { AiPanelWebview } from '../ai-features/webview';
@@ -534,7 +534,7 @@ export function activateVisualizer(context: vscode.ExtensionContext, firstProjec
             }
 
             const swaggerDir = path.join(projectUri!, "src", "main", "wso2mi", "resources", "api-definitions");
-            if (document?.uri.fsPath.includes(swaggerDir)) {
+            if (document?.uri.fsPath.includes(swaggerDir) && !swaggerSavesSkippingComparison.delete(document.uri.fsPath)) {
                 const rpcManager = new MiDiagramRpcManager(projectUri!);
                 const langClient = await MILanguageClient.getInstance(projectUri!);
                 const apiPath = path.join(apiDir, path.basename(document?.uri.fsPath, path.extname(document?.uri.fsPath)) + '.xml');

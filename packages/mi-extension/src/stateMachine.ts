@@ -778,10 +778,12 @@ export function openView(type: EVENT_TYPE, viewLocation?: VisualizerLocation) {
             async function askForPrj() {
                 const projectUri = await askForProject();
                 if (projectUri) {
+                    viewLocation!.projectUri = projectUri;
                     const stateMachine = getStateMachine(projectUri);
                     stateMachine.service().send({ type: type, viewLocation: viewLocation });
                 }
             }
+            return;
         }
 
         // Prefer the currently visible webview's project so the view opens in

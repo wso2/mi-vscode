@@ -430,14 +430,11 @@ export function runCommand(command, pathToRun?: string,
     onClose?: (code: number) => void,
     printToOutput?: (line: string, isError: boolean) => void): ChildProcess {
     try {
-        if (pathToRun) {
-            command = `cd ${escapeShellArg(pathToRun)} && ${command}`
-        }
         const envVariables = {
             ...process.env,
             ...(pathToRun ? setJavaHomeInEnvironmentAndPath(pathToRun) : {})
         };
-        const cp = child_process.spawn(command, [], { shell: true, env: envVariables });
+        const cp = child_process.spawn(command, [], { shell: true, cwd: pathToRun, env: envVariables });
 
         if (typeof onData === 'function') {
             cp.stdout.setEncoding('utf8');

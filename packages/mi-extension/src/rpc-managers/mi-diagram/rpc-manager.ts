@@ -231,6 +231,10 @@ import {
     UpdateAddressEndpointResponse,
     UpdateResourceQueryParamsRequest,
     UpdateResourceQueryParamsResponse,
+    RenameResourceInSwaggerRequest,
+    RenameResourceInSwaggerResponse,
+    PrepareSwaggerForEditRequest,
+    PrepareSwaggerForEditResponse,
     UpdateConnectorRequest,
     UpdateDefaultEndpointRequest,
     UpdateDefaultEndpointResponse,
@@ -371,7 +375,7 @@ import { copyDockerResources, copyMavenWrapper, createFolderStructure, getAPIRes
 import { addNewEntryToArtifactXML, createMetadataFilesForRegistryCollection, deleteApiMetadata, deleteRegistryResource, detectMediaType, getAvailableRegistryResources, getMediatypeAndFileExtension, getRegistryResourceMetadata, updateRegistryResourceMetadata, generatePathFromRegistryPath, updatePomWithParent } from "../../util/fileOperations";
 import { log } from "../../util/logger";
 import { importProjects } from "../../util/migrationUtils";
-import { copyQueryParamsFromSource, deleteSwagger, extractQueryParams, generateSwagger, generateSwaggerCore, getResourceInfo, isEqualSwaggers, mergeGeneratedSwagger, updateQueryParamsInSwagger, withSwaggerFileLock } from "../../util/swagger";
+import { copyQueryParamsFromSource, deleteSwagger, extractQueryParams, generateSwagger, generateSwaggerCore, getResourceInfo, isEqualSwaggers, mergeGeneratedSwagger, renameResourcePathInSwaggerYaml, resolveUnsavedSwaggerChanges, updateQueryParamsInSwagger, withSwaggerFileLock } from "../../util/swagger";
 import { getDataSourceXml } from "../../util/template-engine/mustach-templates/DataSource";
 import { getClassMediatorContent } from "../../util/template-engine/mustach-templates/classMediator";
 import { getBallerinaModuleContent, getBallerinaConfigContent } from "../../util/template-engine/mustach-templates/ballerinaModule";
@@ -2811,12 +2815,18 @@ ${endpointAttributes}
                 });
             }
 
+            let applied: boolean;
             if (params.waitForEdits) {
-                await this.applyEditAndWait(edit, params.documentUri);
+                applied = await this.applyEditAndWait(edit, params.documentUri);
             } else {
-                await workspace.applyEdit(edit);
+                applied = await workspace.applyEdit(edit);
             }
-            
+            if (!applied) {
+                // Nothing changed, so skip saving, formatting and the undo snapshot.
+                resolve({ status: false });
+                return;
+            }
+
             const file = Uri.file(params.documentUri);
             let document = workspace.textDocuments.find(doc => doc.uri.fsPath === params.documentUri) 
                             || await workspace.openTextDocument(file);
@@ -5813,12 +5823,15 @@ ${keyValuesXML}`;
     }
 
     async updateResourceQueryParams(params: UpdateResourceQueryParamsRequest): Promise<UpdateResourceQueryParamsResponse> {
-        const { apiPath, resourcePath, oldResourcePath, methods, queryParams } = params;
+        const { apiPath, resourcePath, methods, queryParams } = params;
         const swaggerPath = path.join(this.projectUri, SWAGGER_REL_DIR, `${path.basename(apiPath, ".xml")}.yaml`);
 
         // Locked so this can't interleave with generateSwagger's auto-regeneration on API
         // save; both read-modify-write the same file.
-        await withSwaggerFileLock(swaggerPath, async () => {
+        const updated = await withSwaggerFileLock(swaggerPath, async () => {
+            if ((await resolveUnsavedSwaggerChanges(swaggerPath)) === "cancelled") {
+                return false;
+            }
             let existingSwagger: string;
             if (fs.existsSync(swaggerPath)) {
                 existingSwagger = fs.readFileSync(swaggerPath, 'utf-8');
@@ -5829,10 +5842,40 @@ ${keyValuesXML}`;
                 }
                 existingSwagger = generatedSwagger;
             }
-            const updatedYaml = updateQueryParamsInSwagger(existingSwagger, resourcePath, methods, queryParams, false, oldResourcePath);
-            await replaceFullContentToFile(swaggerPath, updatedYaml);
+            const updatedYaml = updateQueryParamsInSwagger(existingSwagger, resourcePath, methods, queryParams);
+            fs.writeFileSync(swaggerPath, updatedYaml);
+            return true;
         });
-        return { queryParams };
+        return { queryParams, updated };
+    }
+
+    async prepareSwaggerForEdit(params: PrepareSwaggerForEditRequest): Promise<PrepareSwaggerForEditResponse> {
+        const swaggerPath = path.join(this.projectUri, SWAGGER_REL_DIR, `${path.basename(params.apiPath, ".xml")}.yaml`);
+        // Asked before a resource edit, so cancelling leaves both the API and its swagger unchanged.
+        const resolution = await withSwaggerFileLock(swaggerPath, () => resolveUnsavedSwaggerChanges(swaggerPath, true));
+        return { proceed: resolution !== "cancelled" };
+    }
+
+    async renameResourceInSwagger(params: RenameResourceInSwaggerRequest): Promise<RenameResourceInSwaggerResponse> {
+        const { apiPath, oldResourcePath, newResourcePath, methods } = params;
+        const swaggerPath = path.join(this.projectUri, SWAGGER_REL_DIR, `${path.basename(apiPath, ".xml")}.yaml`);
+
+        // Runs before the XML edit so regeneration reuses the resource's existing definition.
+        return withSwaggerFileLock(swaggerPath, async () => {
+            if (!fs.existsSync(swaggerPath)) {
+                return { proceed: true };
+            }
+            if ((await resolveUnsavedSwaggerChanges(swaggerPath)) === "cancelled") {
+                return { proceed: false };
+            }
+            const existingSwagger = fs.readFileSync(swaggerPath, 'utf-8');
+            const updatedYaml = renameResourcePathInSwaggerYaml(
+                existingSwagger, oldResourcePath, newResourcePath, methods.map((method) => method.toLowerCase()));
+            if (updatedYaml) {
+                fs.writeFileSync(swaggerPath, updatedYaml);
+            }
+            return { proceed: true };
+        });
     }
 
     async updateSwaggerFromAPI(params: SwaggerTypeRequest): Promise<void> {
@@ -5845,8 +5888,13 @@ ${keyValuesXML}`;
             );
 
             await withSwaggerFileLock(swaggerPath, async () => {
-                let generatedSwagger = params.generatedSwagger;
-                let existingSwagger = params.existingSwagger;
+                const resolution = await resolveUnsavedSwaggerChanges(swaggerPath);
+                if (resolution === "cancelled") {
+                    return;
+                }
+                // The given definitions were read before the editor changes were saved or discarded.
+                let generatedSwagger = resolution === "clean" ? params.generatedSwagger : undefined;
+                let existingSwagger = resolution === "clean" ? params.existingSwagger : undefined;
                 if (!generatedSwagger || !existingSwagger) {
                     const langClient = await MILanguageClient.getInstance(this.projectUri);
                     const response = await langClient.swaggerFromAPI({ apiPath: apiPath, ...(fs.existsSync(swaggerPath) && { swaggerPath: swaggerPath }) });
@@ -6943,16 +6991,15 @@ ${keyValuesXML}`;
         return undefined;
     }
 
-    async applyEditAndWait(edit: WorkspaceEdit, documentUri: string): Promise<void> {
+    async applyEditAndWait(edit: WorkspaceEdit, documentUri: string): Promise<boolean> {
 
         if (edit.size === 0) {
-            await workspace.applyEdit(edit);
-            return;
+            return await workspace.applyEdit(edit);
         }
 
         const success = await workspace.applyEdit(edit);
         if (!success) {
-            return;
+            return false;
         }
 
         await Promise.race([
@@ -6968,6 +7015,7 @@ ${keyValuesXML}`;
                 setTimeout(() => reject(new Error('Wait timeout for document update')), 10000)
             )
         ]);
+        return true;
     }
 
     async getInputOutputMappings(params: GenerateMappingsParamsRequest): Promise<string[]> {

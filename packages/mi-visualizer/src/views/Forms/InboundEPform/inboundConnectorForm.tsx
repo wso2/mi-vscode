@@ -105,23 +105,26 @@ export function AddInboundConnector(props: AddInboundConnectorProps) {
             const attributeNames = getGenericAttributeNames(formData);
             const parameterNames = getParameterNames(formData);
 
-            // Populate Attributes
-            attributeNames.forEach((attributeName: string) => {
-                if (model.hasOwnProperty(attributeName)) {
-                    setValue(getNameForController(attributeName), model[attributeName]);
-                }
-            });
-
             let additionalParams: any[] = [];
             // Populate Paramters
             model.parameters[0]?.parameter?.forEach((param: any) => {
-                if (parameterNames.includes(param.name)) {
+                // Check attributeNames as well to handle scenarios where mandatory attributes
+                // are not included in the ui-schema but exists in the xml configuration as a parameter
+                if (parameterNames.includes(param.name) || attributeNames.includes(param.name)) {
                     setValue(getNameForController(param.name), getParameterValue(param));
                 } else {
                     additionalParams.push({
                         name: param.name,
                         value: getParameterValue(param)
                     });
+                }
+            });
+
+            // Populate Attributes
+            attributeNames.forEach((attributeName: string) => {
+                // Attributes take precedence over parameters, but only when defined in the xml
+                if (model[attributeName] !== undefined && model[attributeName] !== null) {
+                    setValue(getNameForController(attributeName), model[attributeName]);
                 }
             });
 
@@ -157,16 +160,24 @@ export function AddInboundConnector(props: AddInboundConnectorProps) {
         return name.replace(new RegExp("__dot__", 'g'), '.');
     }
 
+    const MANDATORY_ATTRIBUTE_DEFAULTS: Record<string, any> = { suspend: false };
+    const MANDATORY_ATTRIBUTES = Object.keys(MANDATORY_ATTRIBUTE_DEFAULTS);
+
     function getGenericAttributeNames(jsonData: any) {
         const genericGroup = jsonData.elements.find((element: any) =>
             element.type === "attributeGroup" && element.value.groupName === "Generic"
         );
-        if (genericGroup) {
-            return genericGroup.value.elements
+        const attributeNames = genericGroup
+            ? genericGroup.value.elements
                 .filter((element: any) => element.type === "attribute" && element.value.name !== "generateSequences")
-                .map((attribute: any) => attribute.value.name);
-        }
-        return [];
+                .map((attribute: any) => attribute.value.name)
+            : [];
+        MANDATORY_ATTRIBUTES.forEach(name => {
+            if (!attributeNames.includes(name)) {
+                attributeNames.push(name);
+            }
+        });
+        return attributeNames;
     }
 
     function getParameterNames(jsonData: any): string[] {
@@ -257,6 +268,12 @@ export function AddInboundConnector(props: AddInboundConnectorProps) {
                 values.sequence = values.sequence.value ?? values.sequence;
                 values.onError = values.onError.value ?? values.onError;
         }
+
+        Object.entries(MANDATORY_ATTRIBUTE_DEFAULTS).forEach(([name, defaultValue]) => {
+            if (values[name] === undefined) {
+                values[name] = defaultValue;
+            }
+        });
 
         const { attrFields, paramFields } = extractProperties(values, attributeNames);
 

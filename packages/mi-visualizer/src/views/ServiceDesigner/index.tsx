@@ -93,13 +93,18 @@ export function ServiceDesignerView({ syntaxTree, documentUri }: ServiceDesigner
         });
     };
 
-    if (rpcClient) {
+    useEffect(() => {
+        if (!rpcClient || !documentUri) {
+            return;
+        }
+        // Same name the extension uses for the API's swagger file (e.g. Orders_v1.xml -> Orders_v1.yaml).
+        const swaggerFileName = `${documentUri.split(/[\\/]/).pop().replace(/\.xml$/, "")}.yaml`;
         rpcClient.onDocumentSave((document: Document) => {
-            if (document.uri.includes(`${serviceData.apiName}.yaml`)) {
-                setSwaggerUpdated(!swaggerUpdated);
+            if (decodeURIComponent(document.uri).endsWith(`/${swaggerFileName}`)) {
+                setSwaggerUpdated((prev) => !prev);
             }
         });
-    }
+    }, [rpcClient, documentUri]);
 
     useEffect(() => {
         const st = syntaxTree;
@@ -248,30 +253,60 @@ export function ServiceDesignerView({ syntaxTree, documentUri }: ServiceDesigner
     const handleResourceCreate = async (formData: ResourceFormData) => {
         isSavingResourceRef.current = true;
         try {
-            // Captured before the edit so a path param addition (or any other resource-path change)
-            // can be carried over to the resource's new path instead of orphaning it under the old one.
+            // Resolves unsaved swagger editor changes first; cancelling leaves the API unchanged.
+            const { proceed } = await rpcClient.getMiDiagramRpcClient().prepareSwaggerForEdit({ apiPath: documentUri });
+            if (!proceed) {
+                return;
+            }
             const oldResourcePath = formData.mode === "edit"
                 ? (selectedResource.uriTemplate || selectedResource.urlMapping)?.split("?")[0]
                 : undefined;
+            const rawPath = formData.urlStyle === "url-mapping" ? formData.urlMapping : formData.uriTemplate;
+            const resourcePath = rawPath?.split("?")[0];
+            const pathChanged = !!oldResourcePath && oldResourcePath !== resourcePath;
 
             switch (formData.mode) {
                 case "create":
                     await onResourceCreate(formData, resourceBodyRange, documentUri, rpcClient);
                     break;
                 case "edit":
+                    // Rename first so regeneration reuses the existing definition.
+                    if (pathChanged) {
+                        const { proceed } = await rpcClient.getMiDiagramRpcClient().renameResourceInSwagger({
+                            apiPath: documentUri,
+                            oldResourcePath,
+                            newResourcePath: resourcePath,
+                            methods: selectedResource.methods,
+                        });
+                        if (!proceed) {
+                            return;
+                        }
+                    }
                     const ranges: Range[] = getResourceDeleteRanges(selectedResource, formData);
-                    await onResourceEdit(formData, selectedResource.range, ranges, documentUri, rpcClient);
+                    try {
+                        await onResourceEdit(formData, selectedResource.range, ranges, documentUri, rpcClient);
+                    } catch (error) {
+                        // The API still has the old path, so move the swagger definition back to match it.
+                        if (pathChanged) {
+                            await rpcClient.getMiDiagramRpcClient().renameResourceInSwagger({
+                                apiPath: documentUri,
+                                oldResourcePath: resourcePath,
+                                newResourcePath: oldResourcePath,
+                                methods: selectedResource.methods,
+                            });
+                        }
+                        rpcClient.getMiVisualizerRpcClient().showNotification({
+                            message: "Failed to update the resource.",
+                            type: "error",
+                        });
+                        return;
+                    }
                     break;
             }
 
             // Query params only modify the OpenAPI spec, never the synapse XML.
             const newQueryParams = formData.queryParams ?? [];
-            const rawPath = formData.urlStyle === "url-mapping" ? formData.urlMapping : formData.uriTemplate;
-            const resourcePath = rawPath?.split("?")[0];
-            const pathChanged = !!oldResourcePath && oldResourcePath !== resourcePath;
-            // A changed path needs its swagger entry renamed promptly even with no query params,
-            // rather than waiting on the slower fire-and-forget auto regeneration.
-            if (newQueryParams.length > 0 || existingQueryParams.length > 0 || pathChanged) {
+            if (newQueryParams.length > 0 || existingQueryParams.length > 0) {
                 const methods = Object.entries(formData.methods ?? {})
                     .filter(([, enabled]) => enabled)
                     .map(([method]) => method);
@@ -280,23 +315,25 @@ export function ServiceDesignerView({ syntaxTree, documentUri }: ServiceDesigner
                     apiName: serviceData.apiName,
                     apiPath: documentUri,
                     resourcePath,
-                    oldResourcePath: pathChanged ? oldResourcePath : undefined,
                     methods,
                     queryParams: newQueryParams,
                 });
-                setQueryParamsMap((prev) => {
-                    const next = { ...prev };
-                    if (pathChanged) {
-                        delete next[oldResourcePath];
-                    }
-                    // Rebuilt from scratch so a method unchecked in this
-                    // edit doesn't keep a stale, no-longer-applicable entry under this path.
-                    next[resourcePath] = {};
-                    methods.forEach((method) => {
-                        next[resourcePath][method] = response.queryParams;
+                // Only reflect params actually written to the swagger file.
+                if (response.updated) {
+                    setQueryParamsMap((prev) => {
+                        const next = { ...prev };
+                        if (pathChanged) {
+                            delete next[oldResourcePath];
+                        }
+                        // Rebuilt from scratch so a method unchecked in this
+                        // edit doesn't keep a stale, no-longer-applicable entry under this path.
+                        next[resourcePath] = {};
+                        methods.forEach((method) => {
+                            next[resourcePath][method] = response.queryParams;
+                        });
+                        return next;
                     });
-                    return next;
-                });
+                }
             }
         } finally {
             isSavingResourceRef.current = false;

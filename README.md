@@ -1,4 +1,4 @@
-# Micro Integrator for Visual Studio Code (MI for VS Code) 
+# WSO2 Integrator: MI VS Code Extension
 
 WSO2 Micro Integrator (MI) offers an extension for Visual Studio Code (VS Code) that simplifies the development of integration solutions.
 
@@ -57,12 +57,12 @@ By default, the language server is built from `packages/mi-language-server`, and
 
 ## Prerequisites
 
-You need the following to work with the MI for VS Code extension.
+You need the following to work with the WSO2 Integrator: MI VS Code Extension.
 
 - Java Development Kit (JDK)
 - WSO2 Micro Integrator (MI) runtime
 
-If these are not installed on your local machine, the Micro Integrator for VS Code extension will automatically prompt you to download and configure them during the project creation step, depending on the project runtime version.
+If these are not installed on your local machine, the WSO2 Integrator: MI VS Code Extension will automatically prompt you to download and configure them during the project creation step, depending on the project runtime version.
 
 If a different JDK or WSO2 MI version is installed on your local machine, you'll be prompted to download the required versions.
 
@@ -70,7 +70,7 @@ If the required JDK and WSO2 MI versions are already installed, you can directly
 
 ## Get Started
 
-1. Launch VS Code with the Micro Integrator for Visual Studio Code (MI for VS Code) extension installed. When the extension is installed properly, you can see the Micro Integrator icon in the Activity Bar of the VS Code editor.
+1. Launch VS Code with the WSO2 Integrator: MI VS Code Extension installed. When the extension is installed properly, you can see the Micro Integrator icon in the Activity Bar of the VS Code editor.
 
 2. Click on the Micro Integrator icon on the Activity Bar of the VS Code editor to open the extension and get started.
 
@@ -113,7 +113,7 @@ The **Design View** lists a set of sample projects and integration artifacts tha
 
 ## Documentation
 
-To learn more about the Micro Integrator for Visual Studio Code extension, go to the [Micro Integrator for VS Code](https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/mi-for-vscode-overview/) documentation.
+To learn more about the WSO2 Integrator: MI VS Code Extension, go to the [WSO2 Integrator: MI VS Code Extension](https://mi.docs.wso2.com/en/latest/develop/mi-for-vscode/mi-for-vscode-overview/) documentation.
 
 ## Reach Out
 

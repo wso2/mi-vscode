@@ -38,12 +38,14 @@ import path from 'path';
 import { COMMANDS, WI_EXTENSION_ID } from './constants';
 import { enableLS, shouldShowWorkspaceOverview } from './util/workspace';
 import { disposeMIAgentPanelRpcManager } from './rpc-managers/agent-mode/rpc-handler';
-import { isConsolidatedProject } from './util/onboardingUtils';
+import { isConsolidatedProject, isMiProject, ensureMavenWrapper } from './util/onboardingUtils';
 import { readConsolidatedProjectDetails } from './util/consolidatedPomUtils';
 import { getModules, parseConsolidatedProjectPom } from './debugger/pomResolver';
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
+
+const MAVEN_WRAPPER_SETUP_CONCURRENCY = 5;
 
 export async function activate(context: vscode.ExtensionContext) {
 	extension.context = context;
@@ -103,6 +105,10 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 	updateMultiProjectContext();
 
+	if (activeFolders) {
+		void ensureMavenWrapperForWorkspace(activeFolders);
+	}
+
 	workspace.onDidChangeWorkspaceFolders(async (event) => {
 		if (event.added.length > 0) {
 			const validAdded = await rejectIsolatedSubProjects(event.added);
@@ -110,6 +116,7 @@ export async function activate(context: vscode.ExtensionContext) {
 				// If several folders are added at once, this avoids opening one panel per folder.
 				const showWorkspaceOverview = shouldShowWorkspaceOverview();
 				getStateMachine(validAdded[0].uri.fsPath, showWorkspaceOverview ? { view: MACHINE_VIEW.WorkspaceOverview } : undefined);
+				void ensureMavenWrapperForWorkspace(validAdded);
 			}
 		}
 		if (event.removed.length > 0) {
@@ -181,6 +188,50 @@ export function checkForWso2IntegratorExt() {
 		return false;
 	}
 	return true;
+}
+
+async function runWithConcurrencyLimit<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {
+	let index = 0;
+	const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+		while (index < items.length) {
+			await task(items[index++]);
+		}
+	});
+	await Promise.all(workers);
+}
+
+/**
+ * Ensures the maven wrapper exists for every MI project folder, without waiting for the
+ * Overview page to be opened. Also covers a consolidated project's root.
+ */
+async function ensureMavenWrapperForWorkspace(folders: readonly vscode.WorkspaceFolder[]): Promise<void> {
+	const handledConsolidatedRoots = new Set<string>();
+	await runWithConcurrencyLimit(folders, MAVEN_WRAPPER_SETUP_CONCURRENCY, async folder => {
+		const folderPath = folder.uri.fsPath;
+		try {
+			if (await isMiProject(folderPath)) {
+				await ensureMavenWrapper(folderPath);
+			}
+			if (!handledConsolidatedRoots.has(folderPath) && isConsolidatedProject(folderPath)) {
+				handledConsolidatedRoots.add(folderPath);
+				await ensureMavenWrapper(folderPath);
+			}
+		} catch (err) {
+			console.error(`Failed to set up maven wrapper for ${folderPath}`, err);
+		}
+
+		const parent = path.dirname(folderPath);
+		if (!handledConsolidatedRoots.has(parent)) {
+			handledConsolidatedRoots.add(parent);
+			try {
+				if (isConsolidatedProject(parent)) {
+					await ensureMavenWrapper(parent);
+				}
+			} catch (err) {
+				console.error(`Failed to set up maven wrapper for consolidated root ${parent}`, err);
+			}
+		}
+	});
 }
 
 /**
