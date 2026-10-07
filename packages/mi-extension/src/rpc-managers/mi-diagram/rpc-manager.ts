@@ -5843,7 +5843,7 @@ ${keyValuesXML}`;
                 existingSwagger = generatedSwagger;
             }
             const updatedYaml = updateQueryParamsInSwagger(existingSwagger, resourcePath, methods, queryParams);
-            await replaceFullContentToFile(swaggerPath, updatedYaml);
+            fs.writeFileSync(swaggerPath, updatedYaml);
             return true;
         });
         return { queryParams, updated };
