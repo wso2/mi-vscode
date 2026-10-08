@@ -60,6 +60,35 @@ export function Diagram(props: DiagramProps) {
         }
     }, [project]);
 
+    // re-fit the diagram when the canvas is resized
+    useEffect(() => {
+        const canvas = diagramEngine?.getCanvas();
+        if (!canvas || typeof ResizeObserver === "undefined") {
+            return;
+        }
+        let lastWidth = canvas.clientWidth;
+        let lastHeight = canvas.clientHeight;
+        let resizeTimeout: ReturnType<typeof setTimeout>;
+        const observer = new ResizeObserver(() => {
+            const { clientWidth, clientHeight } = canvas;
+            if (clientWidth === 0 || clientHeight === 0 || (clientWidth === lastWidth && clientHeight === lastHeight)) {
+                return;
+            }
+            lastWidth = clientWidth;
+            lastHeight = clientHeight;
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                diagramEngine.zoomToFitNodes({ margin: 40, maxZoom: 1 });
+                centerDiagram(diagramEngine);
+            }, 100);
+        });
+        observer.observe(canvas);
+        return () => {
+            clearTimeout(resizeTimeout);
+            observer.disconnect();
+        };
+    }, [diagramModel]);
+
     const getDiagramData = () => {
         // generate diagram nodes and links
         const nodes: NodeModel[] = [];
