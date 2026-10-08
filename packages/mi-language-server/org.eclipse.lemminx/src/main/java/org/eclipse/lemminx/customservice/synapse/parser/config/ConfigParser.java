@@ -39,13 +39,23 @@ import java.util.regex.Pattern;
 
 public class ConfigParser {
 
+    private static class EnvEntry {
+        private final String value;
+        private final Range range;
+
+        private EnvEntry(String value, Range range) {
+            this.value = value;
+            this.range = range;
+        }
+    }
+
     private static final Logger LOGGER = Logger.getLogger(ConfigParser.class.getName());
     private static final String ENV_KEY_VALUE_REGEX = "^(\\s*)([A-Za-z0-9_.-]+)(\\s*=\\s*)(.*)$";
 
     public static List<ConfigDetails> getConfigDetails(String projectUri) {
 
         List<ConfigDetails> result = new ArrayList<>();
-        Map<String, String> envValueList = processEnvFile(Path.of(projectUri, ".env"));
+        Map<String, EnvEntry> envEntries = processEnvFile(Path.of(projectUri, ".env"));
         File propertyFilePath = getFilePath(projectUri);
         if (isConfigFileExist(propertyFilePath)) {
             try (BufferedReader reader = new BufferedReader(new FileReader(propertyFilePath))) {
@@ -60,11 +70,13 @@ public class ConfigParser {
                     int delimiterIndex = line.indexOf(':');
                     if (delimiterIndex != -1) {
                         String key = line.substring(0, delimiterIndex).trim();
+                        EnvEntry envEntry = envEntries.get(key);
                         result.add(new ConfigDetails(key, line.substring(delimiterIndex + 1).trim(),
-                                envValueList.get(key),
+                                envEntry != null ? envEntry.value : null,
                                 Either.forLeft(new Range(
                                         new Position(lineNumber, line.indexOf(key) + 1),
-                                        new Position(lineNumber, line.length() + 1)))));
+                                        new Position(lineNumber, line.length() + 1))),
+                                envEntry != null ? envEntry.range : null));
                     }
                     lineNumber++;
                 }
@@ -114,23 +126,30 @@ public class ConfigParser {
         return configurableEntries;
     }
 
-    private static Map<String, String> processEnvFile(Path envFilePath) {
+    private static Map<String, EnvEntry> processEnvFile(Path envFilePath) {
 
-        Map<String, String> envMap = new LinkedHashMap<>();
-        String content = null;
-        try {
-            content = Files.readString(envFilePath);
-        } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Error occurred while reading env file.");
+        Map<String, EnvEntry> envMap = new LinkedHashMap<>();
+        File envFile = envFilePath.toFile();
+        if (!envFile.exists()) {
             return envMap;
         }
 
-        Pattern pattern = Pattern.compile(ENV_KEY_VALUE_REGEX, Pattern.MULTILINE);
-        Matcher matcher = pattern.matcher(content);
-        while (matcher.find()) {
-            String key = matcher.group(2).trim();
-            String value = matcher.group(4).trim();
-            envMap.put(key, value);
+        try (BufferedReader reader = new BufferedReader(new FileReader(envFile))) {
+            String line;
+            int lineNumber = 1;
+            Pattern pattern = Pattern.compile(ENV_KEY_VALUE_REGEX);
+            while ((line = reader.readLine()) != null) {
+                Matcher matcher = pattern.matcher(line);
+                if (matcher.matches()) {
+                    String key = matcher.group(2).trim();
+                    String value = matcher.group(4).trim();
+                    Range range = new Range(new Position(lineNumber, 0), new Position(lineNumber, line.length()));
+                    envMap.put(key, new EnvEntry(value, range));
+                }
+                lineNumber++;
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Error occurred while reading env file.");
         }
         return envMap;
     }

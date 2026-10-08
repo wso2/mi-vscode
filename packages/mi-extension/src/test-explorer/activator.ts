@@ -18,7 +18,7 @@
 
 import path = require("path");
 import { TestController, tests, TestRunProfileKind, Uri, TestItem, ExtensionContext, commands, Range, Position, window, workspace, WorkspaceEdit } from "vscode";
-import { runHandler } from "./runner";
+import { runHandler, resumeProjectTestRun } from "./runner";
 import { createTestsForAllFiles, testFileMatchPattern } from "./discover";
 import { getProjectName, getProjectRoot, startWatchingWorkspace } from "./helper";
 import { EVENT_TYPE, MACHINE_VIEW, ProjectStructureArtifactResponse } from "@wso2/mi-core";
@@ -277,6 +277,8 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
     commands.registerCommand(COMMANDS.GEN_AI_TESTS, () => {
         openView(EVENT_TYPE.OPEN_VIEW, { view: MACHINE_VIEW.AITestGen });
     });
+    
+    commands.registerCommand(COMMANDS.RESUME_TEST_RUN, resumeProjectTestRun);
 
     activateMockServiceTreeView(extensionContext);
 }

@@ -50,7 +50,6 @@ import {
     RecentProjectsResponse,
     RecentProjectEntry,
     OpenRecentProjectRequest,
-    AddConfigurableRequest,
     SwaggerProxyRequest,
     SwaggerProxyResponse,
     ToggleDisplayOverviewRequest,
@@ -65,6 +64,7 @@ import {
     UpdateDependenciesRequest,
     UpdatePomValuesRequest,
     UpdateConfigValuesRequest,
+    ConfigLineEdit,
     ImportOpenAPISpecRequest,
     ImportOpenAPISpecResponse,
     PathDetailsResponse,
@@ -93,8 +93,9 @@ import { extension } from "../../MIExtensionContext";
 import { DebuggerConfig } from "../../debugger/config";
 import { history } from "../../history";
 import { getStateMachine, navigate, openView, refreshUI } from "../../stateMachine";
-import { formatAndSavePomDocument, goToSource, handleOpenFile, appendContent, selectFolderDialog } from "../../util/fileOperations";
+import { formatAndSavePomDocument, goToSource, handleOpenFile, selectFolderDialog } from "../../util/fileOperations";
 import { openPopupView } from "../../stateMachinePopup";
+import { webviews } from "../../visualizer/webview";
 import { SwaggerServer } from "../../swagger/server";
 import { log, outputChannel } from "../../util/logger";
 import { escapeXml } from '../../util/templates';
@@ -103,6 +104,7 @@ import { copy } from 'fs-extra';
 
 const fs = require('fs');
 import { TextEdit } from "vscode-languageclient";
+import { Range as STRange } from "../../../../syntax-tree/lib/src";
 import { downloadJavaFromMI, downloadMI, getProjectSetupDetails, getSupportedMIVersionsHigherThan, setPathsInWorkSpace, updateRuntimeVersionsInPom, getMIVersionFromPom, isConsolidatedProject, isMiProject } from '../../util/onboardingUtils';
 import { extractCAppDependenciesAsProjects, loadCAppResources } from "../../visualizer/activate";
 import { findMultiModuleProjectsInWorkspaceDir, getProjectDetails as getPomProjectDetails } from "../../util/migrationUtils";
@@ -502,37 +504,51 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
     }
 
     async updateConfigFileValues(params: UpdateConfigValuesRequest): Promise<boolean> {
-        return new Promise(async (resolve) => {
-            const configFilePath = [this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'conf', 'config.properties'].join(path.sep);
-            const configDir = path.dirname(configFilePath);
-            if (!fs.existsSync(configDir)) {
-                // Create the directory structure for the config file if it doesn't exist
-                fs.mkdirSync(configDir, { recursive: true });
-            }
+        const targetProjectUri = params.projectUri ?? this.projectUri;
+        const configFilePath = [targetProjectUri, 'src', 'main', 'wso2mi', 'resources', 'conf', 'config.properties'].join(path.sep);
+        const configDir = path.dirname(configFilePath);
+        if (!fs.existsSync(configDir)) {
+            // Create the directory structure for the config file if it doesn't exist
+            fs.mkdirSync(configDir, { recursive: true });
+        }
 
-            // Create config.properties if it doesn't exist
-            if (!fs.existsSync(configFilePath)) {
-                fs.writeFileSync(configFilePath, "");
-            }
+        const envFilePath = [targetProjectUri, '.env'].join(path.sep);
+        const envDir = path.dirname(envFilePath);
+        if (!fs.existsSync(envDir)) {
+            // Create the directory structure for the .env file if it doesn't exist
+            fs.mkdirSync(envDir, { recursive: true });
+        }
 
-            const content = params.configValues.map(configValue => `${configValue.key}:${configValue.type}`).join('\n');
-            fs.writeFileSync(configFilePath, content);
+        const entries = params.configValues.filter((configValue): configValue is typeof configValue & { key: string } => !!configValue.key);
 
-            const envFilePath = [this.projectUri, '.env'].join(path.sep);
-            const envDir = path.dirname(envFilePath);
-            if (!fs.existsSync(envDir)) {
-                // Create the directory structure for the .env file if it doesn't exist
-                fs.mkdirSync(envDir, { recursive: true });
-            }
-            // Get values of params.configValues -> configValue -> key and value not empty
-            const nonEmptyConfigValues = params.configValues.filter(configValue => configValue.key && configValue.value);
-            const envContent = nonEmptyConfigValues.map(configValue => `${configValue.key}=${configValue.value}`).join('\n');
-            fs.writeFileSync(envFilePath, envContent);
+        await applyConfigLineEdits(configFilePath, entries.map(entry => ({
+            key: entry.key,
+            originalKey: entry.originalKey,
+            text: `${entry.key}:${entry.type}`,
+            // Already normalized to a single Range in getConfigurableEntries (debugHelper.ts).
+            range: entry.range as STRange | undefined,
+            deleted: !!entry.deleted
+        })), line => extractKey(line, ':', ['#', '!']));
 
-            refreshUI(this.projectUri);
+        const envEntries = entries
+            // Skip entries with no value and no known envRange
+            .filter(entry => entry.deleted || entry.envRange || entry.value)
+            .map(entry => ({
+                key: entry.key,
+                originalKey: entry.originalKey,
+                text: `${entry.key}=${entry.value}`,
+                range: entry.envRange,
+                // No value means nothing to store in .env. Therefore treated as a deletion.
+                deleted: !!entry.deleted || !entry.value
+            }));
+        await applyConfigLineEdits(envFilePath, envEntries, line => extractKey(line, '=', ['#']));
 
-            resolve(true);
-        });
+        // Only refresh if a webview is already open
+        if (webviews.has(targetProjectUri)) {
+            refreshUI(targetProjectUri);
+        }
+
+        return true;
     }
 
     async updateConnectorDependencies(): Promise<string> {
@@ -693,13 +709,6 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
             const folders = workspace.workspaceFolders ?? [];
             workspace.updateWorkspaceFolders(folders.length, 0, { uri: Uri.file(params.path) });
         }
-    }
-
-    async addConfigurable(params: AddConfigurableRequest): Promise<void> {
-        const configPropertiesFilePath = [this.projectUri, 'src', 'main', 'wso2mi', 'resources', 'conf', 'config.properties'].join(path.sep);
-        const envFilePath = [this.projectUri, '.env'].join(path.sep);
-        await appendContent(configPropertiesFilePath, `${params.configurableName}:${params.configurableType}\n`);
-        await appendContent(envFilePath, `${params.configurableName}\n`);
     }
 
     async getHistory(): Promise<HistoryEntryResponse> {
@@ -1331,5 +1340,98 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
             }
         }
         return undefined;
+    }
+}
+
+function extractKey(line: string, separator: string, commentPrefixes: string[]): string | undefined {
+    const trimmed = line.trim();
+    if (trimmed === '' || commentPrefixes.some(prefix => trimmed.startsWith(prefix))) {
+        return undefined;
+    }
+    const separatorIndex = trimmed.indexOf(separator);
+    return separatorIndex === -1 ? undefined : trimmed.substring(0, separatorIndex).trim();
+}
+
+/**
+ * Replaces/deletes each edit at its given line, or falls back to a key scan, or appends if the
+ * key isn't found either. No-op edits are skipped, and nothing is saved if nothing changed.
+ */
+async function applyConfigLineEdits(
+    filePath: string,
+    edits: ConfigLineEdit[],
+    extractKey: (line: string) => string | undefined
+): Promise<void> {
+    if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, '');
+    }
+
+    const uri = Uri.file(filePath);
+    const document = await workspace.openTextDocument(uri);
+    const edit = new WorkspaceEdit();
+    // Stop any possibility of same key duplicates
+    const appended = new Map<string, string>();
+    let changed = false;
+
+    const findKeyLine = (key: string): number | undefined => {
+        for (let i = 0; i < document.lineCount; i++) {
+            if (extractKey(document.lineAt(i).text) === key) {
+                return i;
+            }
+        }
+        return undefined;
+    };
+
+    // Each line is edited only once
+    const editedLines = new Set<number>();
+    // Renames added first so they keep their original line
+    const orderedEdits = [...edits.filter(e => e.originalKey), ...edits.filter(e => !e.originalKey)];
+
+    for (const configEdit of orderedEdits) {
+        // For a rename, the line in the file still holds the original key
+        const currentKey = configEdit.originalKey ?? configEdit.key;
+        let lineIndex = configEdit.range ? configEdit.range.start.line - 1 : undefined;
+        // Only trust the change if the key at that line still matches.
+        if (lineIndex === undefined || lineIndex < 0 || lineIndex >= document.lineCount
+            || extractKey(document.lineAt(lineIndex).text) !== currentKey) {
+            lineIndex = findKeyLine(currentKey);
+            if (lineIndex === undefined && currentKey !== configEdit.key) {
+                lineIndex = findKeyLine(configEdit.key);
+            }
+        }
+        if (lineIndex !== undefined && editedLines.has(lineIndex)) {
+            lineIndex = undefined;
+        }
+
+        if (lineIndex !== undefined) {
+            editedLines.add(lineIndex);
+            const line = document.lineAt(lineIndex);
+            if (configEdit.deleted) {
+                edit.delete(uri, line.rangeIncludingLineBreak);
+                changed = true;
+            } else if (line.text !== configEdit.text) {
+                edit.replace(uri, line.range, configEdit.text);
+                changed = true;
+            }
+        } else if (!configEdit.deleted) {
+            appended.set(configEdit.key, configEdit.text);
+        }
+    }
+
+    if (appended.size > 0) {
+        const lastLine = document.lineAt(document.lineCount - 1);
+        const prefix = lastLine.text.length > 0 ? '\n' : '';
+        edit.insert(uri, lastLine.range.end, prefix + [...appended.values()].join('\n'));
+        changed = true;
+    }
+
+    if (!changed) {
+        return;
+    }
+
+    if (!await workspace.applyEdit(edit)) {
+        throw new Error(`Failed to apply edits to ${path.basename(filePath)}`);
+    }
+    if (!await document.save()) {
+        throw new Error(`Failed to save ${path.basename(filePath)}`);
     }
 }

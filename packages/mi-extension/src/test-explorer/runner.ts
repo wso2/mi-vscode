@@ -20,18 +20,20 @@
  * Test explorer run and debug related funtions.
  */
 
-import { Uri, CancellationToken, TestItem, TestMessage, TestRunProfileKind, TestRunRequest, window, MarkdownString, TestRun, OutputChannel, workspace } from "vscode";
+import { Uri, CancellationToken, TestItem, TestItemCollection, TestMessage, TestRunProfileKind, TestRunRequest, window, MarkdownString, TestRun, OutputChannel, workspace } from "vscode";
 
 import { discoverTests, gatherTestItems } from "./discover";
 import { testController } from "./activator";
 import path = require("path");
 import { getProjectRoot } from "./helper";
-import { getServerPath, setJavaHomeInEnvironmentAndPath, promptAndWriteCipherToolPassword } from "../debugger/debugHelper";
+import { getServerPath, setJavaHomeInEnvironmentAndPath, promptAndWriteCipherToolPassword, killProcessByPort } from "../debugger/debugHelper";
+import { checkMissingConfigurablesAndPrompt } from "../debugger/activate";
+import { TestResumeGroup } from "@wso2/mi-core";
 import { TestRunnerConfig } from "./config";
 import { ChildProcess } from "child_process";
 import treeKill = require("tree-kill");
 import { normalize } from "upath";
-import { MVN_COMMANDS } from "../constants";
+import { COMMANDS, MVN_COMMANDS } from "../constants";
 import { loadEnvVariables } from "../debugger/tasks";
 import { escapeShellArg } from "../util/shellEscapeUtils";
 const fs = require('fs');
@@ -94,173 +96,235 @@ export function runHandler(request: TestRunRequest, cancellation: CancellationTo
             return;
         }
 
+        const resumeGroups: TestResumeGroup[] = [...projectGroups.entries()].map(([projectRoot, projectQueue]) => ({
+            projectRoot,
+            testIds: projectQueue.map(({ test }) => test.id),
+            triggerID: request?.include?.find(
+                (item) => getProjectRoot(Uri.file(item.id)) === projectRoot)?.id ?? ""
+        }));
+
+        // Check all projects up front in one popup
+        const shouldProceed = await checkMissingConfigurablesAndPrompt(
+            [...projectGroups.keys()],
+            COMMANDS.RESUME_TEST_RUN,
+            [resumeGroups]
+        );
+        if (!shouldProceed) {
+            run.end();
+            return;
+        }
+
         // Run each project's test cycle sequentially (each project spins up its
         // own MI test server on the same port, so they cannot overlap).
         try {
-            for (const [projectRoot, projectQueue] of projectGroups) {
-                await runProjectTests(projectRoot, projectQueue);
+            for (const { projectRoot, triggerID } of resumeGroups) {
+                await runProjectTests(run, projectRoot, projectGroups.get(projectRoot)!, triggerID);
             }
         } finally {
             run.end();
         }
     }
+}
 
-    async function runProjectTests(projectRoot: string, projectQueue: { test: TestItem; data: any; }[]) {
-        let stopTestServer: (() => void) | undefined;
-        const startTime = Date.now();
+export async function runProjectTests(run: TestRun, projectRoot: string, projectQueue: { test: TestItem; data: any; }[], triggerID: string) {
+    let stopTestServer: (() => void) | undefined;
+    const startTime = Date.now();
 
-        run.appendOutput(`Start running tests\r\n`);
+    run.appendOutput(`Start running tests\r\n`);
 
-        let testNames = "";
-        // mark tests as running in test explorer
+    let testNames = "";
+    // mark tests as running in test explorer
+    for (const { test, } of projectQueue) {
+        testNames = testNames == "" ? test.label : `${testNames},${test.label}`;
+        markStatusAsRunning(run, test);
+    }
+
+    const failProjectTests = () => {
+        const EndTime = Date.now();
+        const timeElapsed = (EndTime - startTime) / projectQueue.length;
         for (const { test, } of projectQueue) {
-            testNames = testNames == "" ? test.label : `${testNames},${test.label}`;
-            markSatusAsRunning(test);
+            const testMessage: TestMessage = new TestMessage("Command failed");
+            run.failed(test, testMessage, timeElapsed);
+        }
+    };
+
+    try {
+        const serverPath = await getServerPath(projectRoot);
+        if (!serverPath) {
+            window.showErrorMessage("MI server path not found");
+            failProjectTests();
+            return;
         }
 
-        const failProjectTests = () => {
-            const EndTime = Date.now();
-            const timeElapsed = (EndTime - startTime) / projectQueue.length;
+        const printer = (line: string, isError: boolean) => {
+            printToOutput(run, line, isError);
+        }
+
+        // compile project
+        await compileProject(projectRoot, printer);
+
+        // execute test
+        run.appendOutput(`Starting MI test server\r\n`);
+        const { cp } = await startTestServer(serverPath, projectRoot, printer);
+        stopTestServer = () => {
+            treeKill(cp.pid!, 'SIGKILL');
+        }
+
+        run.appendOutput("\x1b[32m================== MI test server started ==================\x1b[0m\r\n");
+        run.appendOutput(`Running tests ${testNames}\r\n`);
+
+        await runTests(testNames, projectRoot, triggerID, printer);
+        const EndTime = Date.now();
+        const timeElapsed = (EndTime - startTime) / projectQueue.length;
+
+        // reading test results
+        const testsJson: JSON | undefined = await readJsonFile(path.join(projectRoot, TEST_RESULTS_PATH).toString());
+        if (!testsJson) {
             for (const { test, } of projectQueue) {
                 const testMessage: TestMessage = new TestMessage("Command failed");
                 run.failed(test, testMessage, timeElapsed);
             }
-        };
+            window.showErrorMessage("Test results not found.");
+        } else {
 
-        try {
-            const serverPath = await getServerPath(projectRoot);
-            if (!serverPath) {
-                window.showErrorMessage("MI server path not found");
-                failProjectTests();
-                return;
-            }
+            for (const { test, } of projectQueue) {
+                let testResults;
+                let testCases;
+                if (test.id.endsWith(".xml")) {
+                    const id = normalize(test.id);
 
-            const printer = (line: string, isError: boolean) => {
-                printToOutput(run, line, isError);
-            }
+                    testResults = Object.entries(testsJson).find(([key]) => normalize(key) === id)?.[1];
+                    testCases = test.children;
+                } else {
+                    const strs = test.id.split("/");
+                    strs.pop();
+                    const suiteName = normalize(strs.join("/"));
+                    testResults = Object.entries(testsJson).find(([key]) => normalize(key) === suiteName)?.[1];
+                    testCases = [[test.id, test]]
+                }
 
-            // compile project
-            await compileProject(projectRoot, printer);
+                if (!testResults) {
+                    const testMessage: TestMessage = new TestMessage("Test result not found");
+                    run.failed(test, testMessage, timeElapsed);
+                    continue;
+                }
 
-            // execute test
-            run.appendOutput(`Starting MI test server\r\n`);
-            const { cp } = await startTestServer(serverPath, projectRoot, printer);
-            stopTestServer = () => {
-                treeKill(cp.pid!, 'SIGKILL');
-            }
+                const mediationStatus = testResults["mediationStatus"];
+                const deploymentStatus = testResults["deploymentStatus"];
+                const testCasesResults = testResults["testCases"];
 
-            run.appendOutput("\x1b[32m================== MI test server started ==================\x1b[0m\r\n");
-            run.appendOutput(`Running tests ${testNames}\r\n`);
+                if (deploymentStatus === TEST_STATUS.PASSED && mediationStatus === TEST_STATUS.PASSED) {
 
-            // run tests - derive the trigger from an explicitly selected test in this project.
-            const triggerID = request?.include?.find(
-                (item) => getProjectRoot(Uri.file(item.id)) === projectRoot)?.id ?? "";
-            await runTests(testNames, projectRoot, triggerID, printer);
-            const EndTime = Date.now();
-            const timeElapsed = (EndTime - startTime) / projectQueue.length;
-
-            // reading test results
-            const testsJson: JSON | undefined = await readJsonFile(path.join(projectRoot, TEST_RESULTS_PATH).toString());
-            if (!testsJson) {
-                for (const { test, } of projectQueue) {
-                    const testMessage: TestMessage = new TestMessage("Command failed");
+                    for (const testCase of testCases) {
+                        const testCaseItem = testCase[1];
+                        const testCaseName = testCaseItem.label;
+                        const testCaseResult = testCasesResults.find((testCaseResult: any) => testCaseResult["testCaseName"] === testCaseName);
+                        if (testCaseResult) {
+                            const mediationStatus = testCaseResult["mediationStatus"];
+                            const assertionStatus = testCaseResult["assertionStatus"];
+                            if (mediationStatus === TEST_STATUS.PASSED && assertionStatus === TEST_STATUS.PASSED) {
+                                run.passed(testCaseItem, timeElapsed);
+                            } else {
+                                let message: TestMessage;
+                                if (assertionStatus === TEST_STATUS.FAILED) {
+                                    const failureAssertions = testCaseResult["failureAssertions"];
+                                    const table = new MarkdownString();
+                                    table.appendMarkdown(`| Test Case | Assert Expression | Failure Message |\n`);
+                                    table.appendMarkdown(`| --- | --- | --- |\n`);
+                                    for (const assertion of failureAssertions) {
+                                        const actualValue = assertion["actual"];
+                                        const expectedValue = assertion["expected"];
+                                        const failureMessage = `Expected: ${expectedValue}, Actual: ${actualValue}`
+                                        table.appendMarkdown(`| ${testCaseName} | ${assertion["assertionExpression"]} | ${failureMessage} |\n`);
+                                    }
+                                    message = new TestMessage(table);
+                                } else {
+                                    message = new TestMessage("Test mediation failed");
+                                }
+                                run.failed(testCaseItem, message, timeElapsed);
+                            }
+                        } else {
+                            const testMessage: TestMessage = new TestMessage("Test result not found");
+                            run.failed(testCaseItem, testMessage, timeElapsed);
+                        }
+                    }
+                    // run.passed(test, timeElapsed);
+                } else {
+                    // test failed
+                    const testMessage: TestMessage = new TestMessage("Mediation failed");
                     run.failed(test, testMessage, timeElapsed);
                 }
-                window.showErrorMessage("Test results not found.");
-            } else {
-
-                for (const { test, } of projectQueue) {
-                    let testResults;
-                    let testCases;
-                    if (test.id.endsWith(".xml")) {
-                        const id = normalize(test.id);
-
-                        testResults = Object.entries(testsJson).find(([key]) => normalize(key) === id)?.[1];
-                        testCases = test.children;
-                    } else {
-                        const strs = test.id.split("/");
-                        strs.pop();
-                        const suiteName = normalize(strs.join("/"));
-                        testResults = Object.entries(testsJson).find(([key]) => normalize(key) === suiteName)?.[1];
-                        testCases = [[test.id, test]]
-                    }
-
-                    if (!testResults) {
-                        const testMessage: TestMessage = new TestMessage("Test result not found");
-                        run.failed(test, testMessage, timeElapsed);
-                        continue;
-                    }
-
-                    const mediationStatus = testResults["mediationStatus"];
-                    const deploymentStatus = testResults["deploymentStatus"];
-                    const testCasesResults = testResults["testCases"];
-
-                    if (deploymentStatus === TEST_STATUS.PASSED && mediationStatus === TEST_STATUS.PASSED) {
-
-                        for (const testCase of testCases) {
-                            const testCaseItem = testCase[1];
-                            const testCaseName = testCaseItem.label;
-                            const testCaseResult = testCasesResults.find((testCaseResult: any) => testCaseResult["testCaseName"] === testCaseName);
-                            if (testCaseResult) {
-                                const mediationStatus = testCaseResult["mediationStatus"];
-                                const assertionStatus = testCaseResult["assertionStatus"];
-                                if (mediationStatus === TEST_STATUS.PASSED && assertionStatus === TEST_STATUS.PASSED) {
-                                    run.passed(testCaseItem, timeElapsed);
-                                } else {
-                                    let message: TestMessage;
-                                    if (assertionStatus === TEST_STATUS.FAILED) {
-                                        const failureAssertions = testCaseResult["failureAssertions"];
-                                        const table = new MarkdownString();
-                                        table.appendMarkdown(`| Test Case | Assert Expression | Failure Message |\n`);
-                                        table.appendMarkdown(`| --- | --- | --- |\n`);
-                                        for (const assertion of failureAssertions) {
-                                            const actualValue = assertion["actual"];
-                                            const expectedValue = assertion["expected"];
-                                            const failureMessage = `Expected: ${expectedValue}, Actual: ${actualValue}`
-                                            table.appendMarkdown(`| ${testCaseName} | ${assertion["assertionExpression"]} | ${failureMessage} |\n`);
-                                        }
-                                        message = new TestMessage(table);
-                                    } else {
-                                        message = new TestMessage("Test mediation failed");
-                                    }
-                                    run.failed(testCaseItem, message, timeElapsed);
-                                }
-                            } else {
-                                const testMessage: TestMessage = new TestMessage("Test result not found");
-                                run.failed(testCaseItem, testMessage, timeElapsed);
-                            }
-                        }
-                        // run.passed(test, timeElapsed);
-                    } else {
-                        // test failed
-                        const testMessage: TestMessage = new TestMessage("Mediation failed");
-                        run.failed(test, testMessage, timeElapsed);
-                    }
-                }
             }
-        } catch (error: any) {
-            // exception.
-            window.showErrorMessage(`Error: ${error}`);
-            String(error).split('\n').forEach((line) => {
-                printToOutput(run, line, true);
-            });
-            failProjectTests();
+        }
+    } catch (error: any) {
+        // exception.
+        window.showErrorMessage(`Error: ${error}`);
+        String(error).split('\n').forEach((line) => {
+            printToOutput(run, line, true);
+        });
+        failProjectTests();
+    } finally {
+        run.appendOutput(`Test running finished\r\n`);
+        if (stopTestServer) {
+            stopTestServer();
+        }
+    }
+}
+
+function markStatusAsRunning(run: TestRun, test: TestItem) {
+    run.started(test);
+    if (test.children) {
+        for (const child of test.children) {
+            markStatusAsRunning(run, child[1]);
+        }
+    }
+}
+
+export function findTestItemById(collection: TestItemCollection, id: string): TestItem | undefined {
+    const direct = collection.get(id);
+    if (direct) {
+        return direct;
+    }
+    for (const [, item] of collection) {
+        const found = findTestItemById(item.children, id);
+        if (found) {
+            return found;
+        }
+    }
+    return undefined;
+}
+
+// Handler for COMMANDS.RESUME_TEST_RUN. Resumes every paused project sequentially.
+export async function resumeProjectTestRun(resumeGroups: TestResumeGroup[]): Promise<void> {
+    const allItems: TestItem[] = [];
+    const perProject: { projectRoot: string; projectQueue: { test: TestItem; data: any }[]; triggerID: string }[] = [];
+
+    for (const { projectRoot, testIds, triggerID } of resumeGroups) {
+        const items = testIds
+            .map(id => findTestItemById(testController.items, id))
+            .filter((item): item is TestItem => !!item);
+        if (items.length === 0) {
+            continue;
+        }
+        allItems.push(...items);
+        perProject.push({ projectRoot, projectQueue: items.map(test => ({ test, data: null })), triggerID });
+    }
+
+    if (allItems.length === 0) {
+        window.showErrorMessage("Could not resume the test run: the selected tests were not found.");
+        return;
+    }
+
+    const run = testController.createTestRun(new TestRunRequest(allItems));
+    (async () => {
+        try {
+            for (const { projectRoot, projectQueue, triggerID } of perProject) {
+                await runProjectTests(run, projectRoot, projectQueue, triggerID);
+            }
         } finally {
-            run.appendOutput(`Test running finished\r\n`);
-            if (stopTestServer) {
-                stopTestServer();
-            }
+            run.end();
         }
-    }
-
-    function markSatusAsRunning(test: TestItem) {
-        run.started(test);
-        if (test.children) {
-            for (const child of test.children) {
-                markSatusAsRunning(child[1]);
-            }
-        }
-    }
+    })().catch(error => window.showErrorMessage(`Error running tests: ${error}`));
 }
 
 /**
@@ -274,6 +338,9 @@ async function startTestServer(serverPath: string, projectRoot: string, printToO
             if (fs.existsSync(filePath)) {
                 loadEnvVariables(filePath)
             }
+
+            // Clear any leftover server from a previous run still bound to this port.
+            await killProcessByPort(TestRunnerConfig.getServerPort());
 
             const passwordWritten = await promptAndWriteCipherToolPassword(serverPath);
             if (!passwordWritten) {
