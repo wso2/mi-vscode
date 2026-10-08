@@ -30,7 +30,7 @@ export function getBuildTask(projectUri: string): vscode.Task {
     const mvnCmd = config.get("useLocalMaven") ? "mvn" : (process.platform === "win32" ?
         MVN_COMMANDS.MVN_WRAPPER_WIN_COMMAND : MVN_COMMANDS.MVN_WRAPPER_COMMAND);
     const commandToExecute = mvnCmd + MVN_COMMANDS.BUILD_COMMAND
-    const env = setJavaHomeInEnvironmentAndPath(projectUri);  
+    const env = { ...setJavaHomeInEnvironmentAndPath(projectUri), ...getProjectEnvVariables([projectUri]) };
     const buildTask = new vscode.Task(
         { type: 'mi-build' },
         vscode.TaskScope.Workspace,
@@ -55,7 +55,7 @@ export function getDockerTask(projectUri: string, consolidatedProjectRoot?: stri
     const mvnCmd = config.get("useLocalMaven") ? "mvn" : (process.platform === "win32" ?
         MVN_COMMANDS.MVN_WRAPPER_WIN_COMMAND : MVN_COMMANDS.MVN_WRAPPER_COMMAND);
     const commandToExecute = mvnCmd + MVN_COMMANDS.DOCKER_COMMAND;
-    const env = setJavaHomeInEnvironmentAndPath(projectUri);
+    const env = { ...setJavaHomeInEnvironmentAndPath(projectUri), ...getProjectEnvVariables([projectUri]) };
     let dockerTask;
 
     if (consolidatedProjectRoot) {
@@ -198,8 +198,9 @@ export function getStopCommand(serverPath: string): string | undefined {
     return command;
 }
 
-// Function to load environment variables from .env file
-export function loadEnvVariables(filePath: string): void {
+// Reads environment variables from a .env file
+export function loadEnvVariables(filePath: string): Record<string, string> {
+    const envVariables: Record<string, string> = {};
     const fileContent = fs.readFileSync(filePath, { encoding: 'utf8' });
     const lines = fileContent.split('\n');
     lines.forEach(line => {
@@ -207,9 +208,30 @@ export function loadEnvVariables(filePath: string): void {
         // Ignore empty lines or comments
         if (trimmedLine && trimmedLine[0] !== '#') {
             const [key, ...value] = trimmedLine.split('=');
-            if (key && value) {
-                process.env[key.trim()] = value.join('=').trim();
+            if (key.trim() && value.length > 0) {
+                envVariables[key.trim()] = value.join('=').trim();
             }
         }
     });
+    return envVariables;
+}
+
+// Java runtime variables are managed by the extension and must not be overridden by .env
+const PROTECTED_ENV_KEYS = ['JAVA_HOME', 'PATH'];
+
+// Merges the .env variables of the given projects.
+export function getProjectEnvVariables(projectPaths: string[]): Record<string, string> {
+    const envVariables = projectPaths.reduce((acc, projectPath) => {
+        const filePath = path.resolve(projectPath, '.env');
+        return fs.existsSync(filePath) ? { ...acc, ...loadEnvVariables(filePath) } : acc;
+    }, {} as Record<string, string>);
+
+    for (const key of Object.keys(envVariables)) {
+        // Case-insensitive, as Windows uses 'Path'
+        if (PROTECTED_ENV_KEYS.includes(key.toUpperCase())) {
+            logDebug(`Ignoring '${key}' defined in .env as it is managed by the extension`, LogLevel.INFO);
+            delete envVariables[key];
+        }
+    }
+    return envVariables;
 }
