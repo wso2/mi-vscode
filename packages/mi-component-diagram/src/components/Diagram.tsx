@@ -71,7 +71,13 @@ export function Diagram(props: DiagramProps) {
         let resizeTimeout: ReturnType<typeof setTimeout>;
         const observer = new ResizeObserver(() => {
             const { clientWidth, clientHeight } = canvas;
-            if (clientWidth === 0 || clientHeight === 0 || (clientWidth === lastWidth && clientHeight === lastHeight)) {
+            if (clientWidth === 0 || clientHeight === 0) {
+                clearTimeout(resizeTimeout);
+                lastWidth = 0;
+                lastHeight = 0;
+                return;
+            }
+            if (clientWidth === lastWidth && clientHeight === lastHeight) {
                 return;
             }
             lastWidth = clientWidth;
