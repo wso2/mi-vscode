@@ -34,7 +34,7 @@ import { ChildProcess } from "child_process";
 import treeKill = require("tree-kill");
 import { normalize } from "upath";
 import { COMMANDS, MVN_COMMANDS } from "../constants";
-import { loadEnvVariables } from "../debugger/tasks";
+import { getProjectEnvVariables } from "../debugger/tasks";
 import { escapeShellArg } from "../util/shellEscapeUtils";
 const fs = require('fs');
 const child_process = require('child_process');
@@ -334,11 +334,6 @@ export async function resumeProjectTestRun(resumeGroups: TestResumeGroup[]): Pro
 async function startTestServer(serverPath: string, projectRoot: string, printToOutput?: (line: string, isError: boolean) => void): Promise<{ cp: ChildProcess }> {
     return new Promise<{ cp: ChildProcess }>(async (resolve, reject) => {
         try {
-            const filePath = path.resolve(projectRoot, '.env');
-            if (fs.existsSync(filePath)) {
-                loadEnvVariables(filePath)
-            }
-
             // Clear any leftover server from a previous run still bound to this port.
             await killProcessByPort(TestRunnerConfig.getServerPort());
 
@@ -361,7 +356,7 @@ async function startTestServer(serverPath: string, projectRoot: string, printToO
                 }
             }
 
-            const cp = runCommand(serverCommand, projectRoot, onData, onError, onClose, printer);
+            const cp = runCommand(serverCommand, projectRoot, onData, onError, onClose, printer, getProjectEnvVariables([projectRoot]));
 
             function onData(data: string) {
                 if (data.includes("WSO2 Micro Integrator started in")) {
@@ -425,7 +420,7 @@ async function compileProject(projectRoot: string, printToOutput?: (line: string
         }
 
         try {
-            runCommand(testRunCmd, projectRoot, onData, onError, onClose, printToOutput);
+            runCommand(testRunCmd, projectRoot, onData, onError, onClose, printToOutput, getProjectEnvVariables([projectRoot]));
         } catch (error) {
             reject(error instanceof Error ? error.message : String(error));
         }
@@ -465,7 +460,7 @@ async function runTests(testNames: string, projectRoot: string, triggerId: strin
         }
 
         try {
-            runCommand(testRunCmd, projectRoot, onData, onError, onClose, printToOutput);
+            runCommand(testRunCmd, projectRoot, onData, onError, onClose, printToOutput, getProjectEnvVariables([projectRoot]));
         } catch (error) {
             reject(error instanceof Error ? error.message : String(error));
         }
@@ -495,11 +490,13 @@ export function runCommand(command, pathToRun?: string,
     onData?: (data: string) => void,
     onError?: (data: string) => void,
     onClose?: (code: number) => void,
-    printToOutput?: (line: string, isError: boolean) => void): ChildProcess {
+    printToOutput?: (line: string, isError: boolean) => void,
+    extraEnv: Record<string, string> = {}): ChildProcess {
     try {
         const envVariables = {
             ...process.env,
-            ...(pathToRun ? setJavaHomeInEnvironmentAndPath(pathToRun) : {})
+            ...(pathToRun ? setJavaHomeInEnvironmentAndPath(pathToRun) : {}),
+            ...extraEnv
         };
         const cp = child_process.spawn(command, [], { shell: true, cwd: pathToRun, env: envVariables });
 

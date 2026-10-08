@@ -20,7 +20,7 @@
 import * as vscode from 'vscode';
 import * as childprocess from 'child_process';
 import { COMMANDS, MVN_COMMANDS, DEPLOY_BASE_ARGS } from '../constants';
-import { loadEnvVariables, getBuildCommand, getRunCommand, getStopCommand } from './tasks';
+import { getProjectEnvVariables, getBuildCommand, getRunCommand, getStopCommand } from './tasks';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SELECTED_SERVER_PATH, INCORRECT_SERVER_PATH_MSG } from './constants';
@@ -206,7 +206,8 @@ export async function executeBuildTask(projectUri: string, serverPath: string, s
                 const buildCommand = getBuildCommand(project) + (forceUpdate ? ' -U' : '');
                 const envVariables = {
                     ...process.env,
-                    ...setJavaHomeInEnvironmentAndPath(project)
+                    ...setJavaHomeInEnvironmentAndPath(project),
+                    ...getProjectEnvVariables([project])
                 };
 
                 const buildProcess = await child_process.spawn(
@@ -343,7 +344,8 @@ export function executeRemoteDeployTask(projectUri: string, postBuildTask?: Func
             MVN_COMMANDS.MVN_WRAPPER_WIN_COMMAND : MVN_COMMANDS.MVN_WRAPPER_COMMAND);
         const envVariables = {
             ...process.env,
-            ...setJavaHomeInEnvironmentAndPath(projectUri)
+            ...setJavaHomeInEnvironmentAndPath(projectUri),
+            ...getProjectEnvVariables([projectUri])
         };
 
         const allArgs = [...DEPLOY_BASE_ARGS, ...extraArgs];
@@ -451,14 +453,6 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
             return;
         }
 
-        if (DebuggerConfig.getProjectList().length > 0) {
-            for (const project of DebuggerConfig.getProjectList()) {
-                const filePath = path.resolve(project, '.env');
-                if (fs.existsSync(filePath)) {
-                    loadEnvVariables(filePath)
-                }
-            }
-        }
         let runCommand: string | undefined;
         try {
             runCommand = await getRunCommand(serverPath, isDebug);
@@ -476,6 +470,7 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
             const envVariables = {
                 ...process.env,
                 ...setJavaHomeInEnvironmentAndPath(projectUri),
+                ...getProjectEnvVariables(DebuggerConfig.getProjectList()),
                 ...definedEnvVariables
             };
 
