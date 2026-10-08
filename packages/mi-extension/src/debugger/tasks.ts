@@ -216,10 +216,22 @@ export function loadEnvVariables(filePath: string): Record<string, string> {
     return envVariables;
 }
 
+// Java runtime variables are managed by the extension and must not be overridden by .env
+const PROTECTED_ENV_KEYS = ['JAVA_HOME', 'PATH'];
+
 // Merges the .env variables of the given projects.
 export function getProjectEnvVariables(projectPaths: string[]): Record<string, string> {
-    return projectPaths.reduce((acc, projectPath) => {
+    const envVariables = projectPaths.reduce((acc, projectPath) => {
         const filePath = path.resolve(projectPath, '.env');
         return fs.existsSync(filePath) ? { ...acc, ...loadEnvVariables(filePath) } : acc;
     }, {} as Record<string, string>);
+
+    for (const key of Object.keys(envVariables)) {
+        // Case-insensitive, as Windows uses 'Path'
+        if (PROTECTED_ENV_KEYS.includes(key.toUpperCase())) {
+            logDebug(`Ignoring '${key}' defined in .env as it is managed by the extension`, LogLevel.INFO);
+            delete envVariables[key];
+        }
+    }
+    return envVariables;
 }
