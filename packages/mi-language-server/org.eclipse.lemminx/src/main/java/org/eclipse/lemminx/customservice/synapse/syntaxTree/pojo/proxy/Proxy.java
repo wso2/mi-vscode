@@ -32,7 +32,7 @@ public class Proxy extends STNode {
     String transports;
     String pinnedServers;
     String serviceGroup;
-    boolean startOnLoad;
+    String startOnLoad;
     EnableDisable statistics;
     EnableDisable trace;
 
@@ -76,12 +76,12 @@ public class Proxy extends STNode {
         this.serviceGroup = serviceGroup;
     }
 
-    public boolean isStartOnLoad() {
+    public String getStartOnLoad() {
 
         return startOnLoad;
     }
 
-    public void setStartOnLoad(boolean startOnLoad) {
+    public void setStartOnLoad(String startOnLoad) {
 
         this.startOnLoad = startOnLoad;
     }

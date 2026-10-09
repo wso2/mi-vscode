@@ -59,7 +59,8 @@ public class ProxySerializer {
         if (proxy.getServiceGroup() != null) {
             proxyElt.addAttribute("serviceGroup", proxy.getServiceGroup(), null);
         }
-        proxyElt.addAttribute("startOnLoad", String.valueOf(proxy.isStartOnLoad()), null);
+        String startOnLoad = proxy.getStartOnLoad() != null ? proxy.getStartOnLoad() : String.valueOf(false);
+        proxyElt.addAttribute("startOnLoad", startOnLoad, null);
     }
 
     private static void serializeChildren(Proxy proxy, OMElement proxyElt) {

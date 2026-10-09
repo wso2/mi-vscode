@@ -978,7 +978,7 @@ export interface Proxy extends STNode {
     transports: string;
     pinnedServers: string;
     serviceGroup: string;
-    startOnLoad: boolean;
+    startOnLoad: string | boolean;
     statistics: string;
     trace: string;
     onError: string;
