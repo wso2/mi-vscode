@@ -468,6 +468,57 @@ public class SynapseDiagnosticsParticipantTest {
         assertTrue(diags.isEmpty(), "responseVariable child element should define the variable");
     }
 
+    @Test
+    public void testForeachCounterVariableDefinesVariable() {
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<foreach collection=\"json-eval($.someList)\" parallel-execution=\"false\" counter-variable=\"idx\">"
+                + "  <sequence>"
+                + "    <variable name=\"currentRow\" type=\"INTEGER\" expression=\"${vars.idx}\"/>"
+                + "  </sequence>"
+                + "</foreach>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "foreach counter-variable attribute should define the variable");
+    }
+
+    @Test
+    public void testForeachTargetVariableDefinesVariable() {
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<foreach collection=\"json-eval($.someList)\" parallel-execution=\"false\" target-variable=\"aggregatedResult\">"
+                + "  <sequence>"
+                + "    <log><message>processing</message></log>"
+                + "  </sequence>"
+                + "</foreach>"
+                + "<log level=\"custom\"><property name=\"x\" expression=\"${vars.aggregatedResult}\"/></log>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "foreach target-variable attribute should define the variable");
+    }
+
+    @Test
+    public void testScatterGatherTargetVariableDefinesVariable() {
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<scatter-gather parallel-execution=\"false\" target=\"Variable\" target-variable=\"scatterResult\">"
+                + "</scatter-gather>"
+                + "<log level=\"custom\"><property name=\"x\" expression=\"${vars.scatterResult}\"/></log>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertTrue(diags.isEmpty(), "scatter-gather target-variable attribute should define the variable");
+    }
+
+    @Test
+    public void testForeachEmptyCounterVariableDoesNotDefine() {
+        String xml = "<sequence xmlns=\"" + SYNAPSE_NS + "\" name=\"test\">"
+                + "<foreach collection=\"json-eval($.someList)\" parallel-execution=\"false\" counter-variable=\"\">"
+                + "  <sequence>"
+                + "    <variable name=\"currentRow\" type=\"INTEGER\" expression=\"${vars.idx}\"/>"
+                + "  </sequence>"
+                + "</foreach>"
+                + "</sequence>";
+        List<Diagnostic> diags = diagnosticsWithCode(diagnose(xml), "UndefinedVariable");
+        assertEquals(1, diags.size(), "empty counter-variable should not define variable");
+    }
+
     // ===== Variable references in element text content (Issue #4) =====
 
     @Test
