@@ -39,6 +39,9 @@ import { useForm } from "react-hook-form";
 import { getArtifactNamesAndRegistryPaths } from "../AddToRegistry";
 import { FormKeylookup } from "@wso2/mi-diagram";
 import { ParamConfig, ParamManager } from "@wso2/mi-diagram";
+import { BooleanOrTextField } from "../../../components/BooleanOrTextField";
+import { compareVersions } from "@wso2/mi-diagram/lib/utils/commons";
+import { RUNTIME_VERSION_460 } from "../../../constants";
 
 export type Protocol = "http" | "https";
 
@@ -51,6 +54,8 @@ type InputsFields = {
     trace?: boolean;
     statistics?: boolean;
     startOnLoad?: boolean;
+    startOnLoadText?: string;
+    startOnLoadIsText?: boolean;
     transports: string;
     transport?: {
         http: boolean;
@@ -140,7 +145,7 @@ export type EditProxyForm  = {
     transports: string;
     pinnedServers: string;
     serviceGroup: string;
-    startOnLoad: boolean;
+    startOnLoad: string | boolean;
     statistics: boolean;
     trace: boolean;
     inSequenceEdited: boolean;
@@ -149,6 +154,9 @@ export type EditProxyForm  = {
 };
 
 export type SequenceOption = "inline" | "named";
+
+const isBooleanValue = (value: unknown) =>
+    value == null || typeof value === "boolean" || ["true", "false"].includes(String(value).trim().toLowerCase());
 
 const WSDL_Types = [
     "NONE",
@@ -202,9 +210,10 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
     const { rpcClient } = useVisualizerContext();
     const [workspaceFileNames, setWorkspaceFileNames] = useState<string[]>([]);
     const [proxyArtifactsNames, setProxyArtifactsNames] = useState<string[]>([]);
+    const [isStartOnLoadExprSupported, setIsStartOnLoadExprSupported] = useState(false);
     const schema = yup
     .object({
-        name: yup.string().required("Proxy  Name is required").matches(/^[^@\\^+;:!%&,=*#[\]$?'"<>{}() /]*$/, "Invalid characters in Proxy name")
+        name: yup.string().required("Proxy Name is required").matches(/^[^@\\^+;:!%&,=*#[\]$?'"<>{}() /]*$/, "Invalid characters in Proxy name")
               .test('validateMessageStoreName',
               'An artifact with same name already exists', value => {
                   return !(workspaceFileNames.includes(value.toLowerCase()) && proxyData.name !== value)
@@ -248,6 +257,12 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
             otherwise: (schema)=>schema.notRequired()
         }),
         transports: yup.string().required("Transports are required"),
+        startOnLoadIsText: yup.boolean(),
+        startOnLoadText: yup.string().when("startOnLoadIsText", {
+            is: true,
+            then: (schema)=>schema.trim().required("Start On Load value is required"),
+            otherwise: (schema)=>schema.notRequired()
+        }),
         wsdlInLine: yup.string().required().when('wsdlType', {
             is: "INLINE",
             then: (schema)=>schema.required("Inline WSDL is required"),
@@ -265,7 +280,9 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
         serviceGroup: proxyData.serviceGroup ?? "",
         trace: proxyData.trace ?? false,
         statistics: proxyData.statistics,
-        startOnLoad: proxyData.startOnLoad ?? false,
+        startOnLoad: isBooleanValue(proxyData.startOnLoad) ? String(proxyData.startOnLoad).trim().toLowerCase() === "true" : false,
+        startOnLoadText: proxyData.startOnLoad != null ? String(proxyData.startOnLoad) : "",
+        startOnLoadIsText: !isBooleanValue(proxyData.startOnLoad),
         transports: proxyData.transports,
         transport: {
             http: proxyData.transports.includes("http"),
@@ -592,6 +609,14 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
                 path: documentUri,
             });
             setWorkspaceFileNames(artifactRes.artifacts.map(name => name.toLowerCase()));
+            const projectDetails = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+            const runtimeVersion = projectDetails.primaryDetails.runtimeVersion.value;
+            const exprSupported = compareVersions(runtimeVersion, RUNTIME_VERSION_460) >= 0;
+            setIsStartOnLoadExprSupported(exprSupported);
+            if (!exprSupported) {
+                // Only 4.6.0 and above runtimes support expressions
+                setValue("startOnLoadIsText", false);
+            }
         })();
     }, [proxyData]);
     
@@ -627,8 +652,22 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
                     <CheckBoxGroup columns={3}>
                         <FormCheckBox label="Statistics" {...register("statistics")} control={control as any} />
                         <FormCheckBox label="Trace" {...register("trace")} control={control as any} />
-                        <FormCheckBox label="Start On Load" {...register("startOnLoad")} control={control as any} />
                     </CheckBoxGroup>
+                    {isStartOnLoadExprSupported ? (
+                        <BooleanOrTextField
+                            id="startOnLoad"
+                            label="Start On Load"
+                            control={control as any}
+                            getValues={getValues as any}
+                            setValue={setValue as any}
+                            booleanName="startOnLoad"
+                            textName="startOnLoadText"
+                            isTextName="startOnLoadIsText"
+                            errorMsg={errors.startOnLoadText?.message?.toString()}
+                        />
+                    ) : (
+                        <FormCheckBox label="Start On Load" {...register("startOnLoad")} control={control as any} />
+                    )}
                     <span>Transports</span>
                     <CheckBoxGroup columns={5}  >
                         <FormCheckBox label="HTTP" {...register("transport.http")} control={control as any}/>
@@ -856,7 +895,7 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
                                     transports: transportGenerator(),
                                     pinnedServers: values.pinnedServers,
                                     serviceGroup: values.serviceGroup,
-                                    startOnLoad: values.startOnLoad,
+                                    startOnLoad: values.startOnLoadIsText ? values.startOnLoadText.trim() : values.startOnLoad,
                                     statistics: values.statistics,
                                     trace: values.trace,
                                     inSequenceEdited: intialInSequenceType !== values.inSequenceType,

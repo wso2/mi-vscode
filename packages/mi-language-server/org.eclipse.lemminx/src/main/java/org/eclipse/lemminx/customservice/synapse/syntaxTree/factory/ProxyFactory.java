@@ -245,7 +245,7 @@ public class ProxyFactory extends AbstractFactory {
         }
         String startOnLoad = element.getAttribute(Constant.START_ON_LOAD);
         if (startOnLoad != null) {
-            ((Proxy) node).setStartOnLoad(Boolean.valueOf(startOnLoad));
+            ((Proxy) node).setStartOnLoad(startOnLoad);
         }
         String statistics = element.getAttribute(Constant.STATISTICS);
         EnableDisable statisticsEnum = Utils.getEnumFromValue(statistics, EnableDisable.class);
