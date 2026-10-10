@@ -19,7 +19,7 @@ import styled from "@emotion/styled";
 import { Control, Controller, UseFormGetValues, UseFormSetValue } from "react-hook-form";
 import { CheckBox, TextField, Typography } from "@wso2/ui-toolkit";
 
-const ExButton = styled.div<{ isActive: boolean }>`
+const ExButton = styled.button<{ isActive: boolean }>`
     margin-left: 6px;
     position: relative;
     top: 1px;
@@ -27,11 +27,17 @@ const ExButton = styled.div<{ isActive: boolean }>`
     align-items: center;
     justify-content: center;
     padding: 3px 5px;
+    color: inherit;
+    font: inherit;
     cursor: pointer;
     background-color: ${(props: { isActive: boolean }) => props.isActive ? "var(--vscode-inputOption-activeBackground)" : "var(--vscode-inputOption-inactiveBackground)"};
     border: 1px solid ${(props: { isActive: boolean }) => props.isActive ? "var(--vscode-inputOption-activeBorder)" : "transparent"};
     &:hover {
         background-color: ${(props: { isActive: boolean }) => props.isActive ? "var(--vscode-inputOption-activeBackground)" : "var(--vscode-inputOption-hoverBackground)"};
+    }
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 1px;
     }
 `;
 
@@ -53,6 +59,7 @@ export type BooleanOrTextFieldProps = {
  */
 export function BooleanOrTextField(props: BooleanOrTextFieldProps) {
     const { id, label, control, setValue, booleanName, textName, isTextName, placeholder, errorMsg } = props;
+    const toggleId = `${id ?? textName}-mode-toggle`;
 
     const switchMode = (toText: boolean) => {
         const options = { shouldDirty: true, shouldValidate: true };
@@ -63,13 +70,17 @@ export function BooleanOrTextField(props: BooleanOrTextFieldProps) {
             setValue(booleanName, false, options);
         }
         setValue(isTextName, toText, options);
+        requestAnimationFrame(() => document.getElementById(toggleId)?.focus());
     };
 
     const renderToggle = (toText: boolean) => (
         <ExButton
-            id={`${id ?? textName}-mode-toggle`}
+            type="button"
+            id={toggleId}
             isActive={!toText}
-            title={toText ? "Use a custom value" : "Use a checkbox"}
+            aria-pressed={!toText}
+            aria-label={`${label}: ${toText ? "use an expression" : "use boolean value"}`}
+            title={toText ? "Use an expression" : "Use a boolean value"}
             onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();

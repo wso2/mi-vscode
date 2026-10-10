@@ -40,6 +40,8 @@ import { getArtifactNamesAndRegistryPaths } from "../AddToRegistry";
 import { FormKeylookup } from "@wso2/mi-diagram";
 import { ParamConfig, ParamManager } from "@wso2/mi-diagram";
 import { BooleanOrTextField } from "../../../components/BooleanOrTextField";
+import { compareVersions } from "@wso2/mi-diagram/lib/utils/commons";
+import { RUNTIME_VERSION_460 } from "../../../constants";
 
 export type Protocol = "http" | "https";
 
@@ -208,6 +210,7 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
     const { rpcClient } = useVisualizerContext();
     const [workspaceFileNames, setWorkspaceFileNames] = useState<string[]>([]);
     const [proxyArtifactsNames, setProxyArtifactsNames] = useState<string[]>([]);
+    const [isStartOnLoadExprSupported, setIsStartOnLoadExprSupported] = useState(false);
     const schema = yup
     .object({
         name: yup.string().required("Proxy Name is required").matches(/^[^@\\^+;:!%&,=*#[\]$?'"<>{}() /]*$/, "Invalid characters in Proxy name")
@@ -277,7 +280,7 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
         serviceGroup: proxyData.serviceGroup ?? "",
         trace: proxyData.trace ?? false,
         statistics: proxyData.statistics,
-        startOnLoad: isBooleanValue(proxyData.startOnLoad) ? String(proxyData.startOnLoad).toLowerCase() === "true" : false,
+        startOnLoad: isBooleanValue(proxyData.startOnLoad) ? String(proxyData.startOnLoad).trim().toLowerCase() === "true" : false,
         startOnLoadText: proxyData.startOnLoad != null ? String(proxyData.startOnLoad) : "",
         startOnLoadIsText: !isBooleanValue(proxyData.startOnLoad),
         transports: proxyData.transports,
@@ -606,6 +609,14 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
                 path: documentUri,
             });
             setWorkspaceFileNames(artifactRes.artifacts.map(name => name.toLowerCase()));
+            const projectDetails = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+            const runtimeVersion = projectDetails.primaryDetails.runtimeVersion.value;
+            const exprSupported = compareVersions(runtimeVersion, RUNTIME_VERSION_460) >= 0;
+            setIsStartOnLoadExprSupported(exprSupported);
+            if (!exprSupported) {
+                // Only 4.6.0 and above runtimes support expressions
+                setValue("startOnLoadIsText", false);
+            }
         })();
     }, [proxyData]);
     
@@ -642,17 +653,21 @@ export function EditProxyForm({ proxyData, isOpen, documentUri, onCancel, onSave
                         <FormCheckBox label="Statistics" {...register("statistics")} control={control as any} />
                         <FormCheckBox label="Trace" {...register("trace")} control={control as any} />
                     </CheckBoxGroup>
-                    <BooleanOrTextField
-                        id="startOnLoad"
-                        label="Start On Load"
-                        control={control as any}
-                        getValues={getValues as any}
-                        setValue={setValue as any}
-                        booleanName="startOnLoad"
-                        textName="startOnLoadText"
-                        isTextName="startOnLoadIsText"
-                        errorMsg={errors.startOnLoadText?.message?.toString()}
-                    />
+                    {isStartOnLoadExprSupported ? (
+                        <BooleanOrTextField
+                            id="startOnLoad"
+                            label="Start On Load"
+                            control={control as any}
+                            getValues={getValues as any}
+                            setValue={setValue as any}
+                            booleanName="startOnLoad"
+                            textName="startOnLoadText"
+                            isTextName="startOnLoadIsText"
+                            errorMsg={errors.startOnLoadText?.message?.toString()}
+                        />
+                    ) : (
+                        <FormCheckBox label="Start On Load" {...register("startOnLoad")} control={control as any} />
+                    )}
                     <span>Transports</span>
                     <CheckBoxGroup columns={5}  >
                         <FormCheckBox label="HTTP" {...register("transport.http")} control={control as any}/>
