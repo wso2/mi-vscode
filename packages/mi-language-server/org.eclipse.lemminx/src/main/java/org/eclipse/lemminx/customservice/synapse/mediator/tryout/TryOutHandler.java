@@ -79,6 +79,10 @@ public class TryOutHandler {
             "synapse-configs", "default", "sequences", "fault.xml");
     private static final String MI_HOST = TryOutConstants.LOCALHOST;
     private static final int BREAKPOINT_HIT_TIMEOUT = 10000; // Timeout to wait for the breakpoint hit
+    // How long a try-out marker in the history lock file is treated as "a try-out is running right now".
+    private static final long TRYOUT_IN_FLIGHT_EXPIRY_SECONDS = 30;
+    // How long to wait for another project's MI server to stop before giving up on taking over the port.
+    private static final long SERVER_SHUTDOWN_TIMEOUT = 30000;
     private final Object lock;
     private final String projectUri;
     private final MIServer server;
@@ -133,7 +137,18 @@ public class TryOutHandler {
         if (isFault) {
             return new MediatorTryoutInfo(TryOutConstants.TRYOUT_NOT_ACTIVATED_ERROR);
         }
+        if (isSessionMismatch(request)) {
+            LOGGER.log(Level.INFO, String.format(
+                    "Try-out request names session %s while session %s is active; rebuilding the "
+                            + "requested one instead of resuming the active session with its data.",
+                    request.getTryoutId(), currentTryoutID));
+            resumeTryOutAndDiscard();
+            return handleLostSession(request);
+        }
         if (isCompleteTryOut(request)) {
+            if (currentInvocationInfo == null) {
+                return handleLostSession(request);
+            }
             return handleIsolatedTryOut(projectUri, request, true, new Properties());
         } else if (isNewTryOut(request)) {
             boolean useSameCAPP = request.getTryoutId() != null;
@@ -145,6 +160,20 @@ public class TryOutHandler {
     private boolean isCompleteTryOut(MediatorTryoutRequest request) {
 
         return request.getMediatorInfo() != null && currentTryoutID == null;
+    }
+
+    /**
+     * Whether the request names a try-out session other than the one this handler currently holds (e.g. a
+     * second panel or a stale click), which would otherwise fall through to {@link #resumeTryOut} and
+     * corrupt the active session, so the requested session is rebuilt instead.
+     *
+     * @param request the incoming try-out request
+     * @return true if the request names a session this handler does not currently hold
+     */
+    private boolean isSessionMismatch(MediatorTryoutRequest request) {
+
+        return request.getTryoutId() != null && currentTryoutID != null
+                && !currentTryoutID.equals(request.getTryoutId());
     }
 
     private boolean isNewTryOut(MediatorTryoutRequest request) {
@@ -221,6 +250,23 @@ public class TryOutHandler {
     }
 
     /**
+     * Rebuilds a try-out session that a "Run" click still references by its old {@code tryoutId} but that
+     * this handler lost when the shared MI server changed hands, by replaying the deploy-and-run-to-breakpoint
+     * step before resuming with the panel's edited properties.
+     */
+    private MediatorTryoutInfo handleLostSession(MediatorTryoutRequest request) {
+
+        LOGGER.info("Rebuilding a try-out session that was lost when the shared MI server changed hands");
+        MediatorTryoutInfo rebuilt = startTryOut(request, false);
+        if (rebuilt.getError() != null || currentInvocationInfo == null || currentInputInfo == null) {
+            // The replay failed (deployment error, breakpoint never hit, fault sequence): report that
+            // rather than resuming a session that was never re-established.
+            return rebuilt;
+        }
+        return resumeTryOut(request);
+    }
+
+    /**
      * Resume from the previous point to get the output of the mediator
      * <p>
      * This method resumes the execution from the previous point and return the output info of the mediator.
@@ -241,13 +287,14 @@ public class TryOutHandler {
                 return createFaultTryOutInfo();
             }
             currentTryoutID = null;
-            MediatorTryoutInfo response = getMediatorTryoutInfo(true, breakpointEventProcessor.isDone());
-            TryOutUtils.updateTimestamp(projectUri, true);
-            return response;
+            return getMediatorTryoutInfo(true, breakpointEventProcessor.isDone());
         } catch (NoBreakpointHitException e) {
             LOGGER.log(Level.SEVERE, "Error while getting output info");
             return new MediatorTryoutInfo(TryOutConstants.TRYOUT_FAILURE_MESSAGE);
         } finally {
+            // The session ends here on every path — including the no-step-over shortcut and a missed
+            // breakpoint — so the in-flight marker written by startTryOut() must be cleared on all of them.
+            TryOutUtils.updateTimestamp(projectUri, true);
             resumeTryOutAndDiscard();
         }
     }
@@ -658,43 +705,79 @@ public class TryOutHandler {
                 commandClient.close();
                 eventClient.close();
             }
-            return server.shutDown();
+            boolean wasStarted = server.isStarted();
+            boolean stopped = server.shutDown();
+            // Wait for the port to actually free up only when this handler owned the server, since waiting on
+            // a port held by an unrelated server would turn every shutdown into a full timeout.
+            return wasStarted && stopped ? server.awaitServerStop(SERVER_SHUTDOWN_TIMEOUT) : stopped;
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Error while closing the clients", e);
         }
         return Boolean.FALSE;
     }
 
+    /**
+     * Hands the single, shared MI server over to this project when it currently belongs to another one: a
+     * server this project already owns is left untouched (marking a live server as not started is
+     * unrecoverable), while a server owned by a different project is always taken over, even mid try-out,
+     * since the interrupted project can simply restart its server on its next try-out.
+     */
     private void handleServerRestart(MediatorTryoutRequest request) {
 
         if (!(isNewTryOut(request) || isCompleteTryOut(request))) {
             return;
         }
         String projectHash = TryOutUtils.getProjectPathHash();
-        String existingTimestamp = TryOutUtils.getTimestamp();
-        if (StringUtils.isBlank(existingTimestamp) ||
-                (System.currentTimeMillis()/1000 - Long.parseLong(existingTimestamp) > 30)) {
-            if (StringUtils.isNotBlank(projectHash) && !Utils.getHash(projectUri).equals(projectHash)) {
-                try {
-                    if (commandClient != null && eventClient != null) {
-                        commandClient.close();
-                        eventClient.close();
-                    }
-                    if (TryOutUtils.getProcessId(DEFAULT_SERVER_PORT) != -1) {
-                        ManagementAPIClient managementAPIClient = new ManagementAPIClient();
-                        managementAPIClient.shutdown();
-                    }
-                    while (server.isServerRunning()) {
-                        Thread.sleep(2000);
-                    }
-                    reset();
-                    server.setStarted(false);
-                } catch (Exception e) {
-                    LOGGER.log(Level.SEVERE, "Error occurred while trying to restart the MI server. ", e);
-                }
+        if (StringUtils.isBlank(projectHash) || projectHash.equals(TryOutUtils.getProjectHash(projectUri))) {
+            // No server recorded, or the recorded one is this project's own: there is nothing to take over.
+            return;
+        }
+        if (isTryOutInFlight()) {
+            LOGGER.log(Level.INFO,
+                    "Taking the MI server over from another project whose try-out is still in flight.");
+        }
+        try {
+            if (commandClient != null && eventClient != null) {
+                commandClient.close();
+                eventClient.close();
             }
-        } else {
+            if (TryOutUtils.getProcessId(DEFAULT_SERVER_PORT) != -1) {
+                ManagementAPIClient managementAPIClient = new ManagementAPIClient();
+                managementAPIClient.shutdown();
+            }
+            long deadline = System.currentTimeMillis() + SERVER_SHUTDOWN_TIMEOUT;
+            while (server.isServerRunning() && System.currentTimeMillis() < deadline) {
+                Thread.sleep(2000);
+            }
+            if (server.isServerRunning()) {
+                // Bail out instead of blocking this synchronized handler forever, since the port is still taken
+                // and handle() will report SERVER_ALREADY_IN_USE_ERROR to the user.
+                LOGGER.log(Level.WARNING, "The MI server of another project did not stop within the timeout.");
+                return;
+            }
+            reset();
             server.setStarted(false);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error occurred while trying to restart the MI server. ", e);
+        }
+    }
+
+    /**
+     * Whether the try-out history lock file carries a marker young enough to mean a try-out is running right
+     * now, treating an absent or unparsable marker as expired so a corrupt lock file can't block try-outs indefinitely.
+     */
+    private boolean isTryOutInFlight() {
+
+        String timestamp = TryOutUtils.getTimestamp();
+        if (StringUtils.isBlank(timestamp)) {
+            return Boolean.FALSE;
+        }
+        try {
+            long startedAt = Long.parseLong(timestamp.trim());
+            return System.currentTimeMillis() / 1000 - startedAt <= TRYOUT_IN_FLIGHT_EXPIRY_SECONDS;
+        } catch (NumberFormatException e) {
+            LOGGER.log(Level.WARNING, String.format("Ignoring malformed try-out timestamp: %s", timestamp));
+            return Boolean.FALSE;
         }
     }
 }

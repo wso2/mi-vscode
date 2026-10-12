@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.Params;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.Property;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
@@ -32,10 +33,12 @@ import java.util.stream.Collectors;
 public class APIVisitor implements SchemaVisitor {
 
     private String projectPath;
+    private ConnectorHolder connectorHolder;
 
-    public APIVisitor(String projectPath) {
+    public APIVisitor(String projectPath, ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
+        this.connectorHolder = connectorHolder;
     }
 
     @Override
@@ -67,10 +70,10 @@ public class APIVisitor implements SchemaVisitor {
 
         updateResourceParams(resource, info);
         if (needToVisit(resource.getInSequence(), position) || needToVisit(resource.getOutSequence(), position)) {
-            Utils.visitSequence(projectPath, resource.getInSequence(), info, position);
-            Utils.visitSequence(projectPath, resource.getOutSequence(), info, position);
+            Utils.visitSequence(projectPath, resource.getInSequence(), info, position, connectorHolder);
+            Utils.visitSequence(projectPath, resource.getOutSequence(), info, position, connectorHolder);
         } else if (needToVisit(resource.getFaultSequence(), position)) {
-            Utils.visitSequence(projectPath, resource.getFaultSequence(), info, position);
+            Utils.visitSequence(projectPath, resource.getFaultSequence(), info, position, connectorHolder);
         }
     }
 

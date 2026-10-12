@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.syntaxTree.factory;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
 import org.eclipse.lemminx.dom.DOMElement;
 
@@ -21,9 +22,20 @@ public abstract class AbstractFactory {
 
     private String projectPath;
     private String miVersion;
+    private ConnectorHolder connectorHolder;
     public abstract STNode create(DOMElement element);
 
     public abstract void populateAttributes(STNode node, DOMElement element);
+
+    public ConnectorHolder getConnectorHolder() {
+
+        return connectorHolder;
+    }
+
+    public void setConnectorHolder(ConnectorHolder connectorHolder) {
+
+        this.connectorHolder = connectorHolder;
+    }
 
     public String getMiVersion() {
 

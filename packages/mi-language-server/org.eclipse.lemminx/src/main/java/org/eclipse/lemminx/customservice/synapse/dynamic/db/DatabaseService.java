@@ -52,12 +52,13 @@ public class DatabaseService {
      * @return List<DynamicField> containing the columns of the table.
      */
     public List<DynamicField> getTableColumns(String connectionUrl, String username, String password, String table,
-                                              String fieldName, boolean markNull, String className, String driverPath) {
+                                              String fieldName, boolean markNull, String className, String driverPath,
+                                              String projectUri) {
 
         List<DynamicField> fields = new ArrayList<>();
 
         try (Connection conn = DBConnectionTester.getConnection(connectionUrl, username, password, className,
-                driverPath)) {
+                driverPath, projectUri)) {
             DatabaseMetaData metaData = conn.getMetaData();
 
             try (ResultSet columns = metaData.getColumns(null, null, table, null)) {
@@ -107,12 +108,12 @@ public class DatabaseService {
      */
     public List<DynamicField> getStoredProcedureParameters(String connectionUrl, String username, String password,
                                                            String procedureName, String fieldName, String className,
-                                                           String driverPath) {
+                                                           String driverPath, String projectUri) {
 
         List<DynamicField> fields = new ArrayList<>();
 
         try (Connection conn = DBConnectionTester.getConnection(connectionUrl, username, password, className,
-                driverPath)) {
+                driverPath, projectUri)) {
             DatabaseMetaData metaData = conn.getMetaData();
 
             try (ResultSet parameters = metaData.getProcedureColumns(null, null, procedureName, null)) {

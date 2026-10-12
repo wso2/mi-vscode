@@ -77,25 +77,32 @@ public class MediatorHandler {
     private String miServerVersion;
     private AIConnectorHandler aiConnectorHandler;
     private String projectUri;
+    private MediatorFactoryFinder mediatorFactory;
 
     public void init(String projectUri, String projectServerVersion, ConnectorHolder connectorHolder) {
 
+        // Assigned before the mediator-list load (the only step that can fail) since callers dereference these without a null check once isInitialized is set.
+        this.miServerVersion = projectServerVersion;
+        this.connectorHolder = connectorHolder;
+        this.projectUri = projectUri;
+        this.gson = new Gson();
+        this.aiConnectorHandler = new AIConnectorHandler(this, projectUri);
+        this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
+
         try {
-            this.miServerVersion = projectServerVersion;
-            this.connectorHolder = connectorHolder;
             this.mediatorList = Utils.getMediatorList(projectServerVersion, connectorHolder);
             this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
-            gson = new Gson();
-            this.aiConnectorHandler = new AIConnectorHandler(this, projectUri);
-            this.projectUri = projectUri;
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE,
                     String.format("Failed to load mediators for the MI server version: %s", projectServerVersion), e);
             LOGGER.warning(String.format("Falling back to default mediators (MI %s).", Constant.DEFAULT_MI_VERSION));
             try {
                 this.mediatorList = Utils.getMediatorList(Constant.DEFAULT_MI_VERSION, connectorHolder);
+                this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
             } catch (IOException ex) {
-                // This should not happen
+                LOGGER.log(Level.SEVERE, String.format(
+                        "Failed to load the default mediator list (MI %s); mediator support will be unavailable "
+                                + "for project: %s", Constant.DEFAULT_MI_VERSION, projectUri), ex);
             }
         }
         this.templateMap = Utils.getTemplateMap("org/eclipse/lemminx/mediators/"
@@ -103,6 +110,11 @@ public class MediatorHandler {
         this.uiSchemaMap = Utils.getUISchemaMap("org/eclipse/lemminx/mediators/"
                 + projectServerVersion.replace(".", "") + "/ui-schemas");
         this.isInitialized = true;
+    }
+
+    public ConnectorHolder getConnectorHolder() {
+
+        return connectorHolder;
     }
 
     public JsonObject getSupportedMediators(TextDocumentIdentifier documentIdentifier, Position position) {
@@ -527,7 +539,7 @@ public class MediatorHandler {
             return null;
         }
 
-        STNode mediator = MediatorFactoryFinder.getInstance().getMediator(node);
+        STNode mediator = mediatorFactory.getMediator(node);
         if (mediator != null && !(mediator instanceof InvalidMediator)) {
             return mediator;
         }
@@ -667,7 +679,7 @@ public class MediatorHandler {
                     uiSchemaObject.addProperty(Constant.CAN_TRY_OUT, isTryoutSupported);
                     JsonObject resultObject = new JsonObject();
                     if (isTryoutSupported && documentIdentifier != null && position != null) {
-                        resultObject.addProperty(Constant.RESPONSE_VARIABLE, generateResponseVariableDefaultValue(documentIdentifier, position, connectorName, operationName));
+                        resultObject.addProperty(Constant.RESPONSE_VARIABLE, generateResponseVariableDefaultValue(documentIdentifier, position, connectorName, operationName, connectorHolder));
                     }
                     return mapInputToUISchema(resultObject, uiSchemaObject);
                 } catch (IOException e) {
@@ -689,6 +701,7 @@ public class MediatorHandler {
         try {
             this.mediatorList = Utils.getMediatorList(projectServerVersion, connectorHolder);
             this.agentToolList = Utils.getAgentToolList(mediatorList, connectorHolder);
+            this.mediatorFactory = new MediatorFactoryFinder(projectServerVersion, projectUri, connectorHolder);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, "Failed to reload mediators.", e);
         }

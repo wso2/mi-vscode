@@ -37,7 +37,7 @@ if (shouldDownloadLs) {
   process.exit(0);
 }
 
-const command = process.platform === 'win32' ? 'mvnw.cmd' : './mvnw';
+const command = process.platform === 'win32' ? `"${path.join(projectRoot, 'mvnw.cmd')}"` : './mvnw';
 const result = spawnSync(command, ['clean', 'package', '-DskipTests'], {
   cwd: projectRoot,
   stdio: 'inherit',

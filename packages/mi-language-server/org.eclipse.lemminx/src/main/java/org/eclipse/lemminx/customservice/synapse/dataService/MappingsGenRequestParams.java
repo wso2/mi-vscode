@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.dataService;
 
-public class MappingsGenRequestParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class MappingsGenRequestParams extends AbstractProjectRequest {
 
     public String query;
     public String className;

@@ -147,6 +147,7 @@ export async function validateXmlFile(
         const diagnosticsResponse = await langClient.getCodeDiagnostics({
             fileName: absolutePath,
             code: fileContent,
+            projectUri: projectPath,
             skipCrossFileValidation
         });
 

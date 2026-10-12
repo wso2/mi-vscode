@@ -28,7 +28,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.Driver;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,49 +52,50 @@ public class DBConnectionTester {
      * @return True if the connection is successful, false otherwise
      */
     public boolean testDBConnection(String dbType, String username, String password, String host, String port,
-                                    String dbName, String url, String className) {
+                                    String dbName, String url, String className, String projectUri) {
 
         Connection connection;
         if (StringUtils.isBlank(url)) {
             String connUriStr = generateConnectionUrl(dbType, host, port, dbName);
-            connection = getConnection(connUriStr, username, password, className);
+            connection = getConnection(connUriStr, username, password, className, projectUri);
         } else {
-            connection = getConnection(url, username, password, className);
+            connection = getConnection(url, username, password, className, projectUri);
         }
 
         return connection != null;
     }
 
     public boolean testDBConnection(String dbType, String username, String password, String host, String port,
-                                    String dbName, String url, String className, String driverPath) {
+                                    String dbName, String url, String className, String driverPath,
+                                    String projectUri) {
 
         Connection connection;
         if (StringUtils.isBlank(url)) {
             String connUriStr = generateConnectionUrl(dbType, host, port, dbName);
-            connection = getConnection(connUriStr, username, password, className, driverPath);
+            connection = getConnection(connUriStr, username, password, className, driverPath, projectUri);
         } else {
-            connection = getConnection(url, username, password, className, driverPath);
+            connection = getConnection(url, username, password, className, driverPath, projectUri);
         }
 
         return connection != null;
     }
 
-    public static Connection getConnection(String connectionUrl, String username, String password, String className) {
+    public static Connection getConnection(String connectionUrl, String username, String password, String className,
+                                           String projectUri) {
 
         Connection connection = null;
 
         try {
-            URLClassLoader urlClassLoader = DynamicClassLoader.getClassLoader();
+            URLClassLoader urlClassLoader = DynamicClassLoader.getClassLoader(projectUri);
 
-            Driver driver = (Driver) Class.forName(className, true, urlClassLoader).newInstance();
-            DriverManager.registerDriver(new DriverShim(driver));
-
-            // Check username and password are empty due to Derby db can connect without username and password
-            if (connectionUrl.contains(DBConstant.DBTypes.DB_TYPE_DERBY_CONN) && username.equals(
-                    Constant.EMPTY_STRING) && password.equals(Constant.EMPTY_STRING)) {
-                connection = DriverManager.getConnection(connectionUrl);
-            } else {
-                connection = DriverManager.getConnection(connectionUrl, username, password);
+            // Connect via the driver instance directly instead of the process-global DriverManager, which would let one project's registered driver service every other project's connections.
+            Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
+                    .newInstance();
+            Properties props = buildConnectionProperties(connectionUrl, username, password);
+            connection = driver.connect(connectionUrl, props);
+            if (connection == null) {
+                // Log this since Driver.connect returns null instead of throwing when it doesn't recognise the URL.
+                LOGGER.log(Level.SEVERE, "Driver " + className + " did not accept the connection URL.");
             }
 
         } catch (SQLException e) {
@@ -109,26 +109,19 @@ public class DBConnectionTester {
     }
 
     public static Connection getConnection(String connectionUrl, String username, String password, String className,
-                                           String driverPath) {
+                                           String driverPath, String projectUri) {
 
         Connection connection = null;
         try {
             LOGGER.log(Level.INFO,
                     "Get connection with Class name: " + className + "  and Driver path : " + driverPath);
 
-            Path jarPath = Paths.get(driverPath);
-            DynamicClassLoader.updateJarInClassLoader(new File(driverPath), true);
-            URLClassLoader urlClassLoader = new URLClassLoader(new URL[]{jarPath.toUri().toURL()});
+            // Reuse the shared loader the call above already rebuilt with this jar, rather than leaking an extra URLClassLoader.
+            DynamicClassLoader.updateJarInClassLoader(projectUri, new File(driverPath), true);
+            URLClassLoader urlClassLoader = DynamicClassLoader.getClassLoader(projectUri);
             Driver driver = (Driver) Class.forName(className, true, urlClassLoader).getDeclaredConstructor()
                     .newInstance();
-            Properties props = new Properties();
-
-            // Check username and password are empty due to Derby db can connect without username and password
-            if (!connectionUrl.contains(DBConstant.DBTypes.DB_TYPE_DERBY_CONN) || !username.equals(
-                    Constant.EMPTY_STRING) || !password.equals(Constant.EMPTY_STRING)) {
-                props.setProperty(Constant.USER, username);
-                props.setProperty(Constant.PASSWORD, password);
-            }
+            Properties props = buildConnectionProperties(connectionUrl, username, password);
             connection = driver.connect(connectionUrl, props);
 
         } catch (SQLException e) {
@@ -137,6 +130,30 @@ public class DBConnectionTester {
             LOGGER.log(Level.SEVERE, "Error occurred while accessing the DB driver class", e);
         }
         return connection;
+    }
+
+    /**
+     * Builds the properties passed to {@link Driver#connect}, omitting null credentials and, for Derby URLs, empty ones.
+     *
+     * @param connectionUrl Connection URL
+     * @param username      Username, may be null or empty
+     * @param password      Password, may be null or empty
+     * @return Connection properties
+     */
+    private static Properties buildConnectionProperties(String connectionUrl, String username, String password) {
+
+        Properties props = new Properties();
+        boolean derbyWithoutCredentials = connectionUrl.contains(DBConstant.DBTypes.DB_TYPE_DERBY_CONN)
+                && StringUtils.isEmpty(username) && StringUtils.isEmpty(password);
+        if (!derbyWithoutCredentials) {
+            if (username != null) {
+                props.setProperty(Constant.USER, username);
+            }
+            if (password != null) {
+                props.setProperty(Constant.PASSWORD, password);
+            }
+        }
+        return props;
     }
 
     private List<URL> getDBDriverUrl(String dbType, String dbDriverFolder, String version) {

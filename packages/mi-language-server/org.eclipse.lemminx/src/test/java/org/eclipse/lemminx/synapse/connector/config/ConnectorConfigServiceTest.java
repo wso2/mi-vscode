@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.synapse.connector.config;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorConfig;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorConfigService;
 import org.eclipse.lemminx.customservice.synapse.parser.connectorConfig.ConnectorDependencyConfig;
@@ -138,7 +139,7 @@ public class ConnectorConfigServiceTest {
         req.connectionType = "MYSQL";
         req.version = "9.0.0";
 
-        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         List<DependencyOverride> deps = config.connectors.get("mi-connector-file").dependencies;
@@ -167,7 +168,7 @@ public class ConnectorConfigServiceTest {
         req.connectionType = "MYSQL";
         req.version = "9.0.0";
 
-        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         List<DependencyOverride> deps = config.connectors.get("mi-connector-file").dependencies;
@@ -183,7 +184,7 @@ public class ConnectorConfigServiceTest {
         req.connectionType = "SFTP";
         req.omit = true;
 
-        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         DependencyOverride dep = config.connectors.get("mi-connector-file").dependencies.get(0);
@@ -199,7 +200,7 @@ public class ConnectorConfigServiceTest {
         req.version = "  "; // blank — should become null
         req.groupId = "";   // blank — should become null
 
-        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         DependencyOverride dep = config.connectors.get("mi-connector-db").dependencies.get(0);
@@ -229,7 +230,7 @@ public class ConnectorConfigServiceTest {
         req.version = "  "; // blank — should clear the existing version to null
         req.groupId = "";   // blank — should clear the existing groupId to null
 
-        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         DependencyOverride dep = config.connectors.get("mi-connector-db").dependencies.get(0);
@@ -257,7 +258,7 @@ public class ConnectorConfigServiceTest {
         req.connectionType = "SFTP";
         req.omit = true;
 
-        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req);
+        ConnectorConfigService.updateDependencyOverride(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         List<DependencyOverride> deps = config.connectors.get("mi-connector-file").dependencies;
@@ -380,7 +381,7 @@ public class ConnectorConfigServiceTest {
         req.omit = true;
 
         assertThrows(IllegalArgumentException.class,
-                () -> ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req));
+                () -> ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder()));
     }
 
     @Test
@@ -390,7 +391,7 @@ public class ConnectorConfigServiceTest {
         req.omit = true;
 
         assertThrows(IllegalArgumentException.class,
-                () -> ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req));
+                () -> ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder()));
     }
 
     @Test
@@ -399,7 +400,7 @@ public class ConnectorConfigServiceTest {
         req.connectorArtifactId = "mi-connector-db";
         req.omit = true;
 
-        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
@@ -414,7 +415,7 @@ public class ConnectorConfigServiceTest {
         req.connectorArtifactId = "mi-connector-db";
         req.omitAllDrivers = true;
 
-        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
@@ -439,7 +440,7 @@ public class ConnectorConfigServiceTest {
         req.connectorArtifactId = "mi-connector-db";
         req.omit = false; // clear it
 
-        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         // All fields are now null/empty — the connector key must be pruned
@@ -461,7 +462,7 @@ public class ConnectorConfigServiceTest {
         req.connectorArtifactId = "mi-connector-db";
         req.omit = false; // clear omit, leave omitAllDrivers
 
-        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");
@@ -488,7 +489,7 @@ public class ConnectorConfigServiceTest {
         req.connectorArtifactId = "mi-connector-db";
         req.omit = false; // clear omit — dependencies still present
 
-        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req);
+        ConnectorConfigService.updateConnectorFlags(tempDir.toString(), req, new ConnectorHolder());
 
         ConnectorConfig config = ConnectorConfigService.readConfig(tempDir.toString());
         ConnectorDependencyConfig cfg = config.connectors.get("mi-connector-db");

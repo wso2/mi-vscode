@@ -14,12 +14,14 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
 /**
  * Request payload for {@code synapse/getConnectorInfo}. Callers identify a
  * connector by its Maven coordinates; the endpoint downloads + extracts + parses
  * as needed and returns the rich {@link Connector} metadata in a single call.
  */
-public class ConnectorInfoRequest {
+public class ConnectorInfoRequest extends AbstractProjectRequest {
 
     public String groupId;
     public String artifactId;

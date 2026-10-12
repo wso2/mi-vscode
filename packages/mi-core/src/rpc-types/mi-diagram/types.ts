@@ -1458,6 +1458,7 @@ export interface GetAvailableResourcesRequest {
     resourceType: ResourceType | MultipleResourceType[];
     isDebugFlow?: boolean;
     dataServiceName?: string;
+    projectUri?: string;
 }
 
 export interface GetAvailableResourcesResponse {
@@ -1573,6 +1574,7 @@ export interface GetConnectorInfoRequest {
     groupId: string;
     artifactId: string;
     version: string;
+    projectUri?: string;
 }
 
 export interface ConnectorActionParameter {
@@ -1617,8 +1619,8 @@ export type GetConnectorInfoResponse = ConnectorInfo | string;
 // Accepts either a bundled id OR full Maven coordinates (never a partial mix).
 // Returns an InboundEndpointInfo or a plain string error.
 export type GetInboundInfoRequest =
-    | { id: string; groupId?: never; artifactId?: never; version?: never }
-    | { id?: never; groupId: string; artifactId: string; version: string };
+    | { id: string; groupId?: never; artifactId?: never; version?: never; projectUri?: string }
+    | { id?: never; groupId: string; artifactId: string; version: string; projectUri?: string };
 
 export interface InboundEndpointParameter {
     name: string;
@@ -1769,11 +1771,13 @@ export interface GetConnectorConnectionsResponse {
 export interface SaveInboundEPUischemaRequest {
     connectorName: string;
     uiSchema: string;
+    projectUri?: string;
 }
 
 export interface GetInboundEPUischemaRequest {
     documentPath?: string;
     connectorName?: string;
+    projectUri?: string;
 }
 
 export interface GetInboundEPUischemaResponse {
@@ -2012,6 +2016,7 @@ export interface TestDbConnectionRequest {
     dbName: string;
     url: string;
     className: string;
+    projectUri?: string;
 }
 
 export interface TestDbConnectionResponse {
@@ -2028,6 +2033,7 @@ export interface AddDriverRequest {
     addDriverPath: string;
     removeDriverPath: string;
     className: string;
+    projectUri?: string;
 }
 
 export interface RemoveDBDriverResponse {
@@ -2054,6 +2060,7 @@ export interface DSSQueryGenRequest {
     url: string;
     tableData: string;
     datasourceName: string;
+    projectUri?: string;
 }
 
 export interface ExtendedDSSQueryGenRequest extends DSSQueryGenRequest {
@@ -2071,6 +2078,7 @@ export interface DSSFetchTablesRequest {
     password: string;
     url: string;
     driverPath: string;
+    projectUri?: string;
 }
 
 export interface DSSFetchTablesResponse {
@@ -2126,6 +2134,9 @@ export interface MediatorTryOutRequest {
         text: string;
         range: Range;
     }[]
+    projectUri?: string;
+    // The initiating project's configured MI server path, so the shared server binds the try-out session to the caller's expected runtime.
+    serverPath?: string;
 }
 
 export interface Param {
@@ -2275,6 +2286,7 @@ export interface GetConnectionSchemaRequest {
     connectorName?: string;
     connectionType?: string;
     documentUri?: string;
+    projectUri?: string;
 }
 
 export interface GetConnectionSchemaResponse {
@@ -2305,6 +2317,7 @@ export type ExpressionCompletionsResponse = {
 export interface GenerateConnectorRequest {
     openAPIPath: string;
     connectorProjectPath: string;
+    projectUri?: string;
 }
 export interface GenerateConnectorResponse {
     buildStatus: boolean;
@@ -2324,6 +2337,7 @@ export interface TestConnectorConnectionRequest {
     connectorName: string;
     connectionType: string;
     parameters: any;
+    projectUri?: string;
 }
 export interface TestConnectorConnectionResponse {
     isConnectionTested: boolean;
@@ -2371,6 +2385,13 @@ export interface XmlCode{
      * yet. Optional and ignored by language servers that don't support it.
      */
     skipCrossFileValidation?: boolean;
+    /**
+     * Project root this request belongs to. The language server routes by {@link fileName} when that
+     * is a real path; supply this when it is only a label (MI Copilot names snippets after the
+     * artifact's name attribute), otherwise the request matches no project and validation runs
+     * without connector or dependent-artifact knowledge.
+     */
+    projectUri?: string;
 }
 
 export interface SubmitFeedbackRequest {
@@ -2435,6 +2456,7 @@ export interface GenerateMappingsParamsRequest {
     username?: string;
     password?: string;
     type: 'input' | 'output'
+    projectUri?: string;
 }
 export interface DynamicField {
     type: string;
@@ -2455,6 +2477,7 @@ export interface GetDynamicFieldsRequest {
     fieldName: string;
     selectedValue: string;
     connection: ConnectorConnection;
+    projectUri?: string;
 }
 
 export interface GetDynamicFieldsResponse {
@@ -2468,6 +2491,7 @@ export interface GetStoredProceduresResponse {
 export interface DriverDownloadRequest {
     connectorName: string;
     connectionType: string;
+    projectUri?: string;
 }
 
 export interface DriverDownloadResponse {
@@ -2477,6 +2501,7 @@ export interface DriverMavenCoordinatesRequest {
     filePath: string;
     connectorName: string;
     connectionType: string;
+    projectUri?: string;
 }
 
 export interface DriverMavenCoordinatesResponse {
@@ -2496,6 +2521,7 @@ export interface LoadDriverAndTestConnectionRequest {
     url: string;
     className: string;
     driverPath: string;
+    projectUri?: string;
 }
 
 export interface ProjectCreationStatusResponse {
@@ -2523,6 +2549,7 @@ export interface ConnectorEffectiveData {
 
 export interface GetConnectorDependenciesRequest {
     connectorArtifactId?: string;
+    projectUri?: string;
 }
 
 export interface GetConnectorDependenciesResponse {
@@ -2543,6 +2570,7 @@ export interface UpdateConnectorDependencyOverrideRequest {
     // Marks this override as a user-added dependency that has no entry in descriptor.yml,
     // so the language server includes it in the effective dependency list.
     additionalDependency?: boolean;
+    projectUri?: string;
 }
 
 export interface ResetConnectorDependencyOverridesRequest {
@@ -2550,17 +2578,20 @@ export interface ResetConnectorDependencyOverridesRequest {
     connectionType?: string;
     groupId?: string;
     artifactId?: string;
+    projectUri?: string;
 }
 
 export interface UpdateConnectorFlagsRequest {
     connectorArtifactId: string;
     omit?: boolean;
     omitAllDrivers?: boolean;
+    projectUri?: string;
 }
 
 export interface UpdateGlobalConnectorFlagsRequest {
     omitAllDrivers?: boolean;
     omitAllConnectors?: boolean;
+    projectUri?: string;
 }
 
 //  MCP Server Form helpers 

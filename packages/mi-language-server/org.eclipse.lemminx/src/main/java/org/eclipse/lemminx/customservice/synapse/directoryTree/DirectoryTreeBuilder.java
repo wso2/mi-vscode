@@ -67,6 +67,9 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Builds the project directory tree for a single workspace folder, creating one instance per invocation so its state cannot leak between concurrent requests.
+ */
 public class DirectoryTreeBuilder {
 
     private static final Logger LOGGER = Logger.getLogger(DirectoryTreeBuilder.class.getName());
@@ -76,11 +79,16 @@ public class DirectoryTreeBuilder {
     private static final String JAVA = "java";
     private static final String MCP_SERVERS_SECTION = "MCP Servers";
     private static final String MCP_SERVERS_KEY = "mcpServers";
-    private static String projectPath;
-    private static String mainSequence;
-    private static List<String> artifactResourcePaths = new ArrayList<>();
+    private String projectPath;
+    private String mainSequence;
+    private List<String> artifactResourcePaths = new ArrayList<>();
 
     public static DirectoryMapResponse buildDirectoryTree(WorkspaceFolder projectFolder) {
+
+        return new DirectoryTreeBuilder().build(projectFolder);
+    }
+
+    private DirectoryMapResponse build(WorkspaceFolder projectFolder) {
 
         //Support old project structure
         if (DirectoryTreeUtils.isLegacyProject(projectFolder)) {
@@ -313,7 +321,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void updateMainSequence() {
+    private void updateMainSequence() {
 
         mainSequence = null;
         Path pomPath = Path.of(projectPath, "pom.xml");
@@ -342,7 +350,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeIntegrationProject(IntegrationDirectoryTree directoryTree) {
+    private void analyzeIntegrationProject(IntegrationDirectoryTree directoryTree) {
 
         artifactResourcePaths = new ArrayList<>();
         analyzeArtifacts(directoryTree);
@@ -352,7 +360,7 @@ public class DirectoryTreeBuilder {
         analyzeTestsFolder(directoryTree);
     }
 
-    private static void analyzeDistributionProject(DistributionDirectoryTree directoryTree) {
+    private void analyzeDistributionProject(DistributionDirectoryTree directoryTree) {
 
         artifactResourcePaths = new ArrayList<>();
         File folder = new File(projectPath);
@@ -365,7 +373,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeArtifacts(IntegrationDirectoryTree directoryTree) {
+    private void analyzeArtifacts(IntegrationDirectoryTree directoryTree) {
 
         String artifactsPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN
                 + File.separator + WSO2MI + File.separator + "artifacts";
@@ -398,7 +406,7 @@ public class DirectoryTreeBuilder {
         return file.isFile() && !file.isHidden() && !Constant.GITKEEP.equals(file.getName());
     }
 
-    private static void analyzeByType(IntegrationDirectoryTree directoryTree, File folder, String type) {
+    private void analyzeByType(IntegrationDirectoryTree directoryTree, File folder, String type) {
 
         try {
             File[] listOfFiles = folder.listFiles();
@@ -431,7 +439,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeResources(IntegrationDirectoryTree directoryTree) {
+    private void analyzeResources(IntegrationDirectoryTree directoryTree) {
 
         analyzeRegistryResources(directoryTree);
         analyzeConnectorResources(directoryTree);
@@ -440,7 +448,7 @@ public class DirectoryTreeBuilder {
         analyzeNewResources(directoryTree);
     }
 
-    private static void analyzeNewResources(IntegrationDirectoryTree directoryTree) {
+    private void analyzeNewResources(IntegrationDirectoryTree directoryTree) {
 
         String registryPath = projectPath + File.separator + Constant.SRC + File.separator +
                 MAIN + File.separator + WSO2MI + File.separator + RESOURCES;
@@ -455,13 +463,13 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeRegistryResources(IntegrationDirectoryTree directoryTree) {
+    private void analyzeRegistryResources(IntegrationDirectoryTree directoryTree) {
 
         analyzeRegistryByType(directoryTree, Constant.GOV);
         analyzeRegistryByType(directoryTree, Constant.CONF);
     }
 
-    private static void analyzeRegistryByType(IntegrationDirectoryTree directoryTree, String type) {
+    private void analyzeRegistryByType(IntegrationDirectoryTree directoryTree, String type) {
 
         String registryPath = projectPath + File.separator + Constant.SRC + File.separator +
                 MAIN + File.separator + WSO2MI + File.separator + RESOURCES +
@@ -481,7 +489,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeConnectorResources(IntegrationDirectoryTree directoryTree) {
+    private void analyzeConnectorResources(IntegrationDirectoryTree directoryTree) {
 
         String connectorPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN
                 + File.separator + WSO2MI + File.separator + RESOURCES + File.separator + "connectors";
@@ -499,7 +507,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeInboundConnectorResources(IntegrationDirectoryTree directoryTree) {
+    private void analyzeInboundConnectorResources(IntegrationDirectoryTree directoryTree) {
 
         String resourcesPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN
                 + File.separator + WSO2MI + File.separator + RESOURCES + File.separator;
@@ -519,7 +527,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeMetadataResources(IntegrationDirectoryTree directoryTree) {
+    private void analyzeMetadataResources(IntegrationDirectoryTree directoryTree) {
 
         String metadataPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN +
                 File.separator + WSO2MI + File.separator + RESOURCES +
@@ -538,7 +546,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeJavaProjects(IntegrationDirectoryTree directoryTree) {
+    private void analyzeJavaProjects(IntegrationDirectoryTree directoryTree) {
 
         String javaPath =
                 projectPath + File.separator + Constant.SRC + File.separator + MAIN +
@@ -554,7 +562,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeBallerinaProjects(IntegrationDirectoryTree directoryTree) {
+    private void analyzeBallerinaProjects(IntegrationDirectoryTree directoryTree) {
 
         String ballerinaPath = projectPath + File.separator + Constant.SRC + File.separator + MAIN +
                         File.separator + Constant.BALLERINA;
@@ -567,7 +575,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void analyzeTestsFolder(IntegrationDirectoryTree directoryTree) {
+    private void analyzeTestsFolder(IntegrationDirectoryTree directoryTree) {
 
         TestFolder testFolder = new TestFolder();
         String testsPath = projectPath + File.separator + Constant.SRC + File.separator + "test";
@@ -576,7 +584,7 @@ public class DirectoryTreeBuilder {
         directoryTree.setTests(testFolder);
     }
 
-    private static void analyzeSubTestFolder(String testPath, String testName, Consumer<FolderNode> setter) {
+    private void analyzeSubTestFolder(String testPath, String testName, Consumer<FolderNode> setter) {
 
         File subFolder = new File(testPath + File.separator + testName);
         if (subFolder != null && subFolder.exists() && !subFolder.isHidden()) {
@@ -587,7 +595,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void traverseFolder(FolderNode folderNode, IntegrationDirectoryTree directoryTree) {
+    private void traverseFolder(FolderNode folderNode, IntegrationDirectoryTree directoryTree) {
 
         File[] listOfFiles = folderNode.listFiles();
         for (File file : listOfFiles) {
@@ -619,7 +627,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static void addResourceToIntegrationTree(IntegrationDirectoryTree directoryTree, String path) {
+    private void addResourceToIntegrationTree(IntegrationDirectoryTree directoryTree, String path) {
 
         if (path.endsWith(".xml")) {
             try {
@@ -645,7 +653,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static Node createRegistryNode(String name, String type, String path) {
+    private Node createRegistryNode(String name, String type, String path) {
 
         StringBuilder key = new StringBuilder();
         if (path.contains(Constant.GOV)) {
@@ -662,7 +670,7 @@ public class DirectoryTreeBuilder {
         return registry;
     }
 
-    private static Node createEsbComponent(String type, String name, String path) {
+    private Node createEsbComponent(String type, String name, String path) {
 
         String artifactName;
         String nodeType = Utils.addUnderscoreBetweenWords(type).toUpperCase();
@@ -727,7 +735,7 @@ public class DirectoryTreeBuilder {
         }
     }
 
-    private static AdvancedNode createAdvancedEsbComponent(Node component, String type, String path) {
+    private AdvancedNode createAdvancedEsbComponent(Node component, String type, String path) {
 
         AdvancedNode advancedNode;
         switch (type.toLowerCase()) {

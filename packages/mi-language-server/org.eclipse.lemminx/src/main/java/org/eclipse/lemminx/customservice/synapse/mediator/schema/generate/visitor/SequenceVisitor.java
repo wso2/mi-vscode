@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutInfo;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.NamedSequence;
@@ -27,10 +28,12 @@ import java.util.List;
 public class SequenceVisitor implements SchemaVisitor {
 
     private String projectPath;
+    private ConnectorHolder connectorHolder;
 
-    public SequenceVisitor(String projectPath) {
+    public SequenceVisitor(String projectPath, ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
+        this.connectorHolder = connectorHolder;
     }
 
     @Override
@@ -49,7 +52,7 @@ public class SequenceVisitor implements SchemaVisitor {
         if (Utils.checkNodeInRange(sequence, position)) {
             List<Mediator> mediatorList = sequence.getMediatorList();
             if (mediatorList != null) {
-                Utils.visitMediators(projectPath, mediatorList, info, position);
+                Utils.visitMediators(projectPath, mediatorList, info, position, connectorHolder);
             }
         }
     }

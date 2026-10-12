@@ -15,8 +15,9 @@
 package org.eclipse.lemminx.customservice.synapse.dynamic.db;
 
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class GetDynamicFieldsRequest {
+public class GetDynamicFieldsRequest extends AbstractProjectRequest {
     private String connectorName;
     private String operationName;
     private String fieldName;

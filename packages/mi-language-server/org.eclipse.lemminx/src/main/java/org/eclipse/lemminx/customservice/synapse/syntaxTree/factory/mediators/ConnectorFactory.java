@@ -29,7 +29,6 @@ import java.util.List;
 public class ConnectorFactory extends AbstractMediatorFactory {
 
     private static final String CONNECTOR = "connector";
-    private static List<String> connectors = new ArrayList<>();
 
     @Override
     public void populateAttributes(STNode node, DOMElement element) {
@@ -90,21 +89,6 @@ public class ConnectorFactory extends AbstractMediatorFactory {
             return false;
         }
         return inline.startsWith("{") && inline.endsWith("}");
-    }
-
-    public static void addConnector(String connector) {
-
-        connectors.add(connector);
-    }
-
-    public static void removeConnector(String connector) {
-
-        connectors.remove(connector);
-    }
-
-    public static List<String> getConnectors() {
-
-        return connectors;
     }
 
     @Override
