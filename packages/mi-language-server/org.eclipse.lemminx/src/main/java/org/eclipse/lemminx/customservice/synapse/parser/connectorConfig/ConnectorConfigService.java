@@ -191,7 +191,8 @@ public class ConnectorConfigService {
      * @param request     the override to apply
      * @throws IOException if the config file cannot be read or written
      */
-    public static void updateDependencyOverride(String projectPath, UpdateConnectorDependencyRequest request)
+    public static void updateDependencyOverride(String projectPath, UpdateConnectorDependencyRequest request,
+                                                ConnectorHolder connectorHolder)
             throws IOException {
 
         if (StringUtils.isBlank(request.connectorArtifactId)) {
@@ -208,7 +209,7 @@ public class ConnectorConfigService {
             ConnectorConfig config = readConfig(projectPath);
             ConnectorDependencyConfig connectorCfg = config.connectors.computeIfAbsent(
                     request.connectorArtifactId, k -> new ConnectorDependencyConfig());
-            populateQNameIfAbsent(connectorCfg, request.connectorArtifactId);
+            populateQNameIfAbsent(connectorCfg, request.connectorArtifactId, connectorHolder);
             if (connectorCfg.dependencies == null) {
                 connectorCfg.dependencies = new ArrayList<>();
             }
@@ -326,19 +327,20 @@ public class ConnectorConfigService {
      * @return the populated response
      */
     public static ConnectorDependencyResponse buildDependencyResponse(String projectPath,
-                                                                      String connectorArtifactId) {
+                                                                      String connectorArtifactId,
+                                                                      ConnectorHolder connectorHolder) {
 
         ConnectorConfig config = readConfig(projectPath);
         ConnectorDependencyResponse response = new ConnectorDependencyResponse();
         response.omitAllDrivers = Boolean.TRUE.equals(config.omitAllDrivers);
         response.omitAllConnectors = Boolean.TRUE.equals(config.omitAllConnectors);
         if (connectorArtifactId != null) {
-            List<Map<String, Object>> descriptorDeps = readDescriptorDependencies(connectorArtifactId);
+            List<Map<String, Object>> descriptorDeps = readDescriptorDependencies(connectorArtifactId, connectorHolder);
             Set<String> activeConnectionTypes = scanActiveConnectionTypes(projectPath);
             response.dependencies = mergeDependencies(descriptorDeps, config, connectorArtifactId,
                     activeConnectionTypes);
         } else {
-            response.allConnectors = getAllEffectiveDependencies(config, projectPath);
+            response.allConnectors = getAllEffectiveDependencies(config, projectPath, connectorHolder);
         }
         return response;
     }
@@ -352,14 +354,14 @@ public class ConnectorConfigService {
      * @return map of connectorArtifactId → effective data
      */
     private static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(ConnectorConfig config,
-                                                                                   String projectPath) {
+                                                                                   String projectPath,
+                                                                                   ConnectorHolder holder) {
 
         // Scan once here; the set is forwarded to mergeDependencies so it is not re-scanned
         // for every connector in the loop below.
         Set<String> activeConnectionTypes = scanActiveConnectionTypes(projectPath);
 
         Map<String, ConnectorEffectiveData> result = new HashMap<>();
-        ConnectorHolder holder = ConnectorHolder.getInstance();
         for (Connector connector : new ArrayList<>(holder.getConnectors())) {
             String artifactId = connectorArtifactId(connector);
             List<Map<String, Object>> descriptorDeps = readDescriptorDependenciesFromPath(
@@ -470,18 +472,6 @@ public class ConnectorConfigService {
     }
 
     /**
-     * Returns the effective dependency lists for every connector currently loaded in the
-     * {@link ConnectorHolder}.
-     *
-     * @param projectPath absolute path to the project root
-     * @return map of connectorArtifactId → list of effective dependencies
-     */
-    private static Map<String, ConnectorEffectiveData> getAllEffectiveDependencies(String projectPath) {
-
-        return getAllEffectiveDependencies(readConfig(projectPath), projectPath);
-    }
-
-    /**
      * Returns {@code true} if driver downloads should be skipped for the given connector, based on
      * the root-level or connector-level {@code omitAllDrivers} flag in {@code connector-config.json}.
      *
@@ -538,9 +528,10 @@ public class ConnectorConfigService {
      * Reads the {@code dependencies} list from a connector's descriptor.yml using its
      * ConnectorHolder name to locate the extracted path.
      */
-    private static List<Map<String, Object>> readDescriptorDependencies(String connectorArtifactId) {
+    private static List<Map<String, Object>> readDescriptorDependencies(String connectorArtifactId,
+                                                                        ConnectorHolder connectorHolder) {
 
-        Connector connector = new ArrayList<>(ConnectorHolder.getInstance().getConnectors()).stream()
+        Connector connector = new ArrayList<>(connectorHolder.getConnectors()).stream()
                 .filter(c -> connectorArtifactId.equals(connectorArtifactId(c))
                         || connectorArtifactId.equals(c.getName()))
                 .findFirst().orElse(null);
@@ -790,7 +781,8 @@ public class ConnectorConfigService {
      * @param request     the flag update request
      * @throws IOException if the config file cannot be read or written
      */
-    public static void updateConnectorFlags(String projectPath, UpdateConnectorFlagsRequest request)
+    public static void updateConnectorFlags(String projectPath, UpdateConnectorFlagsRequest request,
+                                            ConnectorHolder connectorHolder)
             throws IOException {
 
         if (StringUtils.isBlank(request.connectorArtifactId)) {
@@ -801,7 +793,7 @@ public class ConnectorConfigService {
             ConnectorConfig config = readConfig(projectPath);
             ConnectorDependencyConfig connectorCfg = config.connectors.computeIfAbsent(
                     request.connectorArtifactId, k -> new ConnectorDependencyConfig());
-            populateQNameIfAbsent(connectorCfg, request.connectorArtifactId);
+            populateQNameIfAbsent(connectorCfg, request.connectorArtifactId, connectorHolder);
 
             if (request.omit != null) {
                 connectorCfg.omit = request.omit ? Boolean.TRUE : null;
@@ -881,12 +873,12 @@ public class ConnectorConfigService {
      * @param connectorArtifactId the Maven artifact ID used to locate the connector in the holder
      */
     private static void populateQNameIfAbsent(ConnectorDependencyConfig connectorCfg,
-                                              String connectorArtifactId) {
+                                              String connectorArtifactId, ConnectorHolder connectorHolder) {
 
         if (connectorCfg.qname != null) {
             return; // already set
         }
-        Connector connector = new ArrayList<>(ConnectorHolder.getInstance().getConnectors()).stream()
+        Connector connector = new ArrayList<>(connectorHolder.getConnectors()).stream()
                 .filter(c -> connectorArtifactId.equals(connectorArtifactId(c))
                         || connectorArtifactId.equals(c.getName()))
                 .findFirst().orElse(null);

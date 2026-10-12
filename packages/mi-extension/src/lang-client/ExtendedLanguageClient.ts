@@ -108,6 +108,8 @@ import { CompletionParams, LanguageClient, LanguageClientOptions, ServerOptions,
 import { TextDocumentIdentifier, CodeAction, CodeActionParams } from "vscode-languageserver-protocol";
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import * as path from "path";
+import { Messenger } from "vscode-messenger";
 import { RPCLayer } from "../RPCLayer";
 import { VisualizerWebview } from "../visualizer/webview";
 import { Range } from "../../../syntax-tree/lib/src";
@@ -192,14 +194,44 @@ export interface LoadDependentResourcesResponse {
     conflictingDependencies?: ConflictingDependency[];
 }
 
+/**
+ * Finds the messenger for a project root the server named, falling back to a normalized path comparison (e.g. for Windows drive-letter case) when there is no exact key match.
+ */
+function findMessenger(projectPath: string): Messenger | undefined {
+    const exactMatch = RPCLayer._messengers.get(projectPath);
+    if (exactMatch) {
+        return exactMatch;
+    }
+    const isCaseInsensitiveFs = process.platform === 'win32';
+    const normalize = (value: string) => {
+        const resolved = path.resolve(value);
+        return isCaseInsensitiveFs ? resolved.toLowerCase() : resolved;
+    };
+    const target = normalize(projectPath);
+    for (const [key, messenger] of RPCLayer._messengers.entries()) {
+        if (normalize(key) === target) {
+            return messenger;
+        }
+    }
+    return undefined;
+}
+
 export class ExtendedLanguageClient extends LanguageClient {
 
-    constructor(id: string, name: string, private projectUri: string, serverOptions: ServerOptions, clientOptions: LanguageClientOptions) {
+    constructor(id: string, name: string, serverOptions: ServerOptions, clientOptions: LanguageClientOptions) {
         super(id, name, serverOptions, clientOptions);
 
         this.onNotification("synapse/addConnectorStatus", (connectorStatus: any) => {
-            // Notify the visualizer
-            RPCLayer._messengers.get(this.projectUri)?.sendNotification(onConnectorStatusUpdate, { type: 'webview', webviewType: VisualizerWebview.viewType }, connectorStatus);
+            // Route by the projectUri the server includes in the payload, falling back to broadcasting to every open project webview for older servers that don't send it yet.
+            const targetProjectUri: string | undefined = connectorStatus?.projectUri;
+            const targetMessenger = targetProjectUri ? findMessenger(targetProjectUri) : undefined;
+            if (targetMessenger) {
+                targetMessenger.sendNotification(onConnectorStatusUpdate, { type: 'webview', webviewType: VisualizerWebview.viewType }, connectorStatus);
+                return;
+            }
+            for (const messenger of RPCLayer._messengers.values()) {
+                messenger.sendNotification(onConnectorStatusUpdate, { type: 'webview', webviewType: VisualizerWebview.viewType }, connectorStatus);
+            }
         });
     }
 
@@ -231,12 +263,12 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/getRegistryFiles", { uri: Uri.file(req).toString() });
     }
 
-    async getResourceFiles(): Promise<string[]> {
-        return this.sendRequest("synapse/getResourceFiles");
+    async getResourceFiles(projectUri: string): Promise<string[]> {
+        return this.sendRequest("synapse/getResourceFiles", { projectUri });
     }
 
-    async getConfigurableEntries(): Promise<{ name: string, type: string }[]> {
-        return this.sendRequest("synapse/getConfigurableEntries");
+    async getConfigurableEntries(projectUri: string): Promise<{ name: string, type: string }[]> {
+        return this.sendRequest("synapse/getConfigurableEntries", { projectUri });
     }
 
     async getResourceUsages(resourceFilePath: string): Promise<string[]> {
@@ -293,6 +325,7 @@ export class ExtendedLanguageClient extends LanguageClient {
         }
         return this.sendRequest("synapse/availableResources", {
             documentIdentifier: { uri: uri }, resourceType: req.resourceType,
+            projectUri: req.projectUri,
             ...(req.isDebugFlow && { customProjectUri: req.documentIdentifier }),
             ...(req.dataServiceName && { dataServiceName: req.dataServiceName })
         }) as Promise<GetAvailableResourcesResponse>;
@@ -331,11 +364,11 @@ export class ExtendedLanguageClient extends LanguageClient {
     }
 
     async saveInboundEPUischema(req: SaveInboundEPUischemaRequest): Promise<boolean> {
-        return this.sendRequest("synapse/saveInboundConnectorSchema", { connectorName: req.connectorName, uiSchema: req.uiSchema });
+        return this.sendRequest("synapse/saveInboundConnectorSchema", { connectorName: req.connectorName, uiSchema: req.uiSchema, projectUri: req.projectUri });
     }
 
     async getInboundEPUischema(req: GetInboundEPUischemaRequest): Promise<GetInboundEPUischemaResponse> {
-        return this.sendRequest("synapse/getInboundConnectorSchema", { documentPath: req.documentPath, connectorId: req.connectorName });
+        return this.sendRequest("synapse/getInboundConnectorSchema", { documentPath: req.documentPath, connectorId: req.connectorName, projectUri: req.projectUri });
     }
 
     async validateBreakpoints(req: ValidateBreakpointsRequest): Promise<ValidateBreakpointsResponse> {
@@ -370,8 +403,8 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/testDBConnection", req);
     }
 
-    async checkDBDriver(req: string): Promise<CheckDBDriverResponse> {
-        return this.sendRequest("synapse/checkDBDriver", { className: req });
+    async checkDBDriver(req: string, projectUri: string): Promise<CheckDBDriverResponse> {
+        return this.sendRequest("synapse/checkDBDriver", { className: req, projectUri });
     }
 
     async addDBDriver(req: AddDriverRequest): Promise<boolean> {
@@ -394,8 +427,8 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/fetchTables", req);
     }
 
-    async getOverviewModel(): Promise<any> {
-        return this.sendRequest("synapse/getOverviewModel");
+    async getOverviewModel(projectUri: string): Promise<any> {
+        return this.sendRequest("synapse/getOverviewModel", { projectUri });
     }
 
     async getProjectExplorerModel(path: string): Promise<any> {
@@ -414,51 +447,55 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest('synapse/updateDependency', req);
     }
 
-    async updateConnectorDependencies(): Promise<string> {
-        return this.sendRequest('synapse/updateConnectorDependencies');
+    async updateConnectorDependencies(projectUri: string): Promise<string> {
+        return this.sendRequest('synapse/updateConnectorDependencies', { projectUri });
     }
 
-    async refetchIntegrationProjectDependencies(): Promise<string> {
-        return this.sendRequest('synapse/refetchIntegrationProjectDependencies');
+    async refetchIntegrationProjectDependencies(projectUri: string): Promise<string> {
+        return this.sendRequest('synapse/refetchIntegrationProjectDependencies', { projectUri });
     }
 
-    async loadDependentCAppResources(): Promise<LoadDependentResourcesResponse> {
-        return this.sendRequest('synapse/loadDependentResources');
+    async loadDependentCAppResources(projectUri: string): Promise<LoadDependentResourcesResponse> {
+        return this.sendRequest('synapse/loadDependentResources', { projectUri });
     }
 
-    async getProjectDetails(): Promise<any> {
-        return this.sendRequest('synapse/getOverviewPageDetails');
+    async getProjectDetails(projectUri: string): Promise<any> {
+        return this.sendRequest('synapse/getOverviewPageDetails', { projectUri });
     }
 
     async setDeployPlugin(req: MavenDeployPluginDetails): Promise<any> {
         return this.sendRequest('synapse/updateMavenDeployPlugin', req);
     }
 
-    async getDeployPluginDetails(): Promise<any> {
-        return this.sendRequest('synapse/getMavenDeployPluginDetails');
+    async getDeployPluginDetails(projectUri: string): Promise<any> {
+        return this.sendRequest('synapse/getMavenDeployPluginDetails', { projectUri });
     }
 
-    async removeDeployPlugin(): Promise<any> {
-        return this.sendRequest('synapse/removeMavenDeployPlugin');
+    async removeDeployPlugin(projectUri: string): Promise<any> {
+        return this.sendRequest('synapse/removeMavenDeployPlugin', { projectUri });
     }
 
-    async getSequencePath(sequenceName: string): Promise<string | undefined> {
-        return new Promise(async (resolve) => {
-            const resp = await this.getProjectStructure(this.projectUri);
-            const sequences = resp.directoryMap.src.main.wso2mi.artifacts.sequences;
-            const match = sequences.find((sequence: any) => sequence.name === sequenceName);
-            resolve(match ? match.path : undefined);
-
-            resolve(undefined);
-        });
+    /**
+     * Resolves a sequence name to its file path within the given project, requiring `projectUri` explicitly since this shared client has no project to default to.
+     */
+    async getSequencePath(sequenceName: string, projectUri: string | undefined): Promise<string | undefined> {
+        if (!projectUri) {
+            return undefined;
+        }
+        const resp = await this.getProjectStructure(projectUri);
+        const sequences = resp?.directoryMap?.src?.main?.wso2mi?.artifacts?.sequences;
+        if (!Array.isArray(sequences)) {
+            return undefined;
+        }
+        return sequences.find((sequence: any) => sequence.name === sequenceName)?.path;
     }
 
     async tryOutMediator(req: MediatorTryOutRequest): Promise<MediatorTryOutResponse> {
         return this.sendRequest("synapse/tryOutMediator", req);
     }
 
-    async shutdownTryoutServer(): Promise<boolean> {
-        return this.sendRequest("synapse/shutDownTryoutServer", {});
+    async shutdownTryoutServer(projectUri: string): Promise<boolean> {
+        return this.sendRequest("synapse/shutDownTryoutServer", { projectUri });
     }
 
     async getMediatorInputOutputSchema(req: MediatorTryOutRequest): Promise<MediatorTryOutResponse> {
@@ -476,12 +513,13 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/getMediatorUISchema", { mediatorType: request.mediatorType, documentIdentifier: { uri: Uri.file(request.documentUri).toString() }, position: request.range.start });
     }
 
-    async getLocalInboundConnectors(): Promise<LocalInboundConnectorsResponse> {
-        return this.sendRequest('synapse/getLocalInboundConnectors');
+    async getLocalInboundConnectors(projectUri: string): Promise<LocalInboundConnectorsResponse> {
+        return this.sendRequest('synapse/getLocalInboundConnectors', { projectUri });
     }
 
-    async updateInboundConnectors(zipFileName?: string): Promise<string> {
-        return this.sendRequest('synapse/fetchInboundConnectors', zipFileName ? { zipFileName } : {});
+    async updateInboundConnectors(projectUri: string, zipFileName?: string): Promise<string> {
+        return this.sendRequest('synapse/fetchInboundConnectors',
+            zipFileName ? { projectUri, zipFileName } : { projectUri });
     }
 
     async getConnectionSchema(request: GetConnectionSchemaRequest): Promise<GetConnectionSchemaResponse> {
@@ -489,7 +527,7 @@ export class ExtendedLanguageClient extends LanguageClient {
             return this.sendRequest("synapse/getConnectionUISchema", { documentUri: Uri.file(request.documentUri).toString(), });
         }
 
-        return this.sendRequest("synapse/getConnectionUISchema", { connectorName: request.connectorName, connectionType: request.connectionType });
+        return this.sendRequest("synapse/getConnectionUISchema", { connectorName: request.connectorName, connectionType: request.connectionType, projectUri: request.projectUri });
     }
 
     async generateSynapseConfig(request: UpdateMediatorRequest): Promise<UpdateMediatorResponse> {
@@ -524,12 +562,12 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest('synapse/pdfToImagesBase64', {base64: req});
     }
 
-    async getConfigurableList(): Promise<{key: string; type: string; value: string; range: Range | Range[]; }[]> {
-        return this.sendRequest('synapse/getConfigurableList');
+    async getConfigurableList(projectUri: string): Promise<{ key: string; type: string; value: string; range: Range | Range[]; }[]> {
+        return this.sendRequest('synapse/getConfigurableList', { projectUri });
     }
 
-    async getDependencyStatusList(): Promise<DependencyStatusResponse> {
-        return this.sendRequest('synapse/getDependencyStatusList');
+    async getDependencyStatusList(projectUri: string): Promise<DependencyStatusResponse> {
+        return this.sendRequest('synapse/getDependencyStatusList', { projectUri });
     }
 
     async getInputOutputMappings(req: GenerateMappingsParamsRequest): Promise<string[]> {
@@ -563,8 +601,10 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/getDriverMavenCoordinates", params);
     }
 
-    async isDuplicateConnector(params: string): Promise<any> {
-        return this.sendRequest("synapse/isDuplicateConnector", { connectorPath: params });
+    async isDuplicateConnector(connectorPath: string, projectUri: string): Promise<any> {
+        // projectUri is what routes this, not connectorPath: the zip lives wherever the user picked it,
+        // which is normally outside every project, and the duplicate check belongs to the target project.
+        return this.sendRequest("synapse/isDuplicateConnector", { connectorPath, projectUri });
     }
 
     async getConnectorDependencies(params: GetConnectorDependenciesRequest): Promise<GetConnectorDependenciesResponse> {
@@ -587,7 +627,7 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/updateGlobalConnectorFlags", params);
     }
 
-    async initConnectorConfig(projectPath: string): Promise<void> {
-        return this.sendNotification("synapse/initConnectorConfig", { projectPath });
+    async initConnectorConfig(projectUri: string): Promise<void> {
+        return this.sendNotification("synapse/initConnectorConfig", { projectUri });
     }
 }

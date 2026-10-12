@@ -14,7 +14,16 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors.entity;
 
-public class ConnectorDetails {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+/**
+ * Details of a connector zip being imported, and the answer to whether the project already has it.
+ *
+ * <p>{@code connectorPath} is a file the user picked anywhere on disk, so it says nothing about which
+ * project the import targets. The inherited {@code projectUri} is what identifies that, and the
+ * duplicate check runs against it.
+ */
+public class ConnectorDetails extends AbstractProjectRequest {
 
     public String connectorPath;
     public String connectorName;

@@ -14,7 +14,12 @@
 
 package org.eclipse.lemminx.customservice.synapse.driver;
 
-public class DriverMavenCoordinatesRequest {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+/**
+ * Looks up the Maven coordinates of the JDBC driver for a connection, routed by the inherited {@code projectUri} rather than {@link #filePath} since that path is blank when the driver hasn't been downloaded yet.
+ */
+public class DriverMavenCoordinatesRequest extends AbstractProjectRequest {
 
     private String filePath;
     private String connectorName;
@@ -61,5 +66,4 @@ public class DriverMavenCoordinatesRequest {
 
         this.connectionType = connectionType;
     }
-
 }

@@ -14,10 +14,12 @@
 
 package org.eclipse.lemminx.customservice.synapse.driver;
 
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
 /**
  * Request data for downloading a JDBC driver for a specific connector and connection type.
  */
-public class DriverDownloadRequest {
+public class DriverDownloadRequest extends AbstractProjectRequest {
 
     private String connectorName;
     private String connectionType;
@@ -45,5 +47,4 @@ public class DriverDownloadRequest {
     public void setConnectionType(String connectionType) {
         this.connectionType = connectionType;
     }
-
 }

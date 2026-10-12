@@ -19,6 +19,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.commons.BadLocationException;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionParam;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.Functions;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.HelperPanelData;
@@ -59,10 +60,10 @@ public class ExpressionHelperProvider {
     private final ServerLessTryoutHandler tryoutHandler;
     private final String projectPath;
 
-    public ExpressionHelperProvider(String projectPath) {
+    public ExpressionHelperProvider(String projectPath, ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
-        this.tryoutHandler = new ServerLessTryoutHandler(projectPath);
+        this.tryoutHandler = new ServerLessTryoutHandler(projectPath, connectorHolder);
     }
 
     /**

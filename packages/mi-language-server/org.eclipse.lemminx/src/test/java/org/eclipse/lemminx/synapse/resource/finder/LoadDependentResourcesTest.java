@@ -59,6 +59,7 @@ public class LoadDependentResourcesTest {
 
     private String mainProjectPath;
     private TestResourceFinder resourceFinder;
+    private ConnectorHolder connectorHolder;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -67,16 +68,17 @@ public class LoadDependentResourcesTest {
         Files.createDirectories(Path.of(mainProjectPath));
         createPomXml(Path.of(mainProjectPath), "com.example", "main-project", "1.0.0");
 
+        connectorHolder = new ConnectorHolder();
         resourceFinder = new TestResourceFinder();
         resourceFinder.setUserHome(tempUserHome.toString());
-        ConnectorHolder.getInstance().clearConnectors();
+        resourceFinder.setConnectorHolder(connectorHolder);
         LOGGER.info("Test setup completed with main project path: " + mainProjectPath);
     }
 
     @AfterEach
     void tearDown() {
 
-        ConnectorHolder.getInstance().clearConnectors();
+        connectorHolder.clearConnectors();
     }
 
     // -------------------------------------------------------------------------
@@ -198,7 +200,7 @@ public class LoadDependentResourcesTest {
         connector.setArtifactId(lastHyphen > 0 ? zipBaseName.substring(0, lastHyphen) : zipBaseName);
         connector.setExtractedConnectorPath("/fake/extracted/" + zipBaseName);
         connector.setFromProject(true); // simulates a connector from the main project
-        ConnectorHolder.getInstance().addConnector(connector);
+        connectorHolder.addConnector(connector);
     }
 
     /**
@@ -1181,7 +1183,7 @@ public class LoadDependentResourcesTest {
         // flagged as conflicting against its own connector that is already in ConnectorHolder.
         registerConnectorInHolder("salesforce", "mi-connector-salesforce-1.0.0");
         // Simulate that the connector came from a dependency (not the main project)
-        ConnectorHolder.getInstance().getConnectors().get(0).setFromProject(false);
+        connectorHolder.getConnectors().get(0).setFromProject(false);
 
         Path depBaseDir = createDependencyBaseDir();
         Path dep1 = createDependentProject(depBaseDir, "adep1", "com.example", "dep1", "1.0.0");

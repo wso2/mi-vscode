@@ -15,6 +15,7 @@
 package org.eclipse.lemminx.customservice.synapse.mediator.schema.generate.visitor;
 
 import org.apache.commons.lang3.StringUtils;
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutInfo;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
@@ -29,10 +30,12 @@ public class TaskSchemaVisitor implements SchemaVisitor {
 
     private static final Logger LOGGER = Logger.getLogger(TaskSchemaVisitor.class.getName());
     private String projectPath;
+    private ConnectorHolder connectorHolder;
 
-    public TaskSchemaVisitor(String projectPath) {
+    public TaskSchemaVisitor(String projectPath, ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
+        this.connectorHolder = connectorHolder;
     }
 
     @Override
@@ -43,7 +46,7 @@ public class TaskSchemaVisitor implements SchemaVisitor {
             return;
         }
         try {
-            Utils.visitSequenceByKey(sequence, projectPath, info, request);
+            Utils.visitSequenceByKey(sequence, projectPath, info, request, connectorHolder);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, String.format("Error occurred while visiting the sequence: %s", sequence), e);
         }

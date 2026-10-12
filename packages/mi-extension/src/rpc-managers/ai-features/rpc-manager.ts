@@ -547,7 +547,11 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
                 }
 
                 // Get diagnostics from language client
-                const res = await langClient.getCodeDiagnostics(xmlCode);
+                const res = await langClient.getCodeDiagnostics({
+                    ...xmlCode,
+                    projectUri: this.projectUri,
+                    skipCrossFileValidation: true
+                });
                 diagnosticsResults.push({
                     fileName: xmlCode.fileName,
                     diagnostics: res.diagnostics

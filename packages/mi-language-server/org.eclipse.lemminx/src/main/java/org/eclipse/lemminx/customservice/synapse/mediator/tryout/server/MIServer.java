@@ -51,6 +51,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
@@ -62,6 +63,8 @@ public class MIServer {
 
     private static final Logger LOGGER = Logger.getLogger(MIServer.class.getName());
     private static final int SERVER_START_TIMEOUT = 30000;
+    // How long to wait for MI to undeploy an artifact whose file has been removed from the repository.
+    private static final long UNDEPLOYMENT_TIMEOUT = 10000;
     private static final String DEPLOYMENT_INTERVAL_REGEX =
             "(?s)(?<=<DeploymentUpdateInterval>)(.*?)(?=</DeploymentUpdateInterval>)";
     private static final String HOT_DEPLOYMENT_INTERVAL = "1";
@@ -74,6 +77,8 @@ public class MIServer {
     private static final HashMap<String, String> ARTIFACT_FOLDERS_MAP = new HashMap<>();
     private final List<String> deployedCAAPs = new ArrayList<>();
     private final List<String> deployedFiles;
+    // Artifacts removed from the MI repository but not yet confirmed undeployed, tracked because a redeployed artifact keeps its name so only a "gone, then back" transition proves the old copy left.
+    private final List<ArtifactIdentity> pendingUndeployments = new ArrayList<>();
     private boolean isStarted = false;
     private boolean isStarting = false;
     private final String projectUri;
@@ -115,7 +120,7 @@ public class MIServer {
         }
         try {
             serverProcess = startServerProcess();
-            String content = Utils.getHash(projectUri) + " - " + serverProcess.pid();
+            String content = TryOutUtils.getProjectHash(projectUri) + " - " + serverProcess.pid();
             Files.createDirectories(TryOutConstants.TRYOUT_HISTORY_LOG_FILE.getParent());
             Files.writeString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE, content);
 
@@ -263,7 +268,7 @@ public class MIServer {
             if (!isAlive) {
                 isStarted = false;
             }
-            if (Utils.getHash(projectUri).equals(TryOutUtils.getProjectPathHash())) {
+            if (TryOutUtils.getProjectHash(projectUri).equals(TryOutUtils.getProjectPathHash())) {
                 Files.createDirectories(TryOutConstants.TRYOUT_HISTORY_LOG_FILE.getParent());
                 Files.writeString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE, StringUtils.EMPTY);
             }
@@ -277,9 +282,44 @@ public class MIServer {
     public void deployProject(String tempProjectUri, String projectUri)
             throws ArtifactDeploymentException {
 
+        waitForUndeployment();
         copyToMI(tempProjectUri, projectUri);
         waitForDeployment();
         LOGGER.log(Level.INFO, "Project deployed successfully");
+    }
+
+    /**
+     * Waits until artifacts deleted from the MI repository disappear from the management API, so the later deployment check does not mistake the still-deployed previous copy for the new one.
+     */
+    private void waitForUndeployment() {
+
+        if (managementAPIClient == null) {
+            pendingUndeployments.clear();
+            return;
+        }
+        long deadline = System.currentTimeMillis() + UNDEPLOYMENT_TIMEOUT;
+        for (ArtifactIdentity artifact : pendingUndeployments) {
+            try {
+                boolean deployed = isDeployed(artifact);
+                while (deployed && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(200);
+                    deployed = isDeployed(artifact);
+                }
+                if (deployed) {
+                    // Proceed anyway since blocking the try-out on a server that refuses to undeploy helps nobody.
+                    LOGGER.log(Level.WARNING, String.format(
+                            "The artifact %s was not undeployed within the timeout. The try-out may run against " +
+                                    "its previous version.", artifact.name));
+                }
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING,
+                        String.format("Error while waiting for the artifact %s to be undeployed", artifact.name), e);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+        pendingUndeployments.clear();
     }
 
     private void waitForDeployment() throws ArtifactDeploymentException {
@@ -319,57 +359,19 @@ public class MIServer {
     private void waitForDeployment(Path filePath) throws ArtifactDeploymentException {
 
         try {
-            DOMDocument document = Utils.getDOMDocument(filePath.toFile());
-            if (document != null) {
-                String resourceName;
-                DeployedArtifactType type;
-                STNode node = SyntaxTreeGenerator.buildTree(document.getDocumentElement());
-                if (node instanceof API) {
-                    resourceName = ((API) node).getName();
-                    type = DeployedArtifactType.APIS;
-                } else if (node instanceof NamedSequence) {
-                    resourceName = ((NamedSequence) node).getName();
-                    type = DeployedArtifactType.SEQUENCES;
-                } else if (node instanceof NamedEndpoint) {
-                    resourceName = ((NamedEndpoint) node).getName();
-                    type = DeployedArtifactType.ENDPOINTS;
-                } else if (node instanceof LocalEntry) {
-                    resourceName = ((LocalEntry) node).getKey();
-                    type = DeployedArtifactType.LOCAL_ENTRIES;
-                } else if (node instanceof Task) {
-                    resourceName = ((Task) node).getName();
-                    type = DeployedArtifactType.TASKS;
-                } else if (node instanceof MessageStore) {
-                    resourceName = ((MessageStore) node).getName();
-                    type = DeployedArtifactType.MESSAGE_STORES;
-                } else if (node instanceof MessageProcessor) {
-                    resourceName = ((MessageProcessor) node).getName();
-                    type = DeployedArtifactType.MESSAGE_PROCESSORS;
-                } else if (node instanceof InboundEndpoint) {
-                    resourceName = ((InboundEndpoint) node).getName();
-                    type = DeployedArtifactType.INBOUND_ENDPOINTS;
-                } else if (node instanceof Template) {
-                    resourceName = ((Template) node).getName();
-                    type = DeployedArtifactType.TEMPLATES;
-                } else if (node instanceof Data) {
-                    resourceName = ((Data) node).getName();
-                    type = DeployedArtifactType.DATA_SERVICES;
-                } else if (node instanceof DatasourceType) {
-                    resourceName = ((DatasourceType) node).getName().getTextNode();
-                    type = DeployedArtifactType.DATA_SOURCES;
-                } else {
+            ArtifactIdentity artifact = resolveArtifactIdentity(filePath);
+            if (artifact == null) {
+                return;
+            }
+            int count = 0;
+            while (count < 5) {
+                if (waitUntilDeployed(artifact)) {
                     return;
                 }
-                int count = 0;
-                while (count < 5) {
-                    if (isDeployed(managementAPIClient, resourceName, type)) {
-                        return;
-                    }
-                    count++;
-                    Thread.sleep(1000);
-                }
-                throw new ArtifactDeploymentException(TryOutConstants.INVALID_ARTIFACT_ERROR);
+                count++;
+                Thread.sleep(1000);
             }
+            throw new ArtifactDeploymentException(TryOutConstants.INVALID_ARTIFACT_ERROR);
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, String.format("Error reading file %s: %s", filePath, e.getMessage()));
             throw new ArtifactDeploymentException(TryOutConstants.TRYOUT_FAILURE_MESSAGE, e);
@@ -379,24 +381,65 @@ public class MIServer {
         }
     }
 
-    private boolean isDeployed(ManagementAPIClient managementAPIClient, String resourceName, DeployedArtifactType type)
-            throws InterruptedException, IOException {
+    /**
+     * The name and type the management API knows the artifact in the given file by, or {@code null} if the
+     * file does not hold an artifact type whose deployment can be observed.
+     */
+    private ArtifactIdentity resolveArtifactIdentity(Path filePath) throws IOException {
+
+        DOMDocument document = Utils.getDOMDocument(filePath.toFile());
+        if (document == null) {
+            return null;
+        }
+        STNode node = SyntaxTreeGenerator.buildTree(document.getDocumentElement());
+        if (node instanceof API) {
+            return new ArtifactIdentity(((API) node).getName(), DeployedArtifactType.APIS);
+        } else if (node instanceof NamedSequence) {
+            return new ArtifactIdentity(((NamedSequence) node).getName(), DeployedArtifactType.SEQUENCES);
+        } else if (node instanceof NamedEndpoint) {
+            return new ArtifactIdentity(((NamedEndpoint) node).getName(), DeployedArtifactType.ENDPOINTS);
+        } else if (node instanceof LocalEntry) {
+            return new ArtifactIdentity(((LocalEntry) node).getKey(), DeployedArtifactType.LOCAL_ENTRIES);
+        } else if (node instanceof Task) {
+            return new ArtifactIdentity(((Task) node).getName(), DeployedArtifactType.TASKS);
+        } else if (node instanceof MessageStore) {
+            return new ArtifactIdentity(((MessageStore) node).getName(), DeployedArtifactType.MESSAGE_STORES);
+        } else if (node instanceof MessageProcessor) {
+            return new ArtifactIdentity(((MessageProcessor) node).getName(), DeployedArtifactType.MESSAGE_PROCESSORS);
+        } else if (node instanceof InboundEndpoint) {
+            return new ArtifactIdentity(((InboundEndpoint) node).getName(), DeployedArtifactType.INBOUND_ENDPOINTS);
+        } else if (node instanceof Template) {
+            return new ArtifactIdentity(((Template) node).getName(), DeployedArtifactType.TEMPLATES);
+        } else if (node instanceof Data) {
+            return new ArtifactIdentity(((Data) node).getName(), DeployedArtifactType.DATA_SERVICES);
+        } else if (node instanceof DatasourceType) {
+            return new ArtifactIdentity(((DatasourceType) node).getName().getTextNode(),
+                    DeployedArtifactType.DATA_SOURCES);
+        }
+        return null;
+    }
+
+    private boolean waitUntilDeployed(ArtifactIdentity artifact) throws InterruptedException, IOException {
 
         int count = 0;
         while (count < 10) {
             count++;
-            List<ManagementAPIClient.DeployedArtifact> deployedArtifacts =
-                    managementAPIClient.getArtifacts(type);
-            if (deployedArtifacts != null) {
-                boolean res = deployedArtifacts.stream()
-                        .anyMatch(artifact -> artifact.getName().equals(resourceName));
-                if (res) {
-                    return Boolean.TRUE;
-                }
-                Thread.sleep(100);
+            if (isDeployed(artifact)) {
+                return Boolean.TRUE;
             }
+            Thread.sleep(100);
         }
         return Boolean.FALSE;
+    }
+
+    /**
+     * Whether the management API reports the given artifact as deployed right now.
+     */
+    private boolean isDeployed(ArtifactIdentity artifact) throws InterruptedException, IOException {
+
+        List<ManagementAPIClient.DeployedArtifact> deployedArtifacts = managementAPIClient.getArtifacts(artifact.type);
+        return deployedArtifacts != null &&
+                deployedArtifacts.stream().anyMatch(deployed -> deployed.getName().equals(artifact.name));
     }
 
     private void copyToMI(String tempFolderPath, String projectUri) throws ArtifactDeploymentException {
@@ -437,8 +480,27 @@ public class MIServer {
 
     public void deleteDeployedFiles() {
 
+        recordPendingUndeployments(deployedFiles);
         deleteDeployedFiles(deployedFiles);
         deleteDeployedFiles(deployedCAAPs);
+    }
+
+    /**
+     * Notes what the files about to be deleted are deployed as, resolved before deletion since identities are read from the files themselves.
+     */
+    private void recordPendingUndeployments(List<String> filePaths) {
+
+        for (String filePath : filePaths) {
+            try {
+                ArtifactIdentity artifact = resolveArtifactIdentity(Path.of(filePath));
+                if (artifact != null && !pendingUndeployments.contains(artifact)) {
+                    pendingUndeployments.add(artifact);
+                }
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING,
+                        String.format("Error reading the deployed artifact %s: %s", filePath, e.getMessage()));
+            }
+        }
     }
 
     public void deleteDeployedFiles(List<String> deployedFiles) {
@@ -478,6 +540,28 @@ public class MIServer {
         LOGGER.log(Level.WARNING, "Server did not start within the timeout period");
     }
 
+    /**
+     * Waits, for at most {@code timeoutMillis}, until nothing is listening on the MI port any more, since on Windows the launched process wrapper can exit before its Java child actually releases the port.
+     *
+     * @return whether the port was free before the timeout elapsed
+     */
+    public boolean awaitServerStop(long timeoutMillis) {
+
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (isServerRunning()) {
+            if (System.currentTimeMillis() >= deadline) {
+                return Boolean.FALSE;
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return !isServerRunning();
+            }
+        }
+        return Boolean.TRUE;
+    }
+
     public boolean isServerRunning() {
 
         try (Socket socket = new Socket(TryOutConstants.LOCALHOST, TryOutConstants.DEFAULT_SERVER_INBOUND_PORT)) {
@@ -513,5 +597,39 @@ public class MIServer {
     public boolean isStarting() {
 
         return isStarting;
+    }
+
+    /**
+     * How the management API identifies a deployed artifact: its name within its artifact type.
+     */
+    private static class ArtifactIdentity {
+
+        private final String name;
+        private final DeployedArtifactType type;
+
+        private ArtifactIdentity(String name, DeployedArtifactType type) {
+
+            this.name = name;
+            this.type = type;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+
+            if (this == other) {
+                return Boolean.TRUE;
+            }
+            if (!(other instanceof ArtifactIdentity)) {
+                return Boolean.FALSE;
+            }
+            ArtifactIdentity that = (ArtifactIdentity) other;
+            return type == that.type && Objects.equals(name, that.name);
+        }
+
+        @Override
+        public int hashCode() {
+
+            return Objects.hash(name, type);
+        }
     }
 }

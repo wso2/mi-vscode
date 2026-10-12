@@ -85,6 +85,7 @@ public class NewDependentProjectConnectorLoaderTest {
     private Path tempHome;
     private Path projectRoot;
     private TestableLoader loader;
+    private ConnectorHolder connectorHolder;
 
     @BeforeEach
     public void setUp() throws IOException {
@@ -97,8 +98,7 @@ public class NewDependentProjectConnectorLoaderTest {
         Files.createFile(projectRoot.resolve("pom.xml"));
         Files.createDirectory(projectRoot.resolve("src"));
 
-        ConnectorHolder connectorHolder = ConnectorHolder.getInstance();
-        connectorHolder.clearConnectors();
+        connectorHolder = new ConnectorHolder();
         InboundConnectorHolder inboundConnectorHolder = new InboundConnectorHolder();
         SynapseLanguageClientAPI languageClient = new MockXMLLanguageClient();
 
@@ -109,7 +109,6 @@ public class NewDependentProjectConnectorLoaderTest {
     public void tearDown() throws IOException {
 
         LOGGER.info("Tearing down test environment for NewDependentProjectConnectorLoaderTest");
-        ConnectorHolder.getInstance().clearConnectors();
         deleteRecursively(tempHome);
         deleteRecursively(projectRoot);
     }
@@ -276,7 +275,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        Connector connector = ConnectorHolder.getInstance().getConnector("http");
+        Connector connector = connectorHolder.getConnector("http");
         assertNotNull(connector, "http connector should be loaded");
         assertTrue(connector.isFromProject(), "Downloaded connector should be marked as fromProject");
     }
@@ -302,7 +301,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        ConnectorHolder holder = ConnectorHolder.getInstance();
+        ConnectorHolder holder = connectorHolder;
         Connector httpConnector = holder.getConnector("http");
         Connector fileConnector = holder.getConnector("file");
 
@@ -334,7 +333,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        ConnectorHolder holder = ConnectorHolder.getInstance();
+        ConnectorHolder holder = connectorHolder;
         Connector httpConnector = holder.getConnector("http");
         Connector fileConnector = holder.getConnector("file");
 
@@ -366,7 +365,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        ConnectorHolder holder = ConnectorHolder.getInstance();
+        ConnectorHolder holder = connectorHolder;
         assertEquals(1, holder.getConnectors().size(),
                 "Same connector in project and dependency should be loaded only once");
         Connector connector = holder.getConnector("http");
@@ -391,7 +390,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        Connector connector = ConnectorHolder.getInstance().getConnector("http");
+        Connector connector = connectorHolder.getConnector("http");
         assertNotNull(connector, "http connector should be loaded");
         assertTrue(connector.isFromProject(), "Connector from project dir should be marked as fromProject");
     }
@@ -413,7 +412,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        Connector connector = ConnectorHolder.getInstance().getConnector("http");
+        Connector connector = connectorHolder.getConnector("http");
         assertNotNull(connector, "http connector should be loaded");
         assertFalse(connector.isFromProject(), "Connector from dependency dir should not be marked as fromProject");
     }
@@ -448,7 +447,7 @@ public class NewDependentProjectConnectorLoaderTest {
         loader.init(projectRoot.toString());
         loader.loadConnector();
 
-        ConnectorHolder holder = ConnectorHolder.getInstance();
+        ConnectorHolder holder = connectorHolder;
         Connector httpConnector = holder.getConnector("http");
         Connector csvConnector = holder.getConnector("csv");
         Connector fileConnector = holder.getConnector("file");

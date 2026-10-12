@@ -14,7 +14,12 @@
 
 package org.eclipse.lemminx.customservice.synapse.inbound.conector;
 
-public class FetchInboundConnectorsParams {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+/**
+ * Parameters of {@code synapse/fetchInboundConnectors}: the project to rescan and an optional single zip name (null means a full rescan with an aggregate status).
+ */
+public class FetchInboundConnectorsParams extends AbstractProjectRequest {
 
     public String zipFileName;
 }

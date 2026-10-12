@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.mediatorService;
 
+import org.eclipse.lemminx.customservice.synapse.connectors.ConnectorHolder;
 import org.eclipse.lemminx.customservice.synapse.expression.ExpressionHelperProvider;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.ExpressionParam;
 import org.eclipse.lemminx.customservice.synapse.expression.pojo.HelperPanelData;
@@ -28,10 +29,10 @@ import java.util.*;
 
 public class MediatorUtils {
 
-    public static String generateResponseVariableDefaultValue(TextDocumentIdentifier documentIdentifier, Position position, String connectorName, String operationName)
+    public static String generateResponseVariableDefaultValue(TextDocumentIdentifier documentIdentifier, Position position, String connectorName, String operationName, ConnectorHolder connectorHolder)
             throws IOException {
 
-        ExpressionHelperProvider expressionHelperProvider = new ExpressionHelperProvider("");
+        ExpressionHelperProvider expressionHelperProvider = new ExpressionHelperProvider("", connectorHolder);
         ExpressionParam expressionParam = new ExpressionParam(documentIdentifier.getUri(), position);
         HelperPanelData lastMediatorHelperData = expressionHelperProvider.getLastMediatorHelperData(expressionParam);
         List<CompletionItem> variables = lastMediatorHelperData.getVariables();

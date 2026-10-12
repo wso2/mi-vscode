@@ -41,7 +41,7 @@ public class ConnectionFinderTest {
     @BeforeEach
     public void setUp() throws Exception {
 
-        connectorHolder = ConnectorHolder.getInstance();
+        connectorHolder = new ConnectorHolder();
 
         Path tempPath = Files.createTempDirectory("connector-reader-test-");
         TestUtils.extractConnectorZips(tempPath, "/synapse/connector/zips");

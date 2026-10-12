@@ -95,12 +95,15 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
     private String projectPath;
     private MediatorTryoutInfo info;
     private Position position;
+    private ConnectorHolder connectorHolder;
 
-    public MediatorSchemaVisitor(String projectPath, MediatorTryoutInfo info, Position position) {
+    public MediatorSchemaVisitor(String projectPath, MediatorTryoutInfo info, Position position,
+                                 ConnectorHolder connectorHolder) {
 
         this.projectPath = projectPath;
         this.info = info;
         this.position = position;
+        this.connectorHolder = connectorHolder;
     }
 
     //TODO: Finish all the mediators
@@ -286,12 +289,12 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
     protected void visitFilter(Filter node) {
 
         if (node.getThen() != null && Utils.checkNodeInRange(node.getThen(), position)) {
-            Utils.visitMediators(projectPath, node.getThen().getMediatorList(), info, position);
+            Utils.visitMediators(projectPath, node.getThen().getMediatorList(), info, position, connectorHolder);
         } else if (node.getElse_() != null && Utils.checkNodeInRange(node.getElse_(), position)) {
-            Utils.visitMediators(projectPath, node.getElse_().getMediatorList(), info, position);
+            Utils.visitMediators(projectPath, node.getElse_().getMediatorList(), info, position, connectorHolder);
         } else {
-            Utils.visitMediators(projectPath, node.getThen().getMediatorList(), info, position);
-            Utils.visitMediators(projectPath, node.getElse_().getMediatorList(), info, position);
+            Utils.visitMediators(projectPath, node.getThen().getMediatorList(), info, position, connectorHolder);
+            Utils.visitMediators(projectPath, node.getElse_().getMediatorList(), info, position, connectorHolder);
         }
     }
 
@@ -345,7 +348,7 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
     protected void visitCallTemplate(CallTemplate node) {
 
         if (node.getTarget() != null) {
-            Utils.visitSequenceTemplate(projectPath, node.getTarget(), info, position);
+            Utils.visitSequenceTemplate(projectPath, node.getTarget(), info, position, connectorHolder);
         }
     }
 
@@ -361,7 +364,7 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
 
         Target target = node.getTarget();
         if (target != null) {
-            Utils.visitSequence(projectPath, target.getSequence(), info, position, true);
+            Utils.visitSequence(projectPath, target.getSequence(), info, position, true, connectorHolder);
         }
     }
 
@@ -429,7 +432,7 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
             String collectionToIterate = node.getCollection();
             String iterateContent = Utils.getIterateContent(info, collectionToIterate);
             info.setOutputPayload(new JsonPrimitive(iterateContent));
-            Utils.visitSequence(projectPath, sequence, info, position, true);
+            Utils.visitSequence(projectPath, sequence, info, position, true, connectorHolder);
             if (!Utils.checkNodeInRange(node, position)) {
                 if (!node.isContinueWithoutAggregation()) {
                     if (node.isUpdateOriginal()) {
@@ -513,9 +516,9 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
     protected void visitSequence(SequenceMediator node) {
 
         if (node.getKey() != null) {
-            Utils.visitNamedSequence(projectPath, node.getKey(), info, position);
+            Utils.visitNamedSequence(projectPath, node.getKey(), info, position, connectorHolder);
         } else {
-            Utils.visitMediators(projectPath, node.getMediatorList(), info, position);
+            Utils.visitMediators(projectPath, node.getMediatorList(), info, position, connectorHolder);
         }
     }
 
@@ -553,7 +556,7 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
         }
         String responseVariable = responseVariableParameter.getValue();
         org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector connector =
-                ConnectorHolder.getInstance().getConnector(node.getConnectorName());
+                connectorHolder.getConnector(node.getConnectorName());
         if (connector != null) {
             ConnectorAction action = connector.getAction(node.getMethod());
             if (action != null && action.getOutputSchema() != null) {
@@ -593,7 +596,7 @@ public class MediatorSchemaVisitor extends AbstractMediatorVisitor {
         }
         String targetVariable = targetVariableParameter.getValue();
         org.eclipse.lemminx.customservice.synapse.connectors.entity.Connector connector =
-                ConnectorHolder.getInstance().getConnector(node.getConnectorName());
+                connectorHolder.getConnector(node.getConnectorName());
         if (connector != null) {
             ConnectorAction action = connector.getAction(node.getMethod());
             if (action != null) {

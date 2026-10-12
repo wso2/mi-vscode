@@ -17,8 +17,9 @@ package org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
-public class MediatorTryoutRequest {
+public class MediatorTryoutRequest extends AbstractProjectRequest {
 
     private final String file;
     private String tryoutId;
@@ -31,6 +32,7 @@ public class MediatorTryoutRequest {
     private final Edit[] edits;
     private MediatorInfo mediatorInfo;
     private boolean isIsolatedTryout;
+    private String serverPath;
 
     public MediatorTryoutRequest(String file, int line, int column, String inputPayload, Edit[] edits) {
 
@@ -106,6 +108,14 @@ public class MediatorTryoutRequest {
     public boolean isIsolatedTryout() {
 
         return isIsolatedTryout;
+    }
+
+    /**
+     * The initiating project's configured MI server path, used to (re)bind the shared {@code TryOutManager} when this request starts a new try-out session.
+     */
+    public String getServerPath() {
+
+        return serverPath;
     }
 
     public List<Property> getQueryParams() {

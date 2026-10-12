@@ -84,9 +84,10 @@ public class DynamicFieldsHandler {
                 return response;
             }
 
+            String projectUri = request.getProjectUri();
             try {
                 Connection connection = DBConnectionTester.getConnection(url, username, password, className,
-                        driverPath);
+                        driverPath, projectUri);
 
                 if (connection == null) {
                     log.log(Level.SEVERE, "Failed to establish database connection.");
@@ -105,12 +106,12 @@ public class DynamicFieldsHandler {
                             boolean markNull = !(OP_SELECT.equals(operationName) || OP_DELETE.equals(operationName));
                             dynamicData =
                                     databaseService.getTableColumns(url, username, password, selectedValue, fieldName,
-                                            markNull, className, driverPath);
+                                            markNull, className, driverPath, projectUri);
                             break;
                         case OP_CALL:
                         case OP_STORED_PROCEDURE:
                             dynamicData = databaseService.getStoredProcedureParameters(url, username, password,
-                                    selectedValue, fieldName, className, driverPath);
+                                    selectedValue, fieldName, className, driverPath, projectUri);
                             break;
                         default:
                             log.log(Level.INFO, "Operation not supported for dynamic fields: " + operationName);
@@ -153,14 +154,16 @@ public class DynamicFieldsHandler {
         String password = requestParams.getPassword();
         String driverPath = requestParams.getDriverPath();
         String className = requestParams.getClassName();
+        String projectUri = requestParams.getProjectUri();
         Connection connection = null;
 
         if (url != null && username != null && password != null) {
             try {
                 if (StringUtils.isBlank(driverPath)) {
-                    connection = DBConnectionTester.getConnection(url, username, password, className);
+                    connection = DBConnectionTester.getConnection(url, username, password, className, projectUri);
                 } else {
-                    connection = DBConnectionTester.getConnection(url, username, password, className, driverPath);
+                    connection = DBConnectionTester.getConnection(url, username, password, className, driverPath,
+                            projectUri);
                 }
 
                 DatabaseMetaData metaData = connection.getMetaData();

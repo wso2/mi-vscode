@@ -14,7 +14,9 @@
 
 package org.eclipse.lemminx.customservice.synapse.connectors.generate;
 
-public class ConnectorGenerateRequest {
+import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
+
+public class ConnectorGenerateRequest extends AbstractProjectRequest {
 
     public String openAPIPath;
     public String connectorProjectPath;

@@ -40,18 +40,18 @@ import static org.mockito.Mockito.mockStatic;
 public class ConnectorDownloadManagerTest {
 
     private ConnectorDownloadManager connectorDownloadManager;
+    private ConnectorHolder connectorHolder;
     private static MockedStatic<Utils> utilsMock;
 
     @BeforeEach
     void setUp() {
         connectorDownloadManager = new ConnectorDownloadManager();
+        connectorHolder = new ConnectorHolder();
         utilsMock = mockStatic(Utils.class);
-        ConnectorHolder.getInstance().clearConnectors();
     }
 
     @AfterEach
     void tearDown() {
-        ConnectorHolder.getInstance().clearConnectors();
         if (utilsMock != null) {
             utilsMock.close();
         }
@@ -66,7 +66,7 @@ public class ConnectorDownloadManagerTest {
         getPomDetails(projectPath, pomDetailsResponse);
         List<DependencyDetails>
                 connectorDependencies = pomDetailsResponse.getDependenciesDetails().getConnectorDependencies();
-        ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies);
+        ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies, connectorHolder);
 
         assertEquals(0, result.getFailedDependencies().size());
         assertEquals(0, result.getFromIntegrationProjectDependencies().size());
@@ -81,14 +81,14 @@ public class ConnectorDownloadManagerTest {
         Connector dependencyConnector = new Connector();
         dependencyConnector.setArtifactId("mi-connector-http");
         dependencyConnector.setFromProject(false);
-        ConnectorHolder.getInstance().addConnector(dependencyConnector);
+        connectorHolder.addConnector(dependencyConnector);
 
         OverviewPageDetailsResponse pomDetailsResponse = new OverviewPageDetailsResponse();
         getPomDetails(projectPath, pomDetailsResponse);
         List<DependencyDetails> connectorDependencies =
                 pomDetailsResponse.getDependenciesDetails().getConnectorDependencies();
 
-        ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies);
+        ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies, connectorHolder);
 
         assertEquals(0, result.getFailedDependencies().size());
         assertTrue(result.getFromIntegrationProjectDependencies().stream().anyMatch(dep -> dep.contains("mi-connector-http")),
@@ -104,7 +104,7 @@ public class ConnectorDownloadManagerTest {
         getPomDetails(projectPath, pomDetailsResponse);
         List<DependencyDetails>
                 connectorDependencies = pomDetailsResponse.getDependenciesDetails().getConnectorDependencies();
-        ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies);
+        ConnectorDependencyDownloadResult result = ConnectorDownloadManager.downloadDependencies(projectPath, connectorDependencies, connectorHolder);
 
         assertFalse(result.getFailedDependencies().isEmpty());
     }

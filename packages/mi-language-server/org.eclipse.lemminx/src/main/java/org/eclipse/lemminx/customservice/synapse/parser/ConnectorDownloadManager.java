@@ -62,7 +62,9 @@ public class ConnectorDownloadManager {
 
     private static final Logger LOGGER = Logger.getLogger(ConnectorDownloadManager.class.getName());
 
-    public static ConnectorDependencyDownloadResult downloadDependencies(String projectPath, List<DependencyDetails> dependencies) {
+    public static ConnectorDependencyDownloadResult downloadDependencies(String projectPath,
+                                                                         List<DependencyDetails> dependencies,
+                                                                         ConnectorHolder connectorHolder) {
 
         LOGGER.log(Level.INFO, "Starting connector dependency download for project: " + new File(projectPath).getName()
                 + " with " + dependencies.size() + " dependencies");
@@ -89,7 +91,7 @@ public class ConnectorDownloadManager {
         for (DependencyDetails dependency : dependencies) {
             String dependencyId =
                     dependency.getGroupId() + Constant.HYPHEN + dependency.getArtifact() + Constant.HYPHEN + dependency.getVersion();
-            if (isConnectorFromIntegrationProjectDependency(dependency.getArtifact())) {
+            if (isConnectorFromIntegrationProjectDependency(dependency.getArtifact(), connectorHolder)) {
                 LOGGER.log(Level.WARNING, "Connector " + dependencyId +
                         " is provided by an integration project dependency. Download not allowed.");
                 fromIntegrationProjectDependencies.add(dependencyId);
@@ -126,9 +128,10 @@ public class ConnectorDownloadManager {
      * Returns true if the connector with the given artifact ID is already loaded from an integration
      * project dependency (i.e. not owned by the current project). 
      */
-    private static boolean isConnectorFromIntegrationProjectDependency(String artifactId) {
+    private static boolean isConnectorFromIntegrationProjectDependency(String artifactId,
+                                                                       ConnectorHolder connectorHolder) {
 
-        return ConnectorHolder.getInstance().getConnectors().stream()
+        return connectorHolder.getConnectors().stream()
                 .anyMatch(c -> artifactId.equalsIgnoreCase(c.getArtifactId()) && !c.isFromProject());
     }
 
@@ -196,9 +199,9 @@ public class ConnectorDownloadManager {
     /**
      * Downloads the driver JAR for a specific connector and connection type by parsing the descriptor.yml file.
      */
-    public static String downloadDriverForConnector(String projectPath, String connectorName, String connectionType) {
+    public static String downloadDriverForConnector(String projectPath, String connectorName, String connectionType,
+                                                    ConnectorHolder connectorHolder) {
         try {
-            ConnectorHolder connectorHolder = ConnectorHolder.getInstance();
             Connector connector = resolveConnector(connectorName, connectorHolder);
             if (connector == null) {
                 LOGGER.log(Level.SEVERE, "Connector not found in holder: " + connectorName);
@@ -449,7 +452,8 @@ public class ConnectorDownloadManager {
      * Get selected driver JAR Maven Coordinates
      */
     public static DriverMavenCoordinatesResponse getDriverMavenCoordinates(String driverPath, String connectorName,
-                                                                           String connectionType) {
+                                                                           String connectionType,
+                                                                           ConnectorHolder connectorHolder) {
 
         DriverMavenCoordinatesResponse response = new DriverMavenCoordinatesResponse();
         response.setFound(false);
@@ -457,7 +461,6 @@ public class ConnectorDownloadManager {
         String artifactId = null;
         String version = null;
         if (StringUtils.isBlank(driverPath)) {
-            ConnectorHolder connectorHolder = ConnectorHolder.getInstance();
             Connector connector = resolveConnector(connectorName, connectorHolder);
             if (connector == null) {
                 LOGGER.log(Level.SEVERE, "Connector not found in holder: " + connectorName);
