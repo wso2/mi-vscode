@@ -2201,27 +2201,41 @@ function copyDockerResources(resourcePath: string, targetPath: string) {
 
 async function copyMavenWrapper(resourcePath: string, targetPath: string, host: MigrationHost, isMigration = false) {
     const mavenWrapperPropertiesPath = path.join(targetPath, '.mvn', 'wrapper');
+    const mavenWrapperPropertiesFile = path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties');
+    const mvnwCmdFile = path.join(targetPath, 'mvnw.cmd');
+    const mvnwFile = path.join(targetPath, 'mvnw');
+
+    const hasExistingWrapperFiles = fs.existsSync(mavenWrapperPropertiesFile)
+        || fs.existsSync(mvnwCmdFile)
+        || fs.existsSync(mvnwFile);
+
     fs.mkdirSync(mavenWrapperPropertiesPath, { recursive: true });
 
-    const useDefault = isMigration && host.getConfig('useDefaultMavenForMigration');
-    const propertiesSrc = useDefault ? path.join(resourcePath, 'migration', 'maven-wrapper.properties') : path.join(resourcePath, 'maven-wrapper.properties');
-    fs.copyFileSync(propertiesSrc, path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties'));
-
-    const copyWrapperFiles = () => {
-        fs.copyFileSync(path.join(resourcePath, 'mvnw.cmd'), path.join(targetPath, 'mvnw.cmd'));
-        fs.copyFileSync(path.join(resourcePath, 'mvnw'), path.join(targetPath, 'mvnw'));
+    const copyIfMissing = (src: string, dest: string, overwrite = false) => {
+        if (overwrite || !fs.existsSync(dest)) fs.copyFileSync(src, dest);
     };
 
-    if (!useDefault) {
+    const useDefault = isMigration && host.getConfig('useDefaultMavenForMigration');
+    const propertiesSrc = useDefault
+        ? path.join(resourcePath, 'migration', 'maven-wrapper.properties')
+        : path.join(resourcePath, 'maven-wrapper.properties');
+    copyIfMissing(propertiesSrc, mavenWrapperPropertiesFile, useDefault);
+
+    const copyWrapperFiles = (overwrite = false) => {
+        copyIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile, overwrite);
+        copyIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile, overwrite);
+    };
+
+    if (useDefault) {
+        copyWrapperFiles(true);
+    } else {
         const mavenInstalled = await isMavenInstalledGlobally();
-        if (mavenInstalled) {
+        if (mavenInstalled && !hasExistingWrapperFiles) {
             const success = await runMavenWrapperCommand(targetPath);
             if (!success) copyWrapperFiles();
         } else {
             copyWrapperFiles();
         }
-    } else {
-        copyWrapperFiles();
     }
 }
 
