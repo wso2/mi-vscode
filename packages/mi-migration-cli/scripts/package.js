@@ -20,8 +20,38 @@ const ROOT = path.resolve(__dirname, '..');
 const BUNDLE = path.join(ROOT, 'dist', 'bundle', 'index.js');
 const BLOB = path.join(ROOT, 'dist', 'sea-prep.blob');
 const SEA_CONFIG = path.join(ROOT, 'sea-config.json');
+const MANIFEST_TMP = path.join(ROOT, 'dist', '__asset_manifest__.json');
 const platform = os.platform();
 const OUT_BIN = path.join(ROOT, 'dist', platform === 'win32' ? 'mi-migrate.exe' : 'mi-migrate');
+
+// Collect all files under resources/ as SEA assets.
+// Also writes a __asset_manifest__ asset so the runtime knows what to extract.
+function collectAssets(dir, prefix, assets, keys) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+        const key = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+            collectAssets(fullPath, key, assets, keys);
+        } else {
+            assets[key] = fullPath;
+            keys.push(key);
+        }
+    }
+}
+
+function buildSeaAssets() {
+    const assets = {};
+    const keys = [];
+    const resourcesSrc = path.join(ROOT, 'resources');
+    if (fs.existsSync(resourcesSrc)) {
+        collectAssets(resourcesSrc, '', assets, keys);
+    } else {
+        console.warn('WARNING: resources/ not found — run "npm run build" first');
+    }
+    fs.writeFileSync(MANIFEST_TMP, JSON.stringify(keys));
+    assets['__asset_manifest__'] = MANIFEST_TMP;
+    return assets;
+}
 
 function run(cmd, opts = {}) {
     console.log(`> ${cmd}`);
@@ -32,14 +62,16 @@ function run(cmd, opts = {}) {
 console.log('\n── Step 1: Bundle with ncc ──');
 run('npx ncc build lib/index.js -o dist/bundle --minify');
 
-// 2. SEA config
+// 2. SEA config (with embedded resource assets)
 console.log('\n── Step 2: Write SEA config ──');
+const assets = buildSeaAssets();
 fs.writeFileSync(SEA_CONFIG, JSON.stringify({
     main: BUNDLE,
     output: BLOB,
     disableExperimentalSEAWarning: true,
+    assets,
 }, null, 2));
-console.log(`Written: ${SEA_CONFIG}`);
+console.log(`Written: ${SEA_CONFIG} (${Object.keys(assets).length - 1} resource asset(s) + manifest)`);
 
 // 3. Generate blob
 console.log('\n── Step 3: Generate SEA blob ──');
@@ -70,16 +102,6 @@ if (platform === 'darwin') {
 // Cleanup temp files
 fs.unlinkSync(BLOB);
 fs.unlinkSync(SEA_CONFIG);
+fs.unlinkSync(MANIFEST_TMP);
 
-// Copy resources alongside the binary so dist/ is self-contained
-console.log('\n── Step 6: Copy resources ──');
-const resourcesSrc = path.join(ROOT, 'resources');
-const resourcesDest = path.join(ROOT, 'dist', 'resources');
-if (fs.existsSync(resourcesSrc)) {
-    fs.cpSync(resourcesSrc, resourcesDest, { recursive: true, force: true });
-    console.log(`Copied resources → ${resourcesDest}`);
-} else {
-    console.warn('WARNING: resources/ directory not found — run "npm run build" first');
-}
-
-console.log(`\n✓ Binary ready: ${OUT_BIN}`);
+console.log(`\n✓ Binary ready (resources embedded): ${OUT_BIN}`);
