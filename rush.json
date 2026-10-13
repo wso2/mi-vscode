@@ -73,6 +73,10 @@
     {
       "packageName": "@wso2/mi-component-diagram",
       "projectFolder": "packages/mi-component-diagram"
+    },
+    {
+      "packageName": "@wso2/mi-migration-core",
+      "projectFolder": "packages/mi-migration-core"
     }
   ]
 }

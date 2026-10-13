@@ -1232,6 +1232,7 @@
     "@vscode/vsce": "3.7.1",
     "@wso2/font-wso2-vscode": "workspace:*",
     "@wso2/mi-core": "workspace:*",
+    "@wso2/mi-migration-core": "workspace:*",
     "@wso2/mi-diagram": "workspace:*",
     "@wso2/mi-rpc-client": "workspace:*",
     "@wso2/syntax-tree": "workspace:*",

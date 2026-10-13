@@ -30,6 +30,7 @@ import { SetPathRequest, PathDetailsResponse, SetupDetails, DependencyDetails } 
 import { MiVisualizerRpcManager } from '../rpc-managers/mi-visualizer/rpc-manager';
 import { parseStringPromise } from 'xml2js';
 import { LATEST_CAR_PLUGIN_VERSION } from './templates';
+import { LATEST_MI_VERSION } from '@wso2/mi-migration-core';
 import { runCommand, runBasicCommand } from '../test-explorer/runner';
 import { escapeShellArg } from './shellEscapeUtils';
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
@@ -45,7 +46,7 @@ export const javaVersionCompatibilityMap: { [key: string]: { supportedRange: { m
     '4.2.0': { supportedRange: { min: '11', max: '17' }, recommended: ['17'] },
     '4.1.0': { supportedRange: { min: '11', max: '11' }, recommended: ['11'] },
 };
-export const LATEST_MI_VERSION = "4.6.0";
+export { LATEST_MI_VERSION };
 const COMPATIBLE_JDK_VERSION = "11";
 const DEFAULT_SYNAPSE_CORE_VERSION = "4.0.0-wso2v165";
 export const synapseCoreVersionMap: { [key: string]: string } = {
