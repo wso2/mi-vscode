@@ -19,6 +19,7 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as readline from 'readline';
 import { Command, Option } from 'commander';
 import {
@@ -34,6 +35,38 @@ import {
     MigrationFinding,
     LATEST_MI_VERSION,
 } from '@wso2/mi-migration-core';
+
+// ---------------------------------------------------------------------------
+// SEA asset extraction
+// ---------------------------------------------------------------------------
+
+let _seaTempDir: string | undefined;
+
+/**
+ * Extracts all embedded SEA assets (resources/) to a temp directory on first
+ * call, then returns that directory path on subsequent calls.
+ * The temp directory is removed when the process exits.
+ */
+function extractSeaAssets(): string {
+    if (_seaTempDir) return _seaTempDir;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const sea = require('node:sea') as {
+        getRawAsset(key: string): ArrayBuffer;
+        getAsset(key: string, encoding: 'utf8'): string;
+    };
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mi-migrate-'));
+    process.on('exit', () => {
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    });
+    const manifest: string[] = JSON.parse(sea.getAsset('__asset_manifest__', 'utf8'));
+    for (const key of manifest) {
+        const dest = path.join(tempDir, key);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.writeFileSync(dest, Buffer.from(sea.getRawAsset(key)));
+    }
+    _seaTempDir = tempDir;
+    return tempDir;
+}
 
 // ---------------------------------------------------------------------------
 // CLI MigrationHost implementation
@@ -76,27 +109,17 @@ function createHost(opts: CliOptions): MigrationHost {
             const envOverride = process.env['MI_MIGRATE_RESOURCES_DIR'];
             if (envOverride) return path.join(envOverride, relative);
 
-            // Determine the base directory to start searching from.
-            // Priority:
-            //   1. SEA binary  → process.execPath (the binary IS the node runtime)
-            //   2. ncc bundle  → require.main.filename (reliable even when __dirname/argv[1] are wrong)
-            //   3. Fallback    → process.argv[1]
-            let scriptDir: string;
             try {
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const sea = require('node:sea') as { isSea?: () => boolean };
                 if (typeof sea.isSea === 'function' && sea.isSea()) {
-                    scriptDir = path.dirname(process.execPath);
-                } else {
-                    const mainFile = require.main?.filename ?? process.argv[1];
-                    scriptDir = path.dirname(path.resolve(mainFile));
+                    return path.join(extractSeaAssets(), relative);
                 }
-            } catch {
-                const mainFile = require.main?.filename ?? process.argv[1];
-                scriptDir = path.dirname(path.resolve(mainFile));
-            }
+            } catch { /* not running as SEA */ }
 
-            // Walk up from the script/binary directory to find a resources/ folder
+            // Non-SEA: walk up from the script directory to find a resources/ folder
+            const mainFile = require.main?.filename ?? process.argv[1];
+            const scriptDir = path.dirname(path.resolve(mainFile));
             let dir = scriptDir;
             for (let i = 0; i < 5; i++) {
                 const candidate = path.join(dir, 'resources');
