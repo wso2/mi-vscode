@@ -82,9 +82,27 @@ interface CliOptions {
     output?: string;
 }
 
+function setupFileLogging(logFile: string) {
+    const append = (...args: unknown[]) => {
+        try {
+            const line = `[${new Date().toISOString()}] ${args.map(a => String(a)).join(' ')}`;
+            fs.appendFileSync(logFile, line + '\n', 'utf-8');
+        } catch { /* best-effort */ }
+    };
+    const _log = console.log.bind(console);
+    const _warn = console.warn.bind(console);
+    const _error = console.error.bind(console);
+    console.log = (...args) => { _log(...args); append(...args); };
+    console.warn = (...args) => { _warn(...args); append(...args); };
+    console.error = (...args) => { _error(...args); append(...args); };
+}
+
 function createHost(opts: CliOptions): MigrationHost {
     if (opts.javaHome) {
         process.env['JAVA_HOME'] = opts.javaHome;
+    }
+    if (opts.logFile) {
+        setupFileLogging(opts.logFile);
     }
 
     return {
@@ -97,11 +115,6 @@ function createHost(opts: CliOptions): MigrationHost {
                 console.warn(line);
             } else {
                 console.log(line);
-            }
-            if (opts.logFile) {
-                try {
-                    fs.appendFileSync(opts.logFile, line + '\n', 'utf-8');
-                } catch { /* best-effort */ }
             }
         },
 
