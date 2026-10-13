@@ -30,6 +30,7 @@ import { SetPathRequest, PathDetailsResponse, SetupDetails, DependencyDetails } 
 import { MiVisualizerRpcManager } from '../rpc-managers/mi-visualizer/rpc-manager';
 import { parseStringPromise } from 'xml2js';
 import { LATEST_CAR_PLUGIN_VERSION } from './templates';
+import { LATEST_MI_VERSION } from '@wso2/mi-migration-core';
 import { runCommand, runBasicCommand } from '../test-explorer/runner';
 import { escapeShellArg } from './shellEscapeUtils';
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
@@ -57,7 +58,6 @@ export async function isMiProject(projectPath: string): Promise<boolean> {
         return false;
     }
 }
-
 const COMPATIBLE_JDK_VERSION = "11";
 export const SYNAPSE_CORE_VERSION_460_AND_ABOVE = "4.1.0-wso2v48";
 export const SYNAPSE_CORE_VERSION_BELOW_460 = "4.0.0-wso2v165";
