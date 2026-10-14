@@ -52,7 +52,7 @@ export async function isMiProject(projectPath: string): Promise<boolean> {
     try {
         const pomFilePath = path.join(projectPath, 'pom.xml');
         const pomContent = await fs.promises.readFile(pomFilePath, 'utf-8');
-        return pomContent.includes('<projectType>integration-project</projectType>');
+        return /<projectType>\s*integration-project\s*<\/projectType>/i.test(pomContent);
     } catch {
         return false;
     }
@@ -105,20 +105,40 @@ export function isWso2IntegratorRuntime(): boolean {
 
 let ballerinaOutputChannel: vscode.OutputChannel | undefined;
 
+// Tracks ongoing wrapper setups so concurrent callers for the same project share one copy
+// instead of racing (e.g. workspace-wide setup and a project's own state machine init).
+const mavenWrapperSetupPromises = new Map<string, Promise<void>>();
+
+export async function ensureMavenWrapper(projectUri: string): Promise<void> {
+    const currentProcess = mavenWrapperSetupPromises.get(projectUri);
+    if (currentProcess) {
+        return currentProcess;
+    }
+
+    const setupPromise = (async () => {
+        const hasWrapper = fs.existsSync(path.join(projectUri, 'mvnw'))
+            && fs.existsSync(path.join(projectUri, 'mvnw.cmd'))
+            && fs.existsSync(path.join(projectUri, '.mvn', 'wrapper', 'maven-wrapper.properties'));
+        if (!hasWrapper) {
+            await copyMavenWrapper(
+                extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
+                projectUri
+            );
+        }
+    })();
+
+    mavenWrapperSetupPromises.set(projectUri, setupPromise);
+    try {
+        await setupPromise;
+    } finally {
+        mavenWrapperSetupPromises.delete(projectUri);
+    }
+}
+
 export async function setupEnvironment(projectUri: string, isOldProject: boolean): Promise<boolean> {
     try {
-        const wrapperFiles = await vscode.workspace.findFiles(
-            new vscode.RelativePattern(projectUri, '{mvnw,mvnw.cmd}'),
-            '**/node_modules/**',
-            1
-        );
         if (!isOldProject) {
-            if (wrapperFiles.length === 0) {
-                await copyMavenWrapper(
-                    extension.context.asAbsolutePath(path.join('resources', 'maven-wrapper')),
-                    projectUri
-                );
-            }
+            await ensureMavenWrapper(projectUri);
             setupConfigFiles(projectUri);
         }
         const { miVersionFromPom } = await getProjectSetupDetails(projectUri);
@@ -135,7 +155,7 @@ export async function setupEnvironment(projectUri: string, isOldProject: boolean
         if (isMISet && isJavaSet) {
             const isUpdateRequested = await isServerUpdateRequested(projectUri);
             await updateCarPluginVersion(projectUri);
-            const config = vscode.workspace.getConfiguration('MI', vscode.Uri.parse(projectUri));
+            const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));
             const currentState = config.inspect<string>("useLocalMaven");
             if (currentState?.workspaceFolderValue === undefined) {
                 config.update("useLocalMaven", currentState?.globalValue ?? false, vscode.ConfigurationTarget.WorkspaceFolder);
@@ -692,8 +712,8 @@ export async function setPathsInWorkSpace(request: SetPathRequest): Promise<Path
                 }
             }
             if (response.status !== 'not-valid') {
-                config.update(SELECTED_JAVA_HOME, validJavaHome, vscode.ConfigurationTarget.WorkspaceFolder);
-                extension.context.globalState.update(SELECTED_JAVA_HOME, validJavaHome);
+                await config.update(SELECTED_JAVA_HOME, validJavaHome, vscode.ConfigurationTarget.WorkspaceFolder);
+                await extension.context.globalState.update(SELECTED_JAVA_HOME, validJavaHome);
 
             } else {
                 vscode.window.showErrorMessage('Invalid Java Home path or Unsupported version. Please set a valid Java Home path. ');
@@ -710,9 +730,9 @@ export async function setPathsInWorkSpace(request: SetPathRequest): Promise<Path
                 }
             }
             if (response.status !== 'not-valid') {
-                config.update(SELECTED_SERVER_PATH, validServerPath, vscode.ConfigurationTarget.WorkspaceFolder);
-                extension.context.globalState.update(SELECTED_SERVER_PATH, validServerPath);
-                config.update('suppressServerUpdateNotification', true, vscode.ConfigurationTarget.WorkspaceFolder);
+                await config.update(SELECTED_SERVER_PATH, validServerPath, vscode.ConfigurationTarget.WorkspaceFolder);
+                await extension.context.globalState.update(SELECTED_SERVER_PATH, validServerPath);
+                await config.update('suppressServerUpdateNotification', true, vscode.ConfigurationTarget.WorkspaceFolder);
             } else {
                 vscode.window.showErrorMessage('Invalid WSO2 Integrator: MI path or Unsupported version. Please set a valid WSO2 Integrator: MI path');
             }

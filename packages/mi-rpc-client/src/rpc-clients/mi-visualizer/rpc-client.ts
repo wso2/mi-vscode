@@ -40,7 +40,6 @@ import {
     SampleDownloadRequest,
     RecentProjectsResponse,
     OpenRecentProjectRequest,
-    AddConfigurableRequest,
     SwaggerProxyRequest,
     SwaggerProxyResponse,
     ToggleDisplayOverviewRequest,
@@ -55,7 +54,6 @@ import {
     focusOutput,
     getAvailableRuntimeServices,
     getCurrentThemeKind,
-    addConfigurable,
     getHistory,
     getProjectOverview,
     getWorkspaceProjectSummary,
@@ -205,10 +203,6 @@ export class MiVisualizerRpcClient implements MIVisualizerAPI {
 
     openRecentProject(params: OpenRecentProjectRequest): void {
         return this._messenger.sendNotification(openRecentProject, HOST_EXTENSION, params);
-    }
-
-    addConfigurable(params: AddConfigurableRequest): Promise<void> {
-        return this._messenger.sendRequest(addConfigurable, HOST_EXTENSION, params);
     }
 
     getHistory(): Promise<HistoryEntryResponse> {

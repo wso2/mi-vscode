@@ -41,7 +41,6 @@ import {
     ProjectOverviewResponse,
     WorkspaceProjectSummary,
     ReadmeContentResponse,
-    AddConfigurableRequest,
     ProjectDetailsResponse,
     UpdatePropertiesRequest,
     UpdateDependenciesRequest,
@@ -87,7 +86,6 @@ export interface MIVisualizerAPI {
     downloadSelectedSampleFromGithub: (params: SampleDownloadRequest) => void;
     getRecentProjects: () => Promise<RecentProjectsResponse>;
     openRecentProject: (params: OpenRecentProjectRequest) => void;
-    addConfigurable: (params: AddConfigurableRequest) => Promise<void>;
     getHistory: () => Promise<HistoryEntryResponse>;
     addToHistory: (params: HistoryEntry) => void;
     goHome: () => void;

@@ -67,12 +67,19 @@ export function ProjectInformation(props: ProjectInformationProps) {
         fetchData();
     }, [props]);
 
-    const openManageConfigs = (configs: PomNodeDetails[]) => {
-        rpcClient.getMiVisualizerRpcClient().openView({
-            type: POPUP_EVENT_TYPE.OPEN_VIEW,
-            location: { view: MACHINE_VIEW.ManageConfigurables, customProps: { configs } },
-            isPopup: true
-        });
+    const openManageConfigs = async () => {
+        // Re-fetch so ranges reflect current file content, not the possibly-stale cached state.
+        try {
+            const response = await rpcClient.getMiVisualizerRpcClient().getProjectDetails();
+            setProjectDetails(response);
+            rpcClient.getMiVisualizerRpcClient().openView({
+                type: POPUP_EVENT_TYPE.OPEN_VIEW,
+                location: { view: MACHINE_VIEW.ManageConfigurables, customProps: { configs: response.configurables } },
+                isPopup: true
+            });
+        } catch (error) {
+            console.error("Error fetching project details:", error);
+        }
     }
 
     const handleManageDependencies = () => {
@@ -158,7 +165,7 @@ export function ProjectInformation(props: ProjectInformationProps) {
                     readonly={true}
                     allowAddItem={false}
                 />}
-            <VSCodeLink onClick={() => openManageConfigs(configs)}>
+            <VSCodeLink onClick={() => openManageConfigs()}>
                 <div style={{
                     display: 'flex',
                     padding: '10px 0 0'

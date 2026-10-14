@@ -498,7 +498,7 @@ export class MiDebugAdapter extends LoggingDebugSession {
     private showErrorAndExecuteChangeServerPath(completeError: string) {
         vscode.window.showErrorMessage(completeError, 'Change Server Path').then((selection) => {
             if (selection) {
-                vscode.commands.executeCommand(COMMANDS.CHANGE_SERVER_PATH);
+                vscode.commands.executeCommand(COMMANDS.CHANGE_SERVER_PATH, this.projectUri);
             }
         });
     }

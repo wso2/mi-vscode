@@ -38,10 +38,24 @@ export const videosFolder = path.join(__dirname, '..', 'test-resources', 'videos
 export let vscode: ElectronApplication | undefined;
 export let page: ExtendedPage;
 
+/**
+ * Runs a command via the command palette, waiting for the palette to actually be focused before
+ * typing. `ExtendedPage.executePaletteCommand` types and hits Enter with no such wait, so on a
+ * slow render it can drop keystrokes typed before the input is ready, confirming on whatever
+ * happens to be selected instead of the intended command.
+ */
+export async function executePaletteCommandSafely(playwrightPage: Page, command: string) {
+    await playwrightPage.keyboard.press(process.platform === 'darwin' ? 'Meta+Shift+p' : 'Control+Shift+p');
+    const input = playwrightPage.locator('.quick-input-widget input[type="text"]:visible');
+    await input.waitFor({ state: 'visible', timeout: 10000 });
+    await input.pressSequentially(command);
+    await playwrightPage.keyboard.press('Enter');
+}
+
 async function initVSCode(groupName?: string, title?: string, attempt: number = 1) {
     if (vscode && page) {
-        await page.executePaletteCommand('Reload Window');
-        await page.executePaletteCommand('View: Toggle Secondary Side Bar Visibility');
+        await executePaletteCommandSafely(page.page, 'Reload Window');
+        await executePaletteCommandSafely(page.page, 'View: Toggle Secondary Side Bar Visibility');
     } else {
         vscode = await startVSCode(resourcesFolder, vscodeVersion, undefined, false, extensionsFolder, newProjectPath, 'mi-test-profile');
     }
@@ -87,7 +101,7 @@ export async function resumeVSCode(groupName?: string, title?: string, attempt: 
     if (vscode && page) {
         console.log('Reloading VSCode');
         await page.page.waitForTimeout(1000);
-        await page.executePaletteCommand('Reload Window');
+        await executePaletteCommandSafely(page.page, 'Reload Window');
     } else {
         console.log('Starting VSCode');
         vscode = await startVSCode(resourcesFolder, vscodeVersion, undefined, false, extensionsFolder, path.join(newProjectPath, 'testProject'), 'mi-test-profile');
@@ -99,7 +113,7 @@ export async function resumeVSCode(groupName?: string, title?: string, attempt: 
 export async function clearNotificationAlerts() {
     console.log(`Clearing notifications`);
     if (page) {
-        await page.executePaletteCommand("Notifications: Clear All Notifications");
+        await executePaletteCommandSafely(page.page, "Notifications: Clear All Notifications");
     }
 }
 
@@ -115,17 +129,17 @@ export async function toggleNotifications(disable: boolean) {
     await notificationStatus.waitFor();
     const ariaLabel = await notificationStatus.getAttribute('aria-label');
     if ((ariaLabel !== "Do Not Disturb" && disable) || (ariaLabel === "Do Not Disturb" && !disable)) {
-        await page.executePaletteCommand("Notifications: Toggle Do Not Disturb Mode");
+        await executePaletteCommandSafely(page.page, "Notifications: Toggle Do Not Disturb Mode");
     }
 
 }
 
 export async function showNotifications() {
-    await page.executePaletteCommand("Notifications: Show Notifications");
+    await executePaletteCommandSafely(page.page, "Notifications: Show Notifications");
 }
 
 export async function closeEditorGroup() {
-    await page.executePaletteCommand('Close Editor Group');
+    await executePaletteCommandSafely(page.page, 'Close Editor Group');
 }
 
 async function safeCleanup(directoryPath: string) {

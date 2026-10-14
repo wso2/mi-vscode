@@ -17,7 +17,7 @@
  */
 
 import { test } from '@playwright/test';
-import { initTest, page, toggleNotifications } from '../Utils';
+import { initTest, page, toggleNotifications, executePaletteCommandSafely } from '../Utils';
 import { Automation } from '../components/ArtifactTest/Automation';
 import { Endpoint } from '../components/ArtifactTest/Endpoint';
 import { Sequence } from '../components/ArtifactTest/Sequence';
@@ -130,7 +130,7 @@ export default function createTests() {
         await api.openDiagramView("NewOpenAPI" + testAttempt + ":v1.0.0", "/pet/findByStatus");
 
         await page.page.waitForTimeout(2000);
-        await page.executePaletteCommand('View: Close All Editors');
+        await executePaletteCommandSafely(page.page, 'View: Close All Editors');
         console.log("Closed editor groups");
         console.log('Opening Diagram View for API again without existing webview');
         await api.openDiagramView("NewOpenAPI" + testAttempt + ":v1.0.0", "/pet/findByStatus");

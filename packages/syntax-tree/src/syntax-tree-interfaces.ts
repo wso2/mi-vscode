@@ -448,7 +448,7 @@ export interface InboundEndpoint extends STNode {
     sequenceURI: string | undefined;
     protocol: string;
     onError: string;
-    suspend: boolean;
+    suspend?: boolean;
     clazz: string;
     statistics: string;
     trace: string;
@@ -978,7 +978,7 @@ export interface Proxy extends STNode {
     transports: string;
     pinnedServers: string;
     serviceGroup: string;
-    startOnLoad: boolean;
+    startOnLoad: string | boolean;
     statistics: string;
     trace: string;
     onError: string;

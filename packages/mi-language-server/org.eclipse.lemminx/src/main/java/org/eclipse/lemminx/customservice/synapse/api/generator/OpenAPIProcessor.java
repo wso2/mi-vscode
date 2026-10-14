@@ -51,6 +51,7 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -118,44 +119,13 @@ public class OpenAPIProcessor {
 
         switch (paramType) {
             case SwaggerConstants.PARAMETER_IN_PATH:
-                PathParameter pathParameter = new PathParameter();
-                pathParameter.setName(paramName);
-                pathParameter.setSchema(new StringSchema());
-                operation.addParametersItem(pathParameter);
+                operation.addParametersItem(createParameter(new PathParameter(), paramName));
                 break;
             case SwaggerConstants.PARAMETER_IN_QUERY:
-                QueryParameter queryParameter = new QueryParameter();
-                queryParameter.setName(paramName);
-                queryParameter.setSchema(new StringSchema());
-                operation.addParametersItem(queryParameter);
+                operation.addParametersItem(createParameter(new QueryParameter(), paramName));
                 break;
             case SwaggerConstants.PARAMETER_IN_BODY:
-                RequestBody requestBody = new RequestBody();
-                requestBody.description("Sample Payload");
-                requestBody.setRequired(false);
-
-                // Add json media type for the request body
-                MediaType jsonMediaType = new MediaType();
-                Schema bodySchema = new Schema();
-                bodySchema.setType("object");
-                Map<String, Schema> inputProperties = new HashMap<>();
-                ObjectSchema objectSchema = new ObjectSchema();
-                bodySchema.setProperties(inputProperties);
-                inputProperties.put("payload", objectSchema);
-                jsonMediaType.setSchema(bodySchema);
-                Content content = new Content();
-                content.addMediaType("application/json", jsonMediaType);
-
-                // Add xml media type for the request body
-                MediaType xmlMediaType = new MediaType();
-                Schema xmlBodySchema = new Schema();
-                xmlBodySchema.setType("object");
-                xmlBodySchema.setXml(new XML());
-                xmlBodySchema.getXml().setName("payload");
-                xmlMediaType.setSchema(xmlBodySchema);
-                content.addMediaType("application/xml", xmlMediaType);
-                requestBody.setContent(content);
-                operation.setRequestBody(requestBody);
+                operation.setRequestBody(createDefaultRequestBody());
                 break;
         }
     }
@@ -326,24 +296,7 @@ public class OpenAPIProcessor {
                 case SwaggerConstants.OPERATION_HTTP_POST:
                 case SwaggerConstants.OPERATION_HTTP_PUT:
                 case SwaggerConstants.OPERATION_HTTP_PATCH:
-                    RequestBody requestBody = new RequestBody();
-                    requestBody.description("Sample Payload");
-                    requestBody.setRequired(false);
-
-                    MediaType mediaType = new MediaType();
-                    Schema bodySchema = new Schema();
-                    bodySchema.setType("object");
-
-                    Map<String, Schema> inputProperties = new HashMap<>();
-                    ObjectSchema objectSchema = new ObjectSchema();
-
-                    bodySchema.setProperties(inputProperties);
-                    inputProperties.put("payload", objectSchema);
-                    mediaType.setSchema(bodySchema);
-                    Content content = new Content();
-                    content.addMediaType("application/json", mediaType);
-                    requestBody.setContent(content);
-                    operation.setRequestBody(requestBody);
+                    operation.setRequestBody(createDefaultRequestBody());
                     break;
             }
         }
@@ -381,7 +334,8 @@ public class OpenAPIProcessor {
         SwaggerParseResult swaggerParseResult = apiv3Parser.readContents(existingSwagger);
         OpenAPI openAPI = swaggerParseResult.getOpenAPI();
 
-        Paths paths = openAPI.getPaths();
+        Paths paths = openAPI.getPaths() != null ? openAPI.getPaths() : new Paths();
+        removeDefaultStyleAndExplode(paths);
         Paths newPaths = new Paths();
 
         final Map<String, Object> dataMap = GenericApiObjectDefinition.getPathMap(api);
@@ -432,7 +386,9 @@ public class OpenAPIProcessor {
                 Object[] paramArr =
                         (Object[]) ((Map<String, Object>) methodEntry.getValue()).get(SwaggerConstants.PARAMETERS);
                 if (operationExists) {
-                    List<Parameter> parameters = operation.getParameters();
+                    // An operation without parameters (e.g. one moved to a new path key) has a null list.
+                    List<Parameter> parameters = operation.getParameters() != null
+                            ? operation.getParameters() : new ArrayList<>();
                     List<Parameter> newParameter = new ArrayList<>();
                     if (paramArr != null && paramArr.length > 0) {
                         for (Object o : paramArr) {
@@ -442,12 +398,12 @@ public class OpenAPIProcessor {
                             switch (paramType) {
                                 case SwaggerConstants.PARAMETER_IN_PATH:
                                     existing = parameters.stream()
-                                            .filter(c -> c.getName().equals(paramName) && c instanceof PathParameter)
+                                            .filter(c -> paramName.equals(c.getName()) && c instanceof PathParameter)
                                             .findFirst();
                                     break;
                                 case SwaggerConstants.PARAMETER_IN_QUERY:
                                     existing =
-                                            parameters.stream().filter(c -> c.getName().equals(paramName) &&
+                                            parameters.stream().filter(c -> paramName.equals(c.getName()) &&
                                                     c instanceof QueryParameter).findFirst();
                                     break;
                             }
@@ -464,11 +420,19 @@ public class OpenAPIProcessor {
                         updateDefaultResponseAndPathItem(pathItem, operation, methodEntry, operationExists);
                     }
                     // remove deleted parameters from swagger
-                    if (newParameter.size() > 0) {
-                        parameters.removeIf(c -> !newParameter.contains(c) && (c instanceof PathParameter));
+                    // updatePathQueryAndBodyParams may have replaced a null list, so read it from the operation.
+                    // Also runs when the resource has no path params, e.g. after renaming /users/{id} to /users.
+                    if (operation.getParameters() != null) {
+                        operation.getParameters()
+                                .removeIf(c -> !newParameter.contains(c) && (c instanceof PathParameter));
+                        if (operation.getParameters().isEmpty()) {
+                            operation.setParameters(null);
+                        }
                     }
                 } else {
-                    populateParameters(pathItem, methodMap);
+                    // Populating the whole methodMap could replace existing operations.
+                    populateParameters(pathItem,
+                            Collections.singletonMap(methodEntry.getKey(), methodEntry.getValue()));
                 }
 
             }
@@ -535,40 +499,19 @@ public class OpenAPIProcessor {
 
         switch (paramType) {
             case SwaggerConstants.PARAMETER_IN_PATH:
-                PathParameter pathParameter = new PathParameter();
-                pathParameter.setName(paramName);
-                pathParameter.setSchema(new StringSchema());
+                Parameter pathParameter = createParameter(new PathParameter(), paramName);
                 operation.addParametersItem(pathParameter);
                 newParameters.add(pathParameter);
                 break;
             case SwaggerConstants.PARAMETER_IN_QUERY:
-                QueryParameter queryParameter = new QueryParameter();
-                queryParameter.setName(paramName);
-                queryParameter.setSchema(new StringSchema());
+                Parameter queryParameter = createParameter(new QueryParameter(), paramName);
                 operation.addParametersItem(queryParameter);
                 newParameters.add(queryParameter);
                 break;
             case SwaggerConstants.PARAMETER_IN_BODY:
                 // if body schema exists do not modify
                 if (operation.getRequestBody() == null) {
-                    RequestBody requestBody = new RequestBody();
-                    requestBody.description("Sample Payload");
-                    requestBody.setRequired(false);
-
-                    MediaType mediaType = new MediaType();
-                    Schema bodySchema = new Schema();
-                    bodySchema.setType("object");
-
-                    Map<String, Schema> inputProperties = new HashMap<>();
-                    ObjectSchema objectSchema = new ObjectSchema();
-
-                    bodySchema.setProperties(inputProperties);
-                    inputProperties.put("payload", objectSchema);
-                    mediaType.setSchema(bodySchema);
-                    Content content = new Content();
-                    content.addMediaType("application/json", mediaType);
-                    requestBody.setContent(content);
-                    operation.setRequestBody(requestBody);
+                    operation.setRequestBody(createDefaultRequestBody());
                 }
                 break;
         }
@@ -645,5 +588,111 @@ public class OpenAPIProcessor {
                 addDefaultRequestBody(operation, methodEntry);
             }
         }
+    }
+
+    /**
+     * Populates a newly created path / query parameter.
+     *
+     * @param parameter Path or query parameter to populate.
+     * @param paramName Name of the parameter.
+     * @return the populated parameter.
+     */
+    private Parameter createParameter(Parameter parameter, String paramName) {
+
+        parameter.setName(paramName);
+        parameter.setSchema(new StringSchema());
+        return parameter;
+    }
+
+    /**
+     * Removes default style / explode values the parser adds, so reused and new parameters match.
+     *
+     * @param paths OpenApi Paths object.
+     */
+    private void removeDefaultStyleAndExplode(Paths paths) {
+
+        if (paths == null) {
+            return;
+        }
+        for (PathItem pathItem : paths.values()) {
+            removeDefaultStyleAndExplode(pathItem.getParameters());
+            for (Operation operation : pathItem.readOperations()) {
+                removeDefaultStyleAndExplode(operation.getParameters());
+            }
+        }
+    }
+
+    private void removeDefaultStyleAndExplode(List<Parameter> parameters) {
+
+        if (parameters == null) {
+            return;
+        }
+        for (Parameter parameter : parameters) {
+            Parameter.StyleEnum defaultStyle = getDefaultStyle(parameter.getIn());
+            if (defaultStyle == null) {
+                continue;
+            }
+            Parameter.StyleEnum style = parameter.getStyle() != null ? parameter.getStyle() : defaultStyle;
+            // explode defaults to true only for form.
+            Boolean defaultExplode = style == Parameter.StyleEnum.FORM;
+            if (defaultExplode.equals(parameter.getExplode())) {
+                parameter.setExplode(null);
+            }
+            if (style == defaultStyle) {
+                parameter.setStyle(null);
+            }
+        }
+    }
+
+    private Parameter.StyleEnum getDefaultStyle(String in) {
+
+        if (in == null) {
+            return null;
+        }
+        switch (in) {
+            case SwaggerConstants.PARAMETER_IN_PATH:
+            case "header":
+                return Parameter.StyleEnum.SIMPLE;
+            case SwaggerConstants.PARAMETER_IN_QUERY:
+            case "cookie":
+                return Parameter.StyleEnum.FORM;
+            default:
+                return null;
+        }
+    }
+
+    /**
+     * Creates the default sample request body.
+     *
+     * @return the request body.
+     */
+    private RequestBody createDefaultRequestBody() {
+
+        RequestBody requestBody = new RequestBody();
+        requestBody.description("Sample Payload");
+        requestBody.setRequired(false);
+
+        // Add json media type for the request body
+        MediaType jsonMediaType = new MediaType();
+        Schema bodySchema = new Schema();
+        bodySchema.setType("object");
+        Map<String, Schema> inputProperties = new HashMap<>();
+        ObjectSchema objectSchema = new ObjectSchema();
+        bodySchema.setProperties(inputProperties);
+        inputProperties.put("payload", objectSchema);
+        jsonMediaType.setSchema(bodySchema);
+        Content content = new Content();
+        content.addMediaType("application/json", jsonMediaType);
+
+        // Add xml media type for the request body
+        MediaType xmlMediaType = new MediaType();
+        Schema xmlBodySchema = new Schema();
+        xmlBodySchema.setType("object");
+        xmlBodySchema.setXml(new XML());
+        xmlBodySchema.getXml().setName("payload");
+        xmlMediaType.setSchema(xmlBodySchema);
+        content.addMediaType("application/xml", xmlMediaType);
+        requestBody.setContent(content);
+        return requestBody;
     }
 }

@@ -90,7 +90,7 @@
         <xs:attribute name="transports" type="xs:string" use="required" />
         <xs:attribute name="pinnedServers" type="xs:string" use="optional" />
         <xs:attribute name="serviceGroup" type="xs:string" use="optional" />
-        <xs:attribute name="startOnLoad" type="xs:boolean" use="optional" />
+        <xs:attribute name="startOnLoad" type="xs:string" use="optional" />
     </xs:complexType>
 
     <xs:simpleType name="policyType">

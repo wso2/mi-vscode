@@ -53,17 +53,6 @@
           {
             "type": "attribute",
             "value": {
-              "name": "suspend",
-              "displayName": "Suspend Inbound",
-              "inputType": "checkbox",
-              "defaultValue": false,
-              "hidden": "true",
-              "required": "false"
-            }
-          },
-          {
-            "type": "attribute",
-            "value": {
               "name": "protocol",
               "displayName": "Protocol",
               "inputType": "string",
@@ -118,6 +107,16 @@
               "displayName": "Coordination",
               "inputType": "checkbox",
               "defaultValue": true,
+              "required": "false"
+            }
+          },
+          {
+            "type": "attribute",
+            "value": {
+              "name": "suspend",
+              "displayName": "Suspend Inbound",
+              "inputType": "checkbox",
+              "defaultValue": false,
               "required": "false"
             }
           }

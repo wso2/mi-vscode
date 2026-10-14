@@ -26,7 +26,7 @@ public class PlatformTest {
 	@Test
 	public void testVersion() {
 		String version = Platform.getVersion().getVersionNumber();
-		Pattern pattern = Pattern.compile("^(\\d+\\.\\d+\\.\\d+)(-.*)$");
+		Pattern pattern = Pattern.compile("^(\\d+\\.\\d+\\.\\d+)(-.*)?$");
 		Matcher matcher = pattern.matcher(version);
 		assertTrue(matcher.matches(), "Unexpected format for :" + version);
 	}

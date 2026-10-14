@@ -87,14 +87,50 @@ export const ResourceView = ({ model: resourceModel, documentUri, diagnostics }:
     }
 
     const onSave = async (data: ResourceFormData) => {
+        // Resolves unsaved swagger editor changes first; cancelling leaves the API unchanged.
+        const { proceed } = await rpcClient.getMiDiagramRpcClient().prepareSwaggerForEdit({ apiPath: documentUri });
+        if (!proceed) {
+            return;
+        }
+        const rawPath = data.urlStyle === "url-mapping" ? data.urlMapping : data.uriTemplate;
+        const newResourcePath = rawPath?.split("?")[0];
+        // Rename first so regeneration reuses the existing definition.
+        const pathChanged = !!resourcePath && !!newResourcePath && resourcePath !== newResourcePath;
+        if (pathChanged) {
+            const { proceed } = await rpcClient.getMiDiagramRpcClient().renameResourceInSwagger({
+                apiPath: documentUri,
+                oldResourcePath: resourcePath,
+                newResourcePath,
+                methods: model.methods,
+            });
+            if (!proceed) {
+                return;
+            }
+        }
+
         const ranges: Range[] = getResourceDeleteRanges(model, data);
-        await onResourceEdit(data, model.range, ranges, documentUri, rpcClient);
+        try {
+            await onResourceEdit(data, model.range, ranges, documentUri, rpcClient);
+        } catch (error) {
+            // The API still has the old path, so move the swagger definition back to match it.
+            if (pathChanged) {
+                await rpcClient.getMiDiagramRpcClient().renameResourceInSwagger({
+                    apiPath: documentUri,
+                    oldResourcePath: newResourcePath,
+                    newResourcePath: resourcePath,
+                    methods: model.methods,
+                });
+            }
+            rpcClient.getMiVisualizerRpcClient().showNotification({
+                message: "Failed to update the resource.",
+                type: "error",
+            });
+            return;
+        }
 
         // Query params only modify the OpenAPI spec, never the synapse XML.
         const newQueryParams = data.queryParams ?? [];
         if (newQueryParams.length > 0 || existingQueryParams.length > 0) {
-            const rawPath = data.urlStyle === "url-mapping" ? data.urlMapping : data.uriTemplate;
-            const newResourcePath = rawPath?.split("?")[0];
             const methods = Object.entries(data.methods ?? {})
                 .filter(([, enabled]) => enabled)
                 .map(([method]) => method);
@@ -103,11 +139,13 @@ export const ResourceView = ({ model: resourceModel, documentUri, diagnostics }:
                 apiName,
                 apiPath: documentUri,
                 resourcePath: newResourcePath,
-                oldResourcePath: resourcePath !== newResourcePath ? resourcePath : undefined,
                 methods,
                 queryParams: newQueryParams,
             }).then((response) => {
-                setExistingQueryParams(response.queryParams);
+                // Only reflect params actually written to the swagger file.
+                if (response.updated) {
+                    setExistingQueryParams(response.queryParams);
+                }
             });
         }
 

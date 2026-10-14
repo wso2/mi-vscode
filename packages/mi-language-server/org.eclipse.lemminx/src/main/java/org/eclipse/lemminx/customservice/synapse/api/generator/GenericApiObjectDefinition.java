@@ -66,8 +66,9 @@ public class GenericApiObjectDefinition {
         Map<String, Object> pathsMap = new LinkedHashMap<>();
         for (APIResource resource : api.getResource()) {
             String uriOrUrl = getUri(resource);
+            // Looked up by the same key it is stored under, so resources sharing a path keep all their methods.
             Map<String, Object> methodMap =
-                    (Map<String, Object>) pathsMap.get(uriOrUrl);
+                    (Map<String, Object>) pathsMap.get(getPathFromUrl(uriOrUrl));
             if (methodMap == null) {
                 methodMap = new LinkedHashMap<>();
             }

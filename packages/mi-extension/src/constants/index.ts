@@ -100,6 +100,8 @@ export const COMMANDS = {
     REMOTE_DEPLOY_PROJECT: 'MI.remote-deploy-project',
     CREATE_DOCKER_IMAGE: 'MI.create-docker-image',
     BUILD_AND_RUN_PROJECT: 'MI.build-and-run',
+    RESUME_DEBUG_SESSION: 'MI.resume-debug-session',
+    RESUME_TEST_RUN: 'MI.resume-test-run',
     TERMINATE_SERVER: 'MI.terminate-server',
     BUILD_BAL_MODULE: 'MI.build-bal-module',
     ADD_DATA_SOURCE_COMMAND: 'MI.project-explorer.add-data-source',

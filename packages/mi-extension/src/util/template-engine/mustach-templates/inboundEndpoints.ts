@@ -34,8 +34,8 @@ export interface GetInboundTemplatesArgs {
 
 export function getInboundEndpointMustacheTemplate() {
     return `<?xml version="1.0" encoding="UTF-8"?>
-<inboundEndpoint{{#attributes}} {{name}}="{{value}}"{{/attributes}}>
-    <parameters xmlns="http://ws.apache.org/ns/synapse">
+<inboundEndpoint{{#attributes}} {{name}}="{{value}}"{{/attributes}} xmlns="http://ws.apache.org/ns/synapse">
+    <parameters>
     {{#params}}
         <parameter name="{{name}}">{{value}}</parameter>
     {{/params}}

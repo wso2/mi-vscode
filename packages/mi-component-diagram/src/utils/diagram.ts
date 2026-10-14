@@ -190,12 +190,19 @@ export const getModelId = (nodeId: string) => {
 export const centerDiagram = async (diagramEngine: DiagramEngine) => {
     if (diagramEngine?.getCanvas()?.getBoundingClientRect()) {
         const canvas = diagramEngine.getCanvas();
-        const zoomLevel = diagramEngine.getModel().getZoomLevel() / 100;
-        const noOfNodes = diagramEngine.getModel().getNodes().filter((node) => node.getType() === NodeTypes.ACTOR_NODE).length;
-        const nodeHeights = ((ENTRY_NODE_HEIGHT + NODE_GAP_Y) * noOfNodes) - NODE_GAP_Y;
+        const model = diagramEngine.getModel();
+        const nodesRect = diagramEngine.getBoundingNodesRect(model.getNodes());
+        if (!nodesRect) {
+            return;
+        }
+        const zoomLevel = model.getZoomLevel() / 100;
+        const nodesCenterX = nodesRect.getTopLeft().x + nodesRect.getWidth() / 2;
+        const nodesCenterY = nodesRect.getTopLeft().y + nodesRect.getHeight() / 2;
 
-        diagramEngine.getModel().setOffsetX(50);
-        diagramEngine.getModel().setOffsetY(200 - (nodeHeights * zoomLevel) / 2);
+        model.setOffset(
+            canvas.clientWidth / 2 - nodesCenterX * zoomLevel,
+            canvas.clientHeight / 2 - nodesCenterY * zoomLevel
+        );
         diagramEngine.repaintCanvas();
     }
 };

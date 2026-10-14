@@ -262,7 +262,7 @@ export const onResourceEdit = async (
         (a, b) => b.start.line - a.start.line || b.start.character - a.start.character
     );
     let deleteLineCount = 0
-    await rpcClient
+    const { status } = await rpcClient
         .getMiDiagramRpcClient()
         .applyEdit({
             text: xml,
@@ -270,6 +270,9 @@ export const onResourceEdit = async (
             range: startTagRange,
             addNewLine: false
         });
+    if (!status) {
+        throw new Error("Failed to update the resource.");
+    }
     for (const range of sortedRanges) {
         deleteLineCount += range.end.line - range.start.line;
         await rpcClient.getMiDiagramRpcClient().applyEdit({

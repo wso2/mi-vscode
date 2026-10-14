@@ -33,7 +33,7 @@ import {
 } from './types';
 import { queryArtifacts, controlArtifact, ARTIFACT_TYPE_MAP } from './management_api_client';
 import { logDebug, logError, logInfo } from '../../copilot/logger';
-import { getBuildCommand, getRunCommand, getStopCommand, loadEnvVariables } from '../../../debugger/tasks';
+import { getBuildCommand, getRunCommand, getStopCommand, getProjectEnvVariables } from '../../../debugger/tasks';
 import { setJavaHomeInEnvironmentAndPath } from '../../../debugger/debugHelper';
 import { DebuggerConfig } from '../../../debugger/config';
 import { getServerPathFromConfig } from '../../../util/onboardingUtils';
@@ -270,7 +270,8 @@ async function runBuildCommand(
     // Set up environment with JAVA_HOME
     const envVariables = {
         ...process.env,
-        ...setJavaHomeInEnvironmentAndPath(projectPath)
+        ...setJavaHomeInEnvironmentAndPath(projectPath),
+        ...getProjectEnvVariables([projectPath])
     };
 
     // Execute build
@@ -795,12 +796,6 @@ async function startServer(
             }
         }
 
-        // Load .env if exists
-        const envFilePath = path.resolve(projectPath, '.env');
-        if (fs.existsSync(envFilePath)) {
-            loadEnvVariables(envFilePath);
-        }
-
         // Get run command (non-debug mode)
         const runCommand = await withServerStartTimeout(
             getRunCommand(serverPath, false),
@@ -821,6 +816,7 @@ async function startServer(
         const envVariables = {
             ...process.env,
             ...setJavaHomeInEnvironmentAndPath(projectPath),
+            ...getProjectEnvVariables([projectPath]),
             ...definedEnvVariables
         };
 

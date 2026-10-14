@@ -24,12 +24,18 @@ public class ConfigDetails {
     private String type;
     private String value;
     private Either<Range, List<Range>> range;
+    private Range envRange;
 
     public ConfigDetails(String key, String type, String value, Either<Range, List<Range>> range) {
+        this(key, type, value, range, null);
+    }
+
+    public ConfigDetails(String key, String type, String value, Either<Range, List<Range>> range, Range envRange) {
         this.key = key;
         this.type = type;
         this.value = value;
         this.range = range;
+        this.envRange = envRange;
     }
 
     public String getKey() {
@@ -46,5 +52,9 @@ public class ConfigDetails {
 
     public Either<Range, List<Range>> getRange() {
         return range;
+    }
+
+    public Range getEnvRange() {
+        return envRange;
     }
 }

@@ -562,7 +562,7 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest('synapse/pdfToImagesBase64', {base64: req});
     }
 
-    async getConfigurableList(projectUri: string): Promise<{ key: string; type: string; value: string; range: Range | Range[]; }[]> {
+    async getConfigurableList(projectUri: string): Promise<{key: string; type: string; value: string; range: Range | Range[]; envRange?: Range; }[]> {
         return this.sendRequest('synapse/getConfigurableList', { projectUri });
     }
 

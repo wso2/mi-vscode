@@ -3,7 +3,7 @@
   "displayName": "WSO2 Integrator: MI",
   "description": "The official low-code development toolkit for WSO2 Integrator: MI. Everything you need to build, test, and deploy integrations — right from within VS Code.",
   "icon": "resources/images/wso2-micro-integrator-icon.png",
-  "version": "4.1.5",
+  "version": "4.1.6",
   "publisher": "wso2",
   "engines": {
     "vscode": "^1.100.0"
@@ -884,6 +884,10 @@
           "when": "!WI.isWiRuntime || (WI.isWiRuntime && config.integrator.selectedProfile == 'WSO2 Integrator: MI')"
         },
         {
+          "command": "MI.project-explorer.open-workspace-overview",
+          "when": "!WI.isWiRuntime || (WI.isWiRuntime && config.integrator.selectedProfile == 'WSO2 Integrator: MI')"
+        },
+        {
           "command": "MI.project-explorer.project-delete",
           "when": "!WI.isWiRuntime || (WI.isWiRuntime && config.integrator.selectedProfile == 'WSO2 Integrator: MI')"
         },
@@ -1257,14 +1261,14 @@
     "@wso2/webview-giga-bridge": "workspace:*",
     "@wso2/playwright-vscode-tester": "workspace:*",
     "adm-zip": "0.6.1",
-    "axios": "1.18.0",
+    "axios": "1.20.0",
     "copyfiles": "2.4.1",
     "cors-anywhere": "0.4.4",
     "dotenv": "16.5.0",
     "fast-xml-parser": "5.7.0",
     "find-process": "1.4.10",
     "fs-extra": "11.3.0",
-    "handlebars": "4.7.9",
+    "handlebars": "4.7.10",
     "json-schema": "0.4.0",
     "json-schema-to-ts": "3.1.1",
     "jsonix": "3.0.0",

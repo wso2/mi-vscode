@@ -1251,10 +1251,8 @@ export function FormGenerator(props: FormGeneratorProps) {
                 );
             case 'configurable': {
                 const onCreateButtonClick = async (fetchItems: any, handleValueChange: any) => {
-                    await rpcClient.getMiVisualizerRpcClient().addConfigurable({
-                        projectUri: '',
-                        configurableName: field.value.value,
-                        configurableType: element.configurableType
+                    await rpcClient.getMiVisualizerRpcClient().updateConfigFileValues({
+                        configValues: [{ key: field.value.value, type: element.configurableType, value: '' }]
                     });
                     handleValueChange(field.value.value);
                 }

@@ -20,14 +20,14 @@
 import * as vscode from 'vscode';
 import * as childprocess from 'child_process';
 import { COMMANDS, MVN_COMMANDS, DEPLOY_BASE_ARGS } from '../constants';
-import { loadEnvVariables, getBuildCommand, getRunCommand, getStopCommand } from './tasks';
+import { getProjectEnvVariables, getBuildCommand, getRunCommand, getStopCommand } from './tasks';
 import * as fs from 'fs';
 import * as path from 'path';
 import { SELECTED_SERVER_PATH, INCORRECT_SERVER_PATH_MSG } from './constants';
 import { reject } from 'lodash';
 import axios from 'axios';
 import * as net from 'net';
-import { MACHINE_VIEW } from '@wso2/mi-core';
+import { MACHINE_VIEW, PomNodeDetails } from '@wso2/mi-core';
 import { getStateMachine } from '../stateMachine';
 import { logDebug, LogLevel } from '../util/logger';
 import * as toml from "@iarna/toml";
@@ -206,7 +206,8 @@ export async function executeBuildTask(projectUri: string, serverPath: string, s
                 const buildCommand = getBuildCommand(project) + (forceUpdate ? ' -U' : '');
                 const envVariables = {
                     ...process.env,
-                    ...setJavaHomeInEnvironmentAndPath(project)
+                    ...setJavaHomeInEnvironmentAndPath(project),
+                    ...getProjectEnvVariables([project])
                 };
 
                 const buildProcess = await child_process.spawn(
@@ -343,7 +344,8 @@ export function executeRemoteDeployTask(projectUri: string, postBuildTask?: Func
             MVN_COMMANDS.MVN_WRAPPER_WIN_COMMAND : MVN_COMMANDS.MVN_WRAPPER_COMMAND);
         const envVariables = {
             ...process.env,
-            ...setJavaHomeInEnvironmentAndPath(projectUri)
+            ...setJavaHomeInEnvironmentAndPath(projectUri),
+            ...getProjectEnvVariables([projectUri])
         };
 
         const allArgs = [...DEPLOY_BASE_ARGS, ...extraArgs];
@@ -451,14 +453,6 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
             return;
         }
 
-        if (DebuggerConfig.getProjectList().length > 0) {
-            for (const project of DebuggerConfig.getProjectList()) {
-                const filePath = path.resolve(project, '.env');
-                if (fs.existsSync(filePath)) {
-                    loadEnvVariables(filePath)
-                }
-            }
-        }
         let runCommand: string | undefined;
         try {
             runCommand = await getRunCommand(serverPath, isDebug);
@@ -477,6 +471,7 @@ export async function startServer(projectUri: string, serverPath: string, isDebu
             const envVariables = {
                 ...process.env,
                 ...setJavaHomeInEnvironmentAndPath(projectUri),
+                ...getProjectEnvVariables(DebuggerConfig.getProjectList()),
                 ...definedEnvVariables
             };
 
@@ -642,11 +637,10 @@ export async function executeTasks(projectUri: string, serverPath: string, isDeb
 }
 
 export async function getServerPath(projectUri: string): Promise<string | undefined> {
-    const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));
     const currentPath = getServerPathFromConfig(projectUri);
     if (!currentPath) {
-        await vscode.commands.executeCommand(COMMANDS.CHANGE_SERVER_PATH);
-        const updatedPath = config.get(SELECTED_SERVER_PATH) as string;
+        await vscode.commands.executeCommand(COMMANDS.CHANGE_SERVER_PATH, projectUri);
+        const updatedPath = getServerPathFromConfig(projectUri);
         if (updatedPath) {
             return path.normalize(updatedPath);
         }
@@ -877,11 +871,9 @@ export async function killProcessByPort(port: number): Promise<void> {
             return;
         }
 
-        // Iterate over the found processes and kill each
-        for (const processInfo of list) {
-            const pid = processInfo.pid;
-            treeKill(pid, 'SIGKILL');
-        }
+        await Promise.all(list.map(processInfo => new Promise<void>((resolve) => {
+            treeKill(processInfo.pid, 'SIGKILL', () => resolve());
+        })));
     } catch (error) {
         vscode.window.showErrorMessage(`Error finding or killing process on port ${port}: ${(error as Error).message}`);
     }
@@ -915,8 +907,11 @@ async function compareFilesByMD5(file1: string, file2: string): Promise<boolean>
     });
 }
 
-export async function getConfigurableEntries(projectUri: string): Promise<{key: string; type: string; value: string; range: any; }[]> {
+export async function getConfigurableEntries(projectUri: string): Promise<PomNodeDetails[]> {
     const langClient = await MILanguageClient.getInstance(projectUri);
     const res = await langClient.getConfigurableList(projectUri);
-    return res;
+    return res.map(entry => ({
+        ...entry,
+        range: Array.isArray(entry.range) ? entry.range[0] : entry.range
+    }));
 }

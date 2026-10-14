@@ -25,7 +25,7 @@ public class InboundEndpoint extends STNode {
     String sequence;
     String protocol;
     String onError;
-    boolean suspend;
+    Boolean suspend;
     String clazz;
     EnableDisable statistics;
     EnableDisable trace;
@@ -81,12 +81,12 @@ public class InboundEndpoint extends STNode {
         this.onError = onError;
     }
 
-    public boolean isSuspend() {
+    public Boolean isSuspend() {
 
         return suspend;
     }
 
-    public void setSuspend(boolean suspend) {
+    public void setSuspend(Boolean suspend) {
 
         this.suspend = suspend;
     }

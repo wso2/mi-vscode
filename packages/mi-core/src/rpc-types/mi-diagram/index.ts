@@ -306,6 +306,10 @@ import {
     UpdateGlobalConnectorFlagsRequest,
     UpdateResourceQueryParamsRequest,
     UpdateResourceQueryParamsResponse,
+    RenameResourceInSwaggerRequest,
+    RenameResourceInSwaggerResponse,
+    PrepareSwaggerForEditRequest,
+    PrepareSwaggerForEditResponse,
 } from "./types";
 
 export interface MiDiagramAPI {
@@ -442,6 +446,8 @@ export interface MiDiagramAPI {
     updateSwaggerFromAPI: (params: SwaggerTypeRequest) => void;
     updateAPIFromSwagger: (params: UpdateAPIFromSwaggerRequest) => void;
     updateResourceQueryParams: (params: UpdateResourceQueryParamsRequest) => Promise<UpdateResourceQueryParamsResponse>;
+    prepareSwaggerForEdit: (params: PrepareSwaggerForEditRequest) => Promise<PrepareSwaggerForEditResponse>;
+    renameResourceInSwagger: (params: RenameResourceInSwaggerRequest) => Promise<RenameResourceInSwaggerResponse>;
     updateTestSuite: (params: UpdateTestSuiteRequest) => Promise<UpdateTestSuiteResponse>;
     updateTestCase: (params: UpdateTestCaseRequest) => Promise<UpdateTestCaseResponse>;
     updateMockService: (params: UpdateMockServiceRequest) => Promise<UpdateMockServiceResponse>;
