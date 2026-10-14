@@ -167,6 +167,7 @@ function scriptMediatorGraalVmRule(files: SynapseFile[]): MigrationFinding[] {
 function connectorVersionRule(ctx: AnalysisContext): MigrationFinding[] {
     const findings: MigrationFinding[] = [];
 
+    // IS workspace: CONNECTOR project entries carry version via connector.xml
     for (const [, fileInfo] of ctx.artifactIdToFileInfoMap) {
         if (fileInfo.projectType !== Nature.CONNECTOR || !fileInfo.artifact) continue;
 
@@ -184,6 +185,67 @@ function connectorVersionRule(ctx: AnalysisContext): MigrationFinding[] {
                     filePath: fileInfo.path,
                 });
             }
+        }
+    }
+
+    // VS Code MI project: connectors are Maven dependencies — check pom.xml
+    const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false });
+    for (const { projectDir, projectType } of ctx.projectDirsWithType) {
+        if (projectType !== Nature.MI_ESB) continue;
+
+        let pomContent = ctx.projectDirToResolvedPomMap.get(projectDir) ?? '';
+        if (!pomContent) {
+            const pomPath = path.join(projectDir, 'pom.xml');
+            if (!fs.existsSync(pomPath)) continue;
+            try { pomContent = fs.readFileSync(pomPath, 'utf-8'); } catch { continue; }
+        }
+
+        const parsed = parser.parse(pomContent);
+        const rawDeps = parsed?.project?.dependencies?.dependency;
+        if (!rawDeps) continue;
+        const deps: unknown[] = Array.isArray(rawDeps) ? rawDeps : [rawDeps];
+
+        for (const dep of deps) {
+            const artifactId: string = (dep as Record<string, string>)?.artifactId ?? '';
+            const version: string = (dep as Record<string, string>)?.version ?? '';
+            if (!artifactId || !version) continue;
+            for (const rule of CONNECTOR_VERSION_REQUIREMENTS) {
+                if (!artifactId.toLowerCase().includes(rule.namePattern)) continue;
+                if (isVersionBelow(version, rule.breakingBelow)) {
+                    findings.push({
+                        severity: 'breaking',
+                        category: 'connector-version',
+                        message: `${artifactId} v${version} detected. ${rule.recommendation}`,
+                        filePath: path.join(projectDir, 'pom.xml'),
+                    });
+                }
+            }
+        }
+
+        // Manually added connector zips (src/main/wso2mi/resources/connectors/)
+        const connectorZipDir = path.join(projectDir, 'src', 'main', 'wso2mi', 'resources', 'connectors');
+        if (fs.existsSync(connectorZipDir)) {
+            try {
+                for (const entry of fs.readdirSync(connectorZipDir)) {
+                    if (!entry.endsWith('.zip')) continue;
+                    const zipName = entry.slice(0, -4);
+                    // Take the last version-like token from the filename (e.g. mongodb-connector-1.0.0 → 1.0.0)
+                    const versions = Array.from(zipName.matchAll(/(\d+\.\d+(?:\.\d+)*)/g));
+                    if (versions.length === 0) continue;
+                    const version = versions[versions.length - 1][1];
+                    for (const rule of CONNECTOR_VERSION_REQUIREMENTS) {
+                        if (!zipName.toLowerCase().includes(rule.namePattern)) continue;
+                        if (isVersionBelow(version, rule.breakingBelow)) {
+                            findings.push({
+                                severity: 'breaking',
+                                category: 'connector-version',
+                                message: `${zipName} v${version} detected. ${rule.recommendation}`,
+                                filePath: path.join(connectorZipDir, entry),
+                            });
+                        }
+                    }
+                }
+            } catch { /* skip unreadable */ }
         }
     }
 
@@ -272,6 +334,14 @@ function missingDependencyRule(ctx: AnalysisContext): MigrationFinding[] {
  * silently ignored during migration.
  */
 function unrecognizedProjectTypeRule(ctx: AnalysisContext): MigrationFinding[] {
+    // Rule only makes sense at workspace/multi-module level. If no sub-projects were
+    // detected, ctx.source is itself a leaf project — its own subdirs are not "projects".
+    if (ctx.projectDirsWithType.length === 0) return [];
+
+    // VS Code MI projects don't use Eclipse workspace layout — composite exporters
+    // and other module dirs won't have .project files, so skip the rule entirely.
+    if (ctx.projectDirsWithType.some(p => p.projectType === Nature.MI_ESB)) return [];
+
     const knownDirs = new Set(ctx.projectDirsWithType.map(({ projectDir }) => projectDir));
     const findings: MigrationFinding[] = [];
 
@@ -282,6 +352,8 @@ function unrecognizedProjectTypeRule(ctx: AnalysisContext): MigrationFinding[] {
             const fullPath = path.join(ctx.source, entry.name);
             if (['.backup', '.git', '.vscode', '.mvn', '.metadata', '.tmp'].includes(entry.name)) continue;
             if (!knownDirs.has(fullPath)) {
+                // Maven modules (have pom.xml) are intentional — just not a recognised IS type.
+                if (fs.existsSync(path.join(fullPath, 'pom.xml'))) continue;
                 findings.push({
                     severity: 'warning',
                     category: 'unrecognized-project',
@@ -415,8 +487,10 @@ function runSynapseFileRules(ctx: AnalysisContext, rules: SynapseAggregateRule[]
     const allFiles: SynapseFile[] = [];
 
     for (const { projectDir, projectType } of ctx.projectDirsWithType) {
-        if (projectType !== Nature.ESB) continue;
-        const synapseConfigDir = path.join(projectDir, 'src', 'main', 'synapse-config');
+        if (projectType !== Nature.ESB && projectType !== Nature.MI_ESB) continue;
+        const synapseConfigDir = projectType === Nature.MI_ESB
+            ? path.join(projectDir, 'src', 'main', 'wso2mi', 'artifacts')
+            : path.join(projectDir, 'src', 'main', 'synapse-config');
         if (!fs.existsSync(synapseConfigDir)) continue;
         for (const filePath of walkXmlFiles(synapseConfigDir)) {
             try {
