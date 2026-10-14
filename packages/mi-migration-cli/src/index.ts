@@ -34,6 +34,7 @@ import {
     MigrationConfigKey,
     MigrationFinding,
     LATEST_MI_VERSION,
+    Nature,
 } from '@wso2/mi-migration-core';
 
 // ---------------------------------------------------------------------------
@@ -194,6 +195,17 @@ async function resolveProjectDirs(absSource: string): Promise<string[]> {
     const { projectName } = getProjectDetails(absSource);
     if (projectName) return [absSource];
 
+    // VS Code MI project root: contains a sub-module with src/main/wso2mi/
+    // (the root may have no pom.xml of its own; analyze it as a single unit)
+    try {
+        for (const entry of fs.readdirSync(absSource, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            if (fs.existsSync(path.join(absSource, entry.name, 'src', 'main', 'wso2mi'))) {
+                return [absSource];
+            }
+        }
+    } catch { /* unreadable — fall through */ }
+
     // Workspace mode: findMultiModuleProjectsInWorkspaceDir stops recursing when it
     // encounters any .project file (even the Eclipse workspace-root one). Fall back to
     // scanning immediate child directories for IS projects when it returns nothing.
@@ -256,6 +268,14 @@ function printJsonReport(findings: TaggedFinding[]) {
 
 async function analyzeDir(projectDir: string, host: MigrationHost, opts: CliOptions): Promise<TaggedFinding[]> {
     const projectDirsWithType = await getProjectDirectoriesWithType(projectDir);
+
+    // If no sub-projects were detected, check whether projectDir itself is a
+    // VS Code MI configs project (src/main/wso2mi/ lives directly under it).
+    if (projectDirsWithType.length === 0 &&
+            fs.existsSync(path.join(projectDir, 'src', 'main', 'wso2mi'))) {
+        projectDirsWithType.push({ projectDir, projectType: Nature.MI_ESB });
+    }
+
     const projectDirToResolvedPomMap = await generateProjectDirToResolvedPomMap(projectDir, host);
     const artifactIdToFileInfoMap = generateArtifactIdToFileInfoMap(projectDirToResolvedPomMap, projectDirsWithType);
     return analyzeProject({

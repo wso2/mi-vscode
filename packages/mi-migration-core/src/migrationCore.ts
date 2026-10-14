@@ -38,7 +38,8 @@ export enum Nature {
     REGISTRY,
     CLASS,
     LEGACY,
-    DISTRIBUTION
+    DISTRIBUTION,
+    MI_ESB,  // VS Code MI project (src/main/wso2mi/ structure)
 }
 
 export interface ArtifactItem {
@@ -1151,6 +1152,10 @@ async function determineProjectType(source: string): Promise<Nature | undefined>
         const pomContent = fs.readFileSync(rootPomFilePath, 'utf-8');
         const fetchedNatureStr = await extractNatureFromPomContent(pomContent);
         configType = getNatureFromString(fetchedNatureStr);
+    }
+    // Detect VS Code MI project structure (src/main/wso2mi/)
+    if (!configType && fs.existsSync(path.join(source, 'src', 'main', 'wso2mi'))) {
+        configType = Nature.MI_ESB;
     }
     return configType;
 }
