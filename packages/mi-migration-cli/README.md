@@ -1,6 +1,8 @@
 # mi-migrate CLI
 
-Standalone command-line tool for migrating WSO2 Integration Studio projects to the MI VS Code extension format.
+Standalone command-line tool for migrating WSO2 Integration Studio projects to the MI VS Code extension project structure.
+
+> **Scope:** `migrate` converts the *project structure* from Integration Studio format to VS Code format. It does **not** modify artifact configuration — sequences, APIs, proxies, endpoints, and other synapse artifacts are carried over as-is. Any configuration changes required for a newer MI runtime (connector upgrades, script engine changes, etc.) must be applied manually in VS Code after migration.
 
 ## Prerequisites
 
@@ -17,7 +19,9 @@ mi-migrate <command> [options] <source>
 
 #### `analyze` — inspect a project without migrating
 
-Scans the source project or workspace and reports issues that need attention before or after migration. Does **not** modify any files.
+Scans the source project or workspace and reports compatibility issues. Supports both **Integration Studio project structure** and **VS Code MI project structure** — useful for pre-migration planning or for reviewing an already-migrated VS Code project.
+
+Does **not** modify any files. After the scan, an `analysis-summary.md` is written into each analyzed project directory with a full breakdown of findings.
 
 ```
 mi-migrate analyze [options] <source>
@@ -34,8 +38,11 @@ mi-migrate analyze [options] <source>
 **Examples**
 
 ```bash
-# Analyze a single project
+# Analyze an Integration Studio project before migrating
 mi-migrate analyze ./MyIntegrationProject
+
+# Analyze an already-migrated VS Code project
+mi-migrate analyze ./MyIntegrationProject-migrated
 
 # Analyze a workspace, output JSON, fail on breaking changes
 mi-migrate analyze ./workspace --format json --fail-on-breaking
@@ -43,6 +50,14 @@ mi-migrate analyze ./workspace --format json --fail-on-breaking
 # Target a specific MI version
 mi-migrate analyze ./MyProject --target-version 4.3.0
 ```
+
+**Output**
+
+Each analyzed project directory receives an `analysis-summary.md` file containing:
+- **Breaking changes** — issues that will cause runtime failures on the target MI version (e.g. incompatible connector versions, removed transport support)
+- **Warnings** — issues that need attention but are not hard failures (e.g. script engine changes, class mediators)
+
+The console prints a short summary and lists the paths to all written files.
 
 **Exit codes**
 
@@ -54,9 +69,11 @@ mi-migrate analyze ./MyProject --target-version 4.3.0
 
 ---
 
-#### `migrate` — migrate a project
+#### `migrate` — migrate an Integration Studio project to VS Code structure
 
-Copies the source to an output directory and converts it to the MI VS Code project format. Runs a pre-migration analysis and prompts for confirmation if issues are found.
+> **Integration Studio projects only.** `migrate` expects a WSO2 Integration Studio project or workspace as input. It is not intended for projects already in VS Code MI format.
+
+Copies the source to an output directory and converts it from Integration Studio project structure to the MI VS Code extension format. After migration completes, an `analysis-summary.md` is written to the output project listing any items that need attention in VS Code (connector upgrades, script engine changes, etc.).
 
 ```
 mi-migrate migrate [options] <source>
@@ -73,7 +90,7 @@ mi-migrate migrate [options] <source>
 **Examples**
 
 ```bash
-# Migrate a single project
+# Migrate a single Integration Studio project
 mi-migrate migrate ./MyIntegrationProject
 
 # Migrate a workspace to a custom output path
@@ -82,8 +99,6 @@ mi-migrate migrate ./workspace --output ./workspace-migrated
 # Non-interactive migration targeting a specific version (for CI/CD)
 mi-migrate migrate ./MyProject --yes --target-version 4.3.0 --log-file migration.log
 ```
-
----
 
 ### Migration logs
 
@@ -100,7 +115,7 @@ These are always written automatically — `--log-file` is only needed if you wa
 
 ### Workspace support
 
-Both commands automatically detect whether `<source>` is a single Integration Studio project or an Eclipse workspace containing multiple projects. No flags are needed — the tool adapts accordingly.
+Both commands automatically detect whether `<source>` is a single project or a workspace containing multiple projects. No flags are needed — the tool adapts accordingly.
 
 ### Environment variables
 
