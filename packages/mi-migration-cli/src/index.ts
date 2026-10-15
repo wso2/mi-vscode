@@ -262,6 +262,22 @@ function printJsonReport(findings: TaggedFinding[]) {
     process.stdout.write(JSON.stringify({ findings }, null, 2) + '\n');
 }
 
+const BACKUP_DIR = '.backup';
+const MIGRATION_LOG_FILE = 'migration.log';
+
+/**
+ * Appends a timestamped line to a project's .backup/migration.log in the same
+ * format the migration core uses, so post-migration CLI actions are captured there.
+ */
+function appendToProjectMigrationLog(projectDir: string, level: 'INFO' | 'WARN' | 'ERROR', message: string) {
+    try {
+        const logPath = path.join(projectDir, BACKUP_DIR, MIGRATION_LOG_FILE);
+        if (!fs.existsSync(path.dirname(logPath))) return;
+        const line = `[${new Date().toISOString()}] [${level}] ${message}\n`;
+        fs.appendFileSync(logPath, line, 'utf-8');
+    } catch { /* best-effort */ }
+}
+
 function writeAnalysisSummary(
     projectDir: string,
     projectName: string,
@@ -435,9 +451,11 @@ async function runMigrate(source: string, opts: CliOptions) {
     const host = createHost(opts);
 
     // Pre-migration analysis: one combined pass, one report, one prompt
+    const perProjectFindings = new Map<string, MigrationFinding[]>();
     const allFindings: TaggedFinding[] = [];
     for (const dir of projectDirs) {
         const findings = await analyzeDir(dir, host, opts);
+        perProjectFindings.set(dir, findings);
         if (isWorkspace) {
             const label = getProjectDetails(dir).projectName ?? path.basename(dir);
             allFindings.push(...findings.map(f => ({ ...f, projectLabel: label })));
@@ -449,8 +467,8 @@ async function runMigrate(source: string, opts: CliOptions) {
         printTextReport(allFindings);
         const breaking = allFindings.filter(f => f.severity === 'breaking');
         const question = breaking.length > 0
-            ? `Found ${breaking.length} breaking change(s) requiring manual intervention. Proceed with migration?`
-            : `Found ${allFindings.length} warning(s). Proceed with migration?`;
+            ? `Found ${breaking.length} breaking change(s) and ${allFindings.length - breaking.length} warning(s).\n\nAfter migration completes, an analysis-summary.md will be written to each project directory listing any items that need attention in VS Code. Proceed with migration?`
+            : `Found ${allFindings.length} warning(s).\n\nAfter migration completes, an analysis-summary.md will be written to each project directory listing any items that need attention in VS Code. Proceed with migration?`;
         const shouldProceed = await host.confirmProceed(question);
         if (!shouldProceed) {
             console.log('Migration cancelled.');
@@ -463,9 +481,37 @@ async function runMigrate(source: string, opts: CliOptions) {
 
     if (result.filePaths.length > 0) {
         console.log('\nMigrated project(s):');
-        result.filePaths.forEach(p => console.log(`  ${p}`));
+        result.filePaths.forEach(p => {
+            console.log(`  ${p}`);
+            // Log migrated paths into each project's migration log
+            for (const dir of projectDirs) {
+                appendToProjectMigrationLog(dir, 'INFO', `Migrated project output: ${p}`);
+            }
+        });
     } else {
         console.log('\nMigration produced no output.');
+    }
+
+    // Write per-project analysis summaries to the migrated output directories
+    const summaryPaths: string[] = [];
+    for (const dir of projectDirs) {
+        const findings = perProjectFindings.get(dir) ?? [];
+        const label = getProjectDetails(dir).projectName ?? path.basename(dir);
+        try {
+            const summaryPath = writeAnalysisSummary(dir, label, findings, opts.targetVersion);
+            summaryPaths.push(summaryPath);
+            const msg = `Analysis summary written: ${summaryPath}`;
+            console.log(`[INFO] ${msg}`);
+            appendToProjectMigrationLog(dir, 'INFO', msg);
+        } catch (err) {
+            const msg = `Could not write analysis-summary.md for ${label}: ${err}`;
+            console.warn(`[WARN] ${msg}`);
+            appendToProjectMigrationLog(dir, 'WARN', msg);
+        }
+    }
+    if (summaryPaths.length > 0) {
+        console.log('\nReview the analysis summary for items to address in VS Code:');
+        for (const p of summaryPaths) console.log(`  ${p}`);
     }
 }
 
