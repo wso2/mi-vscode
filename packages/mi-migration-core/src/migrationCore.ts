@@ -2348,7 +2348,7 @@ async function confirmFindings(findings: MigrationFinding[], host: MigrationHost
     if (breaking.length > 0) {
         logWarn(`Pre-migration analysis found ${breaking.length} breaking change(s) and ${warnings.length} warning(s):\n${summary}`);
         return host.confirmProceed(
-            `Pre-migration analysis found ${breaking.length} breaking change(s) requiring manual intervention.\n\n${summary}\n\nProceed with migration?`
+            `Pre-migration analysis found ${breaking.length} breaking change(s) and ${warnings.length} warning(s).\n\n${summary}\n\nThe migration tool will convert your project to the VS Code MI structure. You can evaluate and address them manually in VS Code after migration.\n\nProceed with migration?`
         );
     }
 
