@@ -31,7 +31,7 @@ env:
 jobs:
   publish:
     name: Publish vsix to marketplaces
-    runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
     env:
       THREAD_KEY: mi-release-${{ github.event.inputs.workflowRunId }}
     steps:
@@ -210,7 +210,7 @@ jobs:
   NotifyFailure:
     needs: [publish]
     if: ${{ always() && contains(needs.*.result, 'failure') && github.repository == 'wso2/mi-vscode' }}
-    runs-on: codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
