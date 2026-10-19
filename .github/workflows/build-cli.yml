@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.artifact }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -13,13 +13,19 @@ jobs:
         include:
           - os: ubuntu-latest
             binary: mi-migrate
-            artifact: mi-migrate-linux
+            artifact: mi-migrate-linux-x64
+          - os: ubuntu-24.04-arm
+            binary: mi-migrate
+            artifact: mi-migrate-linux-arm64
+          - os: macos-13
+            binary: mi-migrate
+            artifact: mi-migrate-macos-x64
           - os: macos-latest
             binary: mi-migrate
-            artifact: mi-migrate-macos
+            artifact: mi-migrate-macos-arm64
           - os: windows-latest
             binary: mi-migrate.exe
-            artifact: mi-migrate-windows.exe
+            artifact: mi-migrate-windows-x64.exe
 
     steps:
       - name: Checkout
