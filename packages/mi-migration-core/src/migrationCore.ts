@@ -2204,7 +2204,7 @@ function copyDockerResources(resourcePath: string, targetPath: string) {
     fs.copyFileSync(path.join(resourcePath, 'wso2carbon.jks'), path.join(dockerResourcesPath, 'wso2carbon.jks'));
 }
 
-async function copyMavenWrapper(resourcePath: string, targetPath: string, host: MigrationHost, isMigration = false) {
+export async function copyMavenWrapper(resourcePath: string, targetPath: string, host: MigrationHost, isMigration = false) {
     const mavenWrapperPropertiesPath = path.join(targetPath, '.mvn', 'wrapper');
     const mavenWrapperPropertiesFile = path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties');
     const mvnwCmdFile = path.join(targetPath, 'mvnw.cmd');
