@@ -30,6 +30,7 @@ import {
     analyzeProject,
     getProjectDetails,
     findMultiModuleProjectsInWorkspaceDir,
+    copyMavenWrapper,
     MigrationHost,
     MigrationConfigKey,
     MigrationFinding,
@@ -150,7 +151,7 @@ function createHost(opts: CliOptions): MigrationHost {
         getConfig(key: MigrationConfigKey): boolean {
             switch (key) {
                 case 'useLocalMaven': return true;
-                case 'useDefaultMavenForMigration': return false;
+                case 'useDefaultMavenForMigration': return true;
                 case 'convertToConsolidated': return false;
                 case 'runAnalysis': return false;
             }
@@ -483,11 +484,28 @@ async function runMigrate(source: string, opts: CliOptions) {
         console.log('\nMigrated project(s):');
         result.filePaths.forEach(p => {
             console.log(`  ${p}`);
-            // Log migrated paths into each project's migration log
             for (const dir of projectDirs) {
                 appendToProjectMigrationLog(dir, 'INFO', `Migrated project output: ${p}`);
             }
         });
+
+        // Copy Maven wrapper into each migrated project so it is immediately usable
+        for (const p of result.filePaths) {
+            try {
+                await copyMavenWrapper(host.getResourcePath('maven-wrapper'), p, host, true);
+                const msg = `Maven wrapper copied to: ${p}`;
+                console.log(`[INFO] ${msg}`);
+                for (const dir of projectDirs) {
+                    appendToProjectMigrationLog(dir, 'INFO', msg);
+                }
+            } catch (err) {
+                const msg = `Could not copy Maven wrapper to ${p}: ${err}`;
+                console.warn(`[WARN] ${msg}`);
+                for (const dir of projectDirs) {
+                    appendToProjectMigrationLog(dir, 'WARN', msg);
+                }
+            }
+        }
     } else {
         console.log('\nMigration produced no output.');
     }
