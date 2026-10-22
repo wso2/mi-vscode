@@ -38,7 +38,7 @@ import { consolidatedProjectPomContent } from './templates';
 import { updatePomWithParent } from './fileOperations';
 
 // Re-export utility functions used by other extension modules
-export { containsMultiModuleNatureInProjectFile, containsMultiModuleNatureInPomFile, findMultiModuleProjectsInWorkspaceDir };
+export { containsMultiModuleNatureInProjectFile, containsMultiModuleNatureInPomFile, findMultiModuleProjectsInWorkspaceDir, getProjectDetails };
 
 // ---------------------------------------------------------------------------
 // Logging
