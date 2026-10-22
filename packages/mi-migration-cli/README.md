@@ -21,7 +21,7 @@ mi-migrate <command> [options] <source>
 
 Scans the source project or workspace and reports compatibility issues. Supports both **Integration Studio project structure** and **VS Code MI project structure** — useful for pre-migration planning or for reviewing an already-migrated VS Code project.
 
-Does **not** modify any files. After the scan, an `analysis-summary.md` is written into each analyzed project directory with a full breakdown of findings.
+Does **not** change project sources. After the scan, an `analysis-summary.md` is written into each analyzed project directory with a full breakdown of findings.
 
 ```
 mi-migrate analyze [options] <source>

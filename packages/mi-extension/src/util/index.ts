@@ -16,10 +16,11 @@
  * under the License.
  */
 
-import { FileStructure } from '@wso2/mi-core';
+import { createFolderStructure, copyDockerResources, copyMavenWrapper } from '@wso2/mi-migration-core';
+export { createFolderStructure, copyDockerResources, copyMavenWrapper };
 import * as fs from 'fs';
 import * as path from 'path';
-import { ExtensionContext, Uri, Webview, workspace } from "vscode";
+import { ExtensionContext, Uri, Webview } from "vscode";
 import { getInboundEndpointdXml, GetInboundTemplatesArgs } from './template-engine/mustach-templates/inboundEndpoints';
 import { getRegistryResource } from './template-engine/mustach-templates/registryResources';
 import { getMessageProcessorXml, MessageProcessorTemplateArgs } from './template-engine/mustach-templates/MessageProcessor';
@@ -37,8 +38,6 @@ import { GetRecipientEPTemplatesArgs, getRecipientEPXml } from './template-engin
 import { GetTemplateEPTemplatesArgs, getTemplateEPXml } from './template-engine/mustach-templates/templateEndpoint';
 import { APIResourceArgs, getAPIResourceXml } from './template-engine/mustach-templates/API';
 import { getDataServiceXml, getDataSourceXml, DataServiceArgs, Datasource } from './template-engine/mustach-templates/DataService';
-import child_process from "child_process";
-
 const isDevMode = process.env.WEB_VIEW_WATCH_MODE === "true";
 
 export function getComposerJSFiles(context: ExtensionContext, componentName: string, webView: Webview): string[] {
@@ -57,117 +56,6 @@ export function getComposerJSFiles(context: ExtensionContext, componentName: str
 	];
 }
 
-export async function createFolderStructure(targetPath: string, structure: FileStructure) {
-	for (const [key, value] of Object.entries(structure)) {
-		const fullPath = path.join(targetPath, key);
-
-		if (key.includes('.') || key === 'Dockerfile') {
-			// If it's a file, create the file
-			await fs.promises.writeFile(fullPath, value as string);
-		} else {
-			// If it's a directory, create the directory and recurse
-			await fs.promises.mkdir(fullPath, { recursive: true });
-			await createFolderStructure(fullPath, value as FileStructure);
-		}
-	}
-}
-
-export function copyDockerResources(resourcePath: string, targetPath: string) {
-	const commonResourcesPath = path.join(targetPath, 'deployment');
-	const dockerResourcesPath = path.join(commonResourcesPath, 'docker', 'resources');
-	fs.copyFileSync(path.join(resourcePath, 'deployment.toml'), path.join(commonResourcesPath, 'deployment.toml'));
-	fs.copyFileSync(path.join(resourcePath, 'client-truststore.jks'), path.join(dockerResourcesPath, 'client-truststore.jks'));
-	fs.copyFileSync(path.join(resourcePath, 'wso2carbon.jks'), path.join(dockerResourcesPath, 'wso2carbon.jks'));
-}
-
-export async function copyMavenWrapper(resourcePath: string, targetPath: string, isMigration: boolean = false) {
-	const mavenWrapperPropertiesPath = path.join(targetPath, '.mvn', 'wrapper');
-	const mavenWrapperPropertiesFile = path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties');
-	const mvnwCmdFile = path.join(targetPath, 'mvnw.cmd');
-	const mvnwFile = path.join(targetPath, 'mvnw');
-
-	const hasExistingWrapperFiles = fs.existsSync(mavenWrapperPropertiesFile)
-		|| fs.existsSync(mvnwCmdFile)
-		|| fs.existsSync(mvnwFile);
-
-	fs.mkdirSync(mavenWrapperPropertiesPath, { recursive: true });
-	const copyMavenWrapperFiles = (overwrite: boolean = false) => {
-		copyFileIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile, overwrite);
-		copyFileIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile, overwrite);
-	};
-
-	const useDefaultMvnWrapperForMigration = isMigration && workspace.getConfiguration("MI").get<boolean>('useDefaultMavenForMigration');
-	copyFileIfMissing(path.join(useDefaultMvnWrapperForMigration ?
-		path.join(resourcePath, 'migration') : resourcePath,
-		'maven-wrapper.properties'), mavenWrapperPropertiesFile, useDefaultMvnWrapperForMigration);
-	if (useDefaultMvnWrapperForMigration) {
-		copyMavenWrapperFiles(true);
-	} else {
-		const isMavenInstalled = await isMavenInstalledGlobally();
-		if (isMavenInstalled && !hasExistingWrapperFiles) {
-			const success = await runMavenWrapperCommand(targetPath);
-			if (!success) {
-				copyMavenWrapperFiles();
-			}
-		} else {
-			copyMavenWrapperFiles();
-		}
-	}
-}
-
-/**
- * Executes the Maven Wrapper initialization command (`mvn wrapper:wrapper`)
- * in the specified target directory.
- *
- * @param targetPath - The file system path where the Maven Wrapper command should be executed.
- * @returns A promise that resolves to `true` if the command completes successfully (exit code 0),
- *          or `false` if an error occurs or the command fails.
- */
-async function runMavenWrapperCommand(targetPath: string): Promise<boolean> {
-	return new Promise((resolve) => {
-		try {
-			const proc = child_process.spawn("mvn wrapper:wrapper", [], {
-				shell: true,
-				cwd: targetPath
-			});
-
-			proc.on("close", (code) => {
-				resolve(code === 0);
-			});
-
-			proc.on("error", (err) => {
-				console.error("Failed to run mvn wrapper:", err);
-				resolve(false);
-			});
-
-			// Set a timeout to prevent hanging
-			const timeout = setTimeout(() => {
-				console.error("Maven wrapper command timed out");
-				try {
-					proc.kill();
-				} catch (e) {
-					console.error("Failed to kill process:", e);
-				}
-				resolve(false);
-			}, 8000);
-
-			proc.on("exit", () => {
-				clearTimeout(timeout);
-			});
-		} catch (error) {
-			console.error("Exception running Maven wrapper command:", error);
-			resolve(false);
-		}
-	});
-}
-
-async function isMavenInstalledGlobally(): Promise<boolean> {
-	return new Promise<boolean>((resolve) => {
-		const proc = child_process.spawn("mvn -version", [], { shell: true });
-		proc.on("error", () => resolve(false));
-		proc.on("exit", (code) => resolve(code === 0));
-	});
-}
 
 export function removeMavenWrapper(targetPath: string) {
 	const mavenWrapperDir = path.join(targetPath, '.mvn');
@@ -326,8 +214,3 @@ export function getDssDataSourceXmlWrapper(props: Datasource) {
 	return getDataSourceXml(props);
 }
 
-function copyFileIfMissing(src: string, dest: string, overwrite: boolean = false) {
-	if (overwrite || !fs.existsSync(dest)) {
-		fs.copyFileSync(src, dest);
-	}
-}

@@ -46,7 +46,8 @@ function buildSeaAssets() {
     if (fs.existsSync(resourcesSrc)) {
         collectAssets(resourcesSrc, '', assets, keys);
     } else {
-        console.warn('WARNING: resources/ not found — run "npm run build" first');
+        console.error('ERROR: resources/ not found — run "npm run build" first');
+        process.exit(1);
     }
     fs.writeFileSync(MANIFEST_TMP, JSON.stringify(keys));
     assets['__asset_manifest__'] = MANIFEST_TMP;

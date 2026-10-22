@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -65,6 +65,7 @@ function extractSeaAssets(): string {
         const dest = path.join(tempDir, key);
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         fs.writeFileSync(dest, Buffer.from(sea.getRawAsset(key)));
+        if (path.basename(key) === 'mvnw') fs.chmodSync(dest, 0o755);
     }
     _seaTempDir = tempDir;
     return tempDir;
@@ -100,15 +101,15 @@ function setupFileLogging(logFile: string) {
 }
 
 function createHost(opts: CliOptions): MigrationHost {
-    if (opts.javaHome) {
-        process.env['JAVA_HOME'] = opts.javaHome;
+    if (opts.format === 'json') {
+        console.log = (...args: unknown[]) => process.stderr.write(args.map(String).join(' ') + '\n');
     }
     if (opts.logFile) {
         setupFileLogging(opts.logFile);
     }
 
     return {
-        notify(level, message) {
+        notify(level, message, _modal?: boolean) {
             const prefix = level === 'error' ? '[ERROR]' : level === 'warn' ? '[WARN]' : '[INFO]';
             const line = `${prefix} ${message}`;
             if (level === 'error') {
@@ -116,8 +117,9 @@ function createHost(opts: CliOptions): MigrationHost {
             } else if (level === 'warn') {
                 console.warn(line);
             } else {
-                console.log(line);
+                (opts.format === 'json' ? process.stderr : process.stdout).write(line + '\n');
             }
+            return Promise.resolve();
         },
 
         getResourcePath(relative) {
@@ -153,8 +155,11 @@ function createHost(opts: CliOptions): MigrationHost {
                 case 'useLocalMaven': return true;
                 case 'useDefaultMavenForMigration': return true;
                 case 'convertToConsolidated': return false;
-                case 'runAnalysis': return false;
             }
+        },
+
+        getJavaHome(): string | undefined {
+            return opts.javaHome;
         },
 
         getTargetVersion(_sourceVersion?: string): string {
@@ -356,6 +361,7 @@ async function analyzeDir(projectDir: string, host: MigrationHost, opts: CliOpti
 async function runAnalyze(source: string, opts: CliOptions) {
     const host = createHost(opts);
     const absSource = path.resolve(source);
+    const progress = (msg: string) => (opts.format === 'json' ? process.stderr : process.stdout).write(msg + '\n');
 
     if (!fs.existsSync(absSource)) {
         console.error(`[ERROR] Source directory does not exist: ${absSource}`);
@@ -366,9 +372,23 @@ async function runAnalyze(source: string, opts: CliOptions) {
     const isWorkspace = projectDirs.length > 1 || projectDirs[0] !== absSource;
 
     if (isWorkspace) {
-        console.log(`Workspace: ${absSource} (${projectDirs.length} project(s) found)`);
+        progress(`Workspace: ${absSource} (${projectDirs.length} project(s) found)`);
     } else {
-        console.log(`Analyzing: ${absSource}`);
+        const { projectName } = getProjectDetails(absSource);
+        const hasMiSubmodule = (() => {
+            try {
+                for (const entry of fs.readdirSync(absSource, { withFileTypes: true })) {
+                    if (entry.isDirectory() && fs.existsSync(path.join(absSource, entry.name, 'src', 'main', 'wso2mi')))
+                        return true;
+                }
+            } catch { /* ignore */ }
+            return false;
+        })();
+        if (!projectName && !hasMiSubmodule) {
+            console.error('[ERROR] Source does not appear to be a valid Integration project (no pom.xml with project details found).');
+            process.exit(1);
+        }
+        progress(`Analyzing: ${absSource}`);
     }
 
     const allFindings: TaggedFinding[] = [];
@@ -396,8 +416,8 @@ async function runAnalyze(source: string, opts: CliOptions) {
     }
 
     if (summaryPaths.length > 0) {
-        console.log('\nAnalysis summary written to:');
-        for (const p of summaryPaths) console.log(`  ${p}`);
+        progress('\nAnalysis summary written to:');
+        for (const p of summaryPaths) progress(`  ${p}`);
     }
 
     const hasBreaking = allFindings.some(f => f.severity === 'breaking');
@@ -437,16 +457,36 @@ async function runMigrate(source: string, opts: CliOptions) {
         process.exit(1);
     }
 
-    console.log(`Source:  ${absSource}`);
-    console.log(`Output:  ${outDir}`);
-    console.log('Copying source to output directory...');
-    copyDirSync(absSource, outDir);
+    const rel = path.relative(absSource, outDir);
+    const isOutside = rel === '..' || rel.startsWith('..' + path.sep);
+    if (!isOutside && !path.isAbsolute(rel)) {
+        console.error(`[ERROR] Output directory cannot be equal to or inside the source directory: ${outDir}`);
+        process.exit(1);
+    }
 
-    const projectDirs = await resolveProjectDirs(outDir);
-    const isWorkspace = projectDirs.length > 1 || projectDirs[0] !== outDir;
+    // Analyze source before copying — user gets feedback without any disk writes
+    const srcProjectDirs = await resolveProjectDirs(absSource);
+    const isWorkspace = srcProjectDirs.length > 1 || srcProjectDirs[0] !== absSource;
 
     if (isWorkspace) {
-        console.log(`Workspace detected: ${projectDirs.length} project(s) to migrate`);
+        console.log(`Workspace detected: ${srcProjectDirs.length} project(s) to migrate`);
+    } else {
+        // resolveProjectDirs falls back to [absSource] for unknown structures;
+        // warn early if the source doesn't look like a valid IS project.
+        const { projectName } = getProjectDetails(absSource);
+        const hasMiSubmodule = (() => {
+            try {
+                for (const entry of fs.readdirSync(absSource, { withFileTypes: true })) {
+                    if (entry.isDirectory() && fs.existsSync(path.join(absSource, entry.name, 'src', 'main', 'wso2mi')))
+                        return true;
+                }
+            } catch { /* ignore */ }
+            return false;
+        })();
+        if (!projectName && !hasMiSubmodule) {
+            console.error('[ERROR] Source does not appear to be a valid Integration Studio project (no pom.xml with project details found).');
+            process.exit(1);
+        }
     }
 
     const host = createHost(opts);
@@ -454,7 +494,7 @@ async function runMigrate(source: string, opts: CliOptions) {
     // Pre-migration analysis: one combined pass, one report, one prompt
     const perProjectFindings = new Map<string, MigrationFinding[]>();
     const allFindings: TaggedFinding[] = [];
-    for (const dir of projectDirs) {
+    for (const dir of srcProjectDirs) {
         const findings = await analyzeDir(dir, host, opts);
         perProjectFindings.set(dir, findings);
         if (isWorkspace) {
@@ -477,6 +517,20 @@ async function runMigrate(source: string, opts: CliOptions) {
         }
     }
 
+    // Copy source to output only after confirmation
+    console.log(`Source:  ${absSource}`);
+    console.log(`Output:  ${outDir}`);
+    console.log('Copying source to output directory...');
+    try {
+        copyDirSync(absSource, outDir);
+    } catch (err) {
+        try { fs.rmSync(outDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        throw err;
+    }
+
+    // Map source project dirs to their counterparts in outDir
+    const projectDirs = srcProjectDirs.map(dir => path.join(outDir, path.relative(absSource, dir)));
+
     const requests = projectDirs.map(dir => ({ source: dir, directory: dir }));
     const result = await importProjects(requests, host);
 
@@ -492,7 +546,7 @@ async function runMigrate(source: string, opts: CliOptions) {
         // Copy Maven wrapper into each migrated project so it is immediately usable
         for (const p of result.filePaths) {
             try {
-                await copyMavenWrapper(host.getResourcePath('maven-wrapper'), p, host, true);
+                await copyMavenWrapper(host.getResourcePath('maven-wrapper'), p, host.getConfig('useDefaultMavenForMigration'));
                 const msg = `Maven wrapper copied to: ${p}`;
                 console.log(`[INFO] ${msg}`);
                 for (const dir of projectDirs) {
@@ -507,29 +561,38 @@ async function runMigrate(source: string, opts: CliOptions) {
             }
         }
     } else {
-        console.log('\nMigration produced no output.');
+        console.error('[ERROR] Migration produced no output.');
+        try { fs.rmSync(outDir, { recursive: true, force: true }); } catch { /* best-effort */ }
+        process.exit(1);
     }
 
     // Write per-project analysis summaries to the migrated output directories
     const summaryPaths: string[] = [];
-    for (const dir of projectDirs) {
-        const findings = perProjectFindings.get(dir) ?? [];
-        const label = getProjectDetails(dir).projectName ?? path.basename(dir);
+    for (let i = 0; i < srcProjectDirs.length; i++) {
+        const outDirProject = projectDirs[i];
+        const findings = perProjectFindings.get(srcProjectDirs[i]) ?? [];
+        const label = getProjectDetails(outDirProject).projectName ?? path.basename(outDirProject);
         try {
-            const summaryPath = writeAnalysisSummary(dir, label, findings, opts.targetVersion);
+            const summaryPath = writeAnalysisSummary(outDirProject, label, findings, opts.targetVersion);
             summaryPaths.push(summaryPath);
             const msg = `Analysis summary written: ${summaryPath}`;
             console.log(`[INFO] ${msg}`);
-            appendToProjectMigrationLog(dir, 'INFO', msg);
+            appendToProjectMigrationLog(outDirProject, 'INFO', msg);
         } catch (err) {
             const msg = `Could not write analysis-summary.md for ${label}: ${err}`;
             console.warn(`[WARN] ${msg}`);
-            appendToProjectMigrationLog(dir, 'WARN', msg);
+            appendToProjectMigrationLog(outDirProject, 'WARN', msg);
         }
     }
     if (summaryPaths.length > 0) {
         console.log('\nReview the analysis summary for items to address in VS Code:');
         for (const p of summaryPaths) console.log(`  ${p}`);
+    }
+
+    if (result.failedSources.length > 0) {
+        console.error(`[ERROR] ${result.failedSources.length} project(s) failed to migrate:`);
+        for (const s of result.failedSources) console.error(`  ${s}`);
+        process.exitCode = 1;
     }
 }
 

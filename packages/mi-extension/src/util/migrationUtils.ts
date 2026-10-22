@@ -36,6 +36,7 @@ import {
 } from '@wso2/mi-migration-core';
 import { consolidatedProjectPomContent } from './templates';
 import { updatePomWithParent } from './fileOperations';
+import { getJavaHomeFromConfig } from './onboardingUtils';
 
 // Re-export utility functions used by other extension modules
 export { containsMultiModuleNatureInProjectFile, containsMultiModuleNatureInPomFile, findMultiModuleProjectsInWorkspaceDir, getProjectDetails };
@@ -49,31 +50,31 @@ const MIGRATION_LOG_FILE = 'migration.log';
 
 let migrationLogFilePath: string | undefined;
 const logQueue: string[] = [];
-let isFlushing = false;
+let flushPromise: Promise<void> = Promise.resolve();
 
 function setMigrationLogFilePath(projectRoot: string) {
     migrationLogFilePath = path.join(projectRoot, BACKUP_DIR, MIGRATION_LOG_FILE);
 }
 
-async function flushLogs() {
-    if (isFlushing || logQueue.length === 0 || !migrationLogFilePath) return;
-    isFlushing = true;
-    try {
-        const logsToWrite = logQueue.splice(0, logQueue.length).join('\n') + '\n';
-        await fs.promises.appendFile(migrationLogFilePath, logsToWrite, 'utf-8');
-    } catch (error) {
-        console.error(`Failed to write migration log to ${migrationLogFilePath}:`, error);
-    } finally {
-        isFlushing = false;
-        if (logQueue.length > 0) flushLogs();
-    }
+function flushLogs(): Promise<void> {
+    if (!migrationLogFilePath || logQueue.length === 0) return flushPromise;
+    flushPromise = flushPromise.then(async () => {
+        if (logQueue.length === 0 || !migrationLogFilePath) return;
+        try {
+            const logsToWrite = logQueue.splice(0, logQueue.length).join('\n') + '\n';
+            await fs.promises.appendFile(migrationLogFilePath, logsToWrite, 'utf-8');
+        } catch (error) {
+            console.error(`Failed to write migration log to ${migrationLogFilePath}:`, error);
+        }
+    });
+    return flushPromise;
 }
 
 function appendLog(level: 'log' | 'warn' | 'error', args: unknown[]) {
     if (!migrationLogFilePath) return;
-    const timestamp = new Date().toISOString();
-    const line = `[${timestamp}] [${level.toUpperCase()}] ${args.map(a => a instanceof Error ? (a.stack || a.message) : typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}`;
     try {
+        const timestamp = new Date().toISOString();
+        const line = `[${timestamp}] [${level.toUpperCase()}] ${args.map(a => a instanceof Error ? (a.stack || a.message) : typeof a === 'string' ? a : JSON.stringify(a)).join(' ')}`;
         const dir = path.dirname(migrationLogFilePath);
         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         logQueue.push(line);
@@ -91,10 +92,18 @@ function logError(...args: unknown[]) { console.error(...args); appendLog('error
 // ---------------------------------------------------------------------------
 
 class VsCodeMigrationHost implements MigrationHost {
-    notify(level: 'info' | 'warn' | 'error', message: string): void {
-        if (level === 'error') void window.showErrorMessage(message);
-        else if (level === 'warn') void window.showWarningMessage(message);
-        else void window.showInformationMessage(message);
+    constructor(private readonly projectUri: string) {}
+
+    async notify(level: 'info' | 'warn' | 'error', message: string, modal?: boolean): Promise<void> {
+        if (level === 'error') {
+            if (modal) await window.showErrorMessage(message, { modal: true });
+            else void window.showErrorMessage(message);
+        } else if (level === 'warn') {
+            if (modal) await window.showWarningMessage(message, { modal: true });
+            else void window.showWarningMessage(message);
+        } else {
+            void window.showInformationMessage(message);
+        }
     }
 
     getResourcePath(relative: string): string {
@@ -102,17 +111,21 @@ class VsCodeMigrationHost implements MigrationHost {
     }
 
     getConfig(key: MigrationConfigKey): boolean {
-        const config = workspace.getConfiguration('MI');
+        const config = workspace.getConfiguration('MI', Uri.file(this.projectUri));
         switch (key) {
             case 'useLocalMaven': return config.get<boolean>('useLocalMaven') ?? false;
             case 'useDefaultMavenForMigration': return config.get<boolean>('useDefaultMavenForMigration') ?? false;
             case 'convertToConsolidated': return config.get<boolean>('convertToConsolidatedProjectAfterMigration') ?? false;
-            case 'runAnalysis': return false;
+            default: return false;
         }
     }
 
     getTargetVersion(sourceVersion?: string): string {
         return sourceVersion ?? LATEST_MI_VERSION;
+    }
+
+    getJavaHome(): string | undefined {
+        return getJavaHomeFromConfig(this.projectUri) ?? undefined;
     }
 
     async confirmProceed(message: string): Promise<boolean> {
@@ -135,7 +148,7 @@ export async function importProject(params: ImportProjectRequest): Promise<Impor
     }
 
     setMigrationLogFilePath(source);
-    const host = new VsCodeMigrationHost();
+    const host = new VsCodeMigrationHost(projectUri);
     const result = await coreImportProjects([{ source, directory: source }], host);
     commands.executeCommand('setContext', 'MI.migrationStatus', 'done');
     await flushLogs();
@@ -161,9 +174,9 @@ export async function importProjects(params: ImportProjectRequest[]): Promise<Im
     }
 
     const closeWindow = await handleWorkspaceAfterMigration(params[0].directory, allCreatedUris);
-    await closeWindowIfRequired(closeWindow);
     logInfo('All migrations finished.');
     await flushLogs();
+    await closeWindowIfRequired(closeWindow);
     return responses;
 }
 

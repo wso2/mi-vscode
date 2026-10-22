@@ -770,9 +770,6 @@ importers:
       '@types/node':
         specifier: 22.15.21
         version: 22.15.21
-      '@types/uuid':
-        specifier: 9.0.0
-        version: 9.0.0
       '@types/xml2js':
         specifier: 0.4.12
         version: 0.4.12
