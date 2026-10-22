@@ -37,7 +37,8 @@ export function escapeXml(text: string) {
     .replace(/"/g, '&quot;');
 };
 
-export const LATEST_CAR_PLUGIN_VERSION = "5.4.21";
+import { LATEST_CAR_PLUGIN_VERSION } from '@wso2/mi-migration-core';
+export { LATEST_CAR_PLUGIN_VERSION };
 
 export const rootPomXmlContent = async (projectName: string, groupID: string, artifactID: string, projectUuid: string, version: string, miVersion: string, initialDependencies: string, directory?: string) => {
   const addDeploymentType = compareVersions(miVersion, RUNTIME_VERSION_450) >= 0;

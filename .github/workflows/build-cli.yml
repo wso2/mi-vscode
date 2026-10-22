@@ -1,0 +1,66 @@
+name: Build CLI Binaries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build (${{ matrix.artifact }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            binary: mi-migrate
+            artifact: mi-migrate-linux-x64
+          - os: ubuntu-24.04-arm
+            binary: mi-migrate
+            artifact: mi-migrate-linux-arm64
+          - os: macos-15-intel
+            binary: mi-migrate
+            artifact: mi-migrate-macos-x64
+          - os: macos-latest
+            binary: mi-migrate
+            artifact: mi-migrate-macos-arm64
+          - os: windows-latest
+            binary: mi-migrate.exe
+            artifact: mi-migrate-windows-x64.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build mi-migration-core
+        working-directory: packages/mi-migration-core
+        run: npm install && npm run build
+
+      - name: Build and package mi-migration-cli
+        working-directory: packages/mi-migration-cli
+        run: npm install && npm run build && npm run package
+
+      - name: Archive binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        working-directory: packages/mi-migration-cli/dist
+        run: tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.binary }}
+
+      - name: Upload binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages/mi-migration-cli/dist/${{ matrix.artifact }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload binary (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages/mi-migration-cli/dist/${{ matrix.binary }}
+          if-no-files-found: error
