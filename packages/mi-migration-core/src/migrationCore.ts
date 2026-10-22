@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -25,9 +25,8 @@ import * as childprocess from 'child_process';
 import { parseString, Builder } from 'xml2js';
 import { v4 as uuidv4 } from 'uuid';
 import { rootPomXmlContent, dockerfileContent } from './templates';
-import { MigrationHost, MigrationRequest, MigrationResult, MigrationConfigKey } from './types';
+import { MigrationHost, MigrationRequest, MigrationResult } from './types';
 import { XMLParser, XMLBuilder } from 'fast-xml-parser';
-import { analyzeProject, MigrationFinding } from './migrationAnalyzer';
 
 export enum Nature {
     MULTIMODULE,
@@ -154,9 +153,9 @@ export function getSynapseCoreVersionForRuntime(runtimeVersion?: string | null):
 }
 let migrationLogFilePath: string | undefined;
 const logQueue: string[] = [];
-let isFlushing = false;
+let flushPromise: Promise<void> = Promise.resolve();
 
-const SYNAPSE_TO_MI_ARTIFACT_FOLDER_MAP: Record<string, string> = {
+export const SYNAPSE_TO_MI_ARTIFACT_FOLDER_MAP: Record<string, string> = {
     'api': 'apis',
     'endpoints': 'endpoints',
     'inbound-endpoints': 'inbound-endpoints',
@@ -204,26 +203,19 @@ function stringifyForLog(value: unknown): string {
  * @async
  * @returns {Promise<void>}
  */
-async function flushLogs() {
-    if (isFlushing || logQueue.length === 0 || !migrationLogFilePath) {
-        return;
-    }
-
-    isFlushing = true;
-    try {
-        // Take all queued logs
-        const logsToWrite = logQueue.splice(0, logQueue.length).join('\n') + '\n';
-        await fs.promises.appendFile(migrationLogFilePath, logsToWrite, 'utf-8');
-    } catch (error) {
-        console.error(`Failed to write migration log to ${migrationLogFilePath}:`, error);
-    } finally {
-        isFlushing = false;
-
-        // If new logs arrived while writing, flush again
-        if (logQueue.length > 0) {
-            flushLogs();
+function flushLogs(): Promise<void> {
+    if (!migrationLogFilePath || logQueue.length === 0) return flushPromise;
+    flushPromise = flushPromise.then(async () => {
+        if (logQueue.length === 0 || !migrationLogFilePath) return;
+        const dest = migrationLogFilePath;
+        try {
+            const logsToWrite = logQueue.splice(0, logQueue.length).join('\n') + '\n';
+            await fs.promises.appendFile(dest, logsToWrite, 'utf-8');
+        } catch (error) {
+            console.error(`Failed to write migration log to ${dest}:`, error);
         }
-    }
+    });
+    return flushPromise;
 }
 
 /**
@@ -366,8 +358,9 @@ async function validateMigrationInputs(source: string, host: MigrationHost): Pro
         const fullList = invalidFiles.join('\n');
 
         logError(`Migration validation failed. Invalid files:\n${fullList}`);
-        host.notify('error',
-            `Migration stopped: Found ${invalidFiles.length} invalid file(s).\n\n${displayedList}${moreMessage}`
+        await host.notify('error',
+            `Migration stopped: Found ${invalidFiles.length} invalid file(s).\n\n${displayedList}${moreMessage}`,
+            true
         );
         return false;
     }
@@ -381,33 +374,41 @@ export async function importProjects(
     host: MigrationHost
 ): Promise<MigrationResult> {
     const filePaths: string[] = [];
+    const failedSources: string[] = [];
     logInfo(`Starting migrate projects for ${params.length} request(s).`);
 
     for (const param of params) {
+        await flushLogs();
         setMigrationLogFilePath(param.source);
         logInfo(`Starting migration for project: ${param.source}`);
         try {
             const created = await importProject(param, host);
-            filePaths.push(...created);
+            if (created.length === 0) {
+                failedSources.push(param.source);
+            } else {
+                filePaths.push(...created);
+            }
             logInfo(`Migration completed for source=${param.source}. Newly created project count=${created.length}`);
         } catch (error) {
             logError(`Failed to migrate project from source=${param.source}:`, error);
+            await host.notify('error', `Migration failed for ${param.source}: ${error instanceof Error ? error.message : error}`);
+            failedSources.push(param.source);
         }
     }
 
     logInfo("Project migration finished.");
     await flushLogs();
-    return { filePaths };
+    return { filePaths, failedSources };
 }
 
 export async function importProject(
     params: MigrationRequest,
     host: MigrationHost
 ): Promise<string[]> {
-    const { source, directory } = params;
+    const { source } = params;
 
     if (!fs.existsSync(source)) {
-        host.notify('error', `Source directory does not exist: ${source}`);
+        await host.notify('error', `Source directory does not exist: ${source}`);
         throw new Error(`Source directory does not exist: ${source}`);
     }
 
@@ -422,7 +423,7 @@ export async function importProject(
     logInfo(`Project details lookup completed, projectName=${projectName ?? ''}, groupId=${groupId ?? ''}, artifactId=${artifactId ?? ''}, version=${version ?? ''}`);
 
     if (!projectName || !groupId || !artifactId || !version) {
-        host.notify('error', `Could not find project details from: ${source}`);
+        await host.notify('error', `Could not find project details from: ${source}`);
         return [];
     }
 
@@ -435,25 +436,7 @@ export async function importProject(
     const projectDirsWithType = await getProjectDirectoriesWithType(destinationFolderPath);
     const projectDirToResolvedPomMap = await generateProjectDirToResolvedPomMap(destinationFolderPath, host);
 
-    // Pre-migration analysis (CLI only; skipped when host disables it)
     const artifactIdToFileInfoMap = generateArtifactIdToFileInfoMap(projectDirToResolvedPomMap, projectDirsWithType);
-    if (host.getConfig('runAnalysis')) {
-        const findings = analyzeProject({
-            source: destinationFolderPath,
-            projectDirsWithType,
-            artifactIdToFileInfoMap,
-            projectDirToResolvedPomMap,
-            runtimeVersion,
-            targetVersion: host.getTargetVersion(runtimeVersion),
-        });
-        if (findings.length > 0) {
-            const shouldProceed = await confirmFindings(findings, host);
-            if (!shouldProceed) {
-                logWarn('Migration cancelled by user after analysis.');
-                return [];
-            }
-        }
-    }
 
     const createdProjectCount = await createFolderStructuresForDistributionProjects(
         destinationFolderPath,
@@ -467,7 +450,7 @@ export async function importProject(
     if (createdProjectCount === 0) {
         const folderStructure = await getFolderStructure(
             projectName, groupId, artifactId, projectUuid, version,
-            host.getTargetVersion(runtimeVersion), host, source
+            host.getTargetVersion(runtimeVersion), source
         );
         await createFolderStructure(source, folderStructure);
         copyDockerResources(host.getResourcePath('docker-resources'), source);
@@ -475,17 +458,14 @@ export async function importProject(
     }
 
     const createdPaths = await migrateConfigs(
-        source,
         path.join(source, BACKUP_DIR),
         source,
         projectDirToResolvedPomMap,
         projectDirsWithType,
-        createdProjectCount,
-        host,
         artifactIdToFileInfoMap
     );
 
-    host.notify('info', `Successfully migrated project: ${projectName}`);
+    await host.notify('info', `Successfully migrated project: ${projectName}`);
     return createdPaths.length > 0 ? createdPaths : [source];
 }
 
@@ -528,7 +508,7 @@ async function createFolderStructuresForDistributionProjects(
             if (projectName && groupId && artifactId && version) {
                 const newFolderStructure = await getFolderStructure(
                     projectName, groupId, artifactId, projectUuid, version,
-                    host.getTargetVersion(runtimeVersion), host, newProjectDir
+                    host.getTargetVersion(runtimeVersion), newProjectDir
                 );
                 await createFolderStructure(newProjectDir, newFolderStructure);
                 copyDockerResources(host.getResourcePath('docker-resources'), newProjectDir);
@@ -566,7 +546,7 @@ export async function generateProjectDirToResolvedPomMap(
     logInfo('Generating resolved POM map.');
 
     if (!host.getConfig('useLocalMaven')) {
-        await copyMavenWrapper(host.getResourcePath('maven-wrapper'), multiModuleProjectDir, host, true);
+        await copyMavenWrapper(host.getResourcePath('maven-wrapper'), multiModuleProjectDir, host.getConfig('useDefaultMavenForMigration'));
     }
     const pomResolvedResult = await getResolvedPomXmlContent(
         path.join(multiModuleProjectDir, 'pom.xml'),
@@ -575,8 +555,9 @@ export async function generateProjectDirToResolvedPomMap(
 
     if (!pomResolvedResult.success) {
         logWarn(`Failed to resolve root pom.xml in ${multiModuleProjectDir}, error=${pomResolvedResult.error ?? ''}`);
-        host.notify('warn',
-            `Migration may be affected: unable to resolve the root pom.xml in ${multiModuleProjectDir}.\nError: ${pomResolvedResult.error}`
+        await host.notify('warn',
+            `Migration may be affected: unable to resolve the root pom.xml in ${multiModuleProjectDir}.\nError: ${pomResolvedResult.error}`,
+            true
         );
     }
 
@@ -675,13 +656,10 @@ export function getProjectDir(filePath: string): string {
 }
 
 export async function migrateConfigs(
-    projectUri: string,
     source: string,
     target: string,
     projectDirToResolvedPomMap: Map<string, string>,
     projectDirsWithType: { projectDir: string; projectType: Nature }[],
-    createdProjectCount: number,
-    host: MigrationHost,
     precomputedArtifactIdToFileInfoMap?: Map<string, FileInfo>
 ): Promise<string[]> {
     const projectType = await determineProjectType(source);
@@ -796,6 +774,19 @@ export async function getProjectDirectoriesWithType(rootDir: string): Promise<{ 
     }
 
     await traverse(rootDir);
+
+    // If no child projects were found, check whether rootDir itself is a project.
+    // This handles the case where a single project directory is passed directly
+    // (e.g. a standalone ESB project with .project at the root) rather than a
+    // workspace whose projects live as immediate children.
+    if (results.length === 0) {
+        const rootType = await determineProjectType(rootDir);
+        if (rootType !== undefined) {
+            results.push({ projectDir: rootDir, projectType: rootType });
+            logInfo(`Detected a project at root. projectDirectory=${rootDir}, projectType=${getNatureName(rootType)}`);
+        }
+    }
+
     logInfo(`Project directory scan finished, detected project count=${results.length}`);
     return results;
 }
@@ -1045,7 +1036,7 @@ async function getResolvedPomXmlContent(pomFilePath: string, host: MigrationHost
         const child = childprocess.spawn(command, [], {
             cwd: pomDir,
             shell: true,
-            env: setJavaHomeInEnvironmentAndPath(pomDir),
+            env: setJavaHomeInEnvironmentAndPath(host.getJavaHome()),
         });
 
         child.stdout.on('data', (data) => { output += data.toString(); });
@@ -1111,7 +1102,6 @@ async function getFolderStructure(
     projectUuid: string,
     version: string,
     runtimeVersion: string,
-    host: MigrationHost,
     directory?: string
 ): Promise<FileStructure> {
     return {
@@ -2208,29 +2198,32 @@ const MVN_WRAPPER_COMMAND = './mvnw';
 const MVN_WRAPPER_WIN_COMMAND = '.\\mvnw.cmd';
 const GEN_POM_COMMAND = 'help:effective-pom';
 
-type FileStructure = { [key: string]: string | FileStructure };
+export type FileStructure = { [key: string]: string | FileStructure };
 
-async function createFolderStructure(targetPath: string, structure: FileStructure) {
-    for (const [key, value] of Object.entries(structure)) {
-        const fullPath = path.join(targetPath, key);
-        if (key.includes('.') || key === 'Dockerfile') {
-            await fs.promises.writeFile(fullPath, value as string);
-        } else {
-            await fs.promises.mkdir(fullPath, { recursive: true });
-            await createFolderStructure(fullPath, value as FileStructure);
-        }
-    }
+export async function createFolderStructure(targetPath: string, structure: FileStructure) {
+	for (const [key, value] of Object.entries(structure)) {
+		const fullPath = path.join(targetPath, key);
+
+		if (key.includes('.') || key === 'Dockerfile') {
+			// If it's a file, create the file
+			await fs.promises.writeFile(fullPath, value as string);
+		} else {
+			// If it's a directory, create the directory and recurse
+			await fs.promises.mkdir(fullPath, { recursive: true });
+			await createFolderStructure(fullPath, value as FileStructure);
+		}
+	}
 }
 
-function copyDockerResources(resourcePath: string, targetPath: string) {
-    const commonResourcesPath = path.join(targetPath, 'deployment');
-    const dockerResourcesPath = path.join(commonResourcesPath, 'docker', 'resources');
-    fs.copyFileSync(path.join(resourcePath, 'deployment.toml'), path.join(commonResourcesPath, 'deployment.toml'));
-    fs.copyFileSync(path.join(resourcePath, 'client-truststore.jks'), path.join(dockerResourcesPath, 'client-truststore.jks'));
-    fs.copyFileSync(path.join(resourcePath, 'wso2carbon.jks'), path.join(dockerResourcesPath, 'wso2carbon.jks'));
+export function copyDockerResources(resourcePath: string, targetPath: string) {
+	const commonResourcesPath = path.join(targetPath, 'deployment');
+	const dockerResourcesPath = path.join(commonResourcesPath, 'docker', 'resources');
+	fs.copyFileSync(path.join(resourcePath, 'deployment.toml'), path.join(commonResourcesPath, 'deployment.toml'));
+	fs.copyFileSync(path.join(resourcePath, 'client-truststore.jks'), path.join(dockerResourcesPath, 'client-truststore.jks'));
+	fs.copyFileSync(path.join(resourcePath, 'wso2carbon.jks'), path.join(dockerResourcesPath, 'wso2carbon.jks'));
 }
 
-export async function copyMavenWrapper(resourcePath: string, targetPath: string, host: MigrationHost, isMigration = false) {
+export async function copyMavenWrapper(resourcePath: string, targetPath: string, useDefault = false) {
     const mavenWrapperPropertiesPath = path.join(targetPath, '.mvn', 'wrapper');
     const mavenWrapperPropertiesFile = path.join(mavenWrapperPropertiesPath, 'maven-wrapper.properties');
     const mvnwCmdFile = path.join(targetPath, 'mvnw.cmd');
@@ -2242,32 +2235,32 @@ export async function copyMavenWrapper(resourcePath: string, targetPath: string,
 
     fs.mkdirSync(mavenWrapperPropertiesPath, { recursive: true });
 
-    const copyIfMissing = (src: string, dest: string, overwrite = false) => {
-        if (overwrite || !fs.existsSync(dest)) fs.copyFileSync(src, dest);
-    };
+    const copyMavenWrapperFiles = (overwrite: boolean = false) => {
+		copyFileIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile, overwrite);
+		copyFileIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile, overwrite);
+	};
 
-    const useDefault = isMigration && host.getConfig('useDefaultMavenForMigration');
-    const propertiesSrc = useDefault
-        ? path.join(resourcePath, 'migration', 'maven-wrapper.properties')
-        : path.join(resourcePath, 'maven-wrapper.properties');
-    copyIfMissing(propertiesSrc, mavenWrapperPropertiesFile, useDefault);
-
-    const copyWrapperFiles = (overwrite = false) => {
-        copyIfMissing(path.join(resourcePath, 'mvnw.cmd'), mvnwCmdFile, overwrite);
-        copyIfMissing(path.join(resourcePath, 'mvnw'), mvnwFile, overwrite);
-    };
+    copyFileIfMissing(path.join(useDefault ?
+		path.join(resourcePath, 'migration') : resourcePath,
+		'maven-wrapper.properties'), mavenWrapperPropertiesFile, useDefault);
 
     if (useDefault) {
-        copyWrapperFiles(true);
+        copyMavenWrapperFiles(true);
     } else {
         const mavenInstalled = await isMavenInstalledGlobally();
         if (mavenInstalled && !hasExistingWrapperFiles) {
             const success = await runMavenWrapperCommand(targetPath);
-            if (!success) copyWrapperFiles();
+            if (!success) copyMavenWrapperFiles();
         } else {
-            copyWrapperFiles();
+            copyMavenWrapperFiles();
         }
     }
+}
+
+function copyFileIfMissing(src: string, dest: string, overwrite: boolean = false) {
+	if (overwrite || !fs.existsSync(dest)) {
+		fs.copyFileSync(src, dest);
+	}
 }
 
 async function isMavenInstalledGlobally(): Promise<boolean> {
@@ -2278,13 +2271,50 @@ async function isMavenInstalledGlobally(): Promise<boolean> {
     });
 }
 
+/**
+ * Executes the Maven Wrapper initialization command (`mvn wrapper:wrapper`)
+ * in the specified target directory.
+ *
+ * @param targetPath - The file system path where the Maven Wrapper command should be executed.
+ * @returns A promise that resolves to `true` if the command completes successfully (exit code 0),
+ *          or `false` if an error occurs or the command fails.
+ */
 async function runMavenWrapperCommand(targetPath: string): Promise<boolean> {
-    return new Promise((resolve) => {
-        const proc = childprocess.spawn('mvn wrapper:wrapper', [], { shell: true, cwd: targetPath });
-        const timeout = setTimeout(() => { try { proc.kill(); } catch { } resolve(false); }, 8000);
-        proc.on('close', (code) => { clearTimeout(timeout); resolve(code === 0); });
-        proc.on('error', () => { clearTimeout(timeout); resolve(false); });
-    });
+	return new Promise((resolve) => {
+		try {
+			const proc = childprocess.spawn("mvn wrapper:wrapper", [], {
+				shell: true,
+				cwd: targetPath
+			});
+
+			proc.on("close", (code) => {
+				resolve(code === 0);
+			});
+
+			proc.on("error", (err) => {
+				console.error("Failed to run mvn wrapper:", err);
+				resolve(false);
+			});
+
+			// Set a timeout to prevent hanging
+			const timeout = setTimeout(() => {
+				console.error("Maven wrapper command timed out");
+				try {
+					proc.kill();
+				} catch (e) {
+					console.error("Failed to kill process:", e);
+				}
+				resolve(false);
+			}, 8000);
+
+			proc.on("exit", () => {
+				clearTimeout(timeout);
+			});
+		} catch (error) {
+			console.error("Exception running Maven wrapper command:", error);
+			resolve(false);
+		}
+	});
 }
 
 async function updatePomForClassMediator(projectUri: string): Promise<void> {
@@ -2373,9 +2403,9 @@ async function updatePomForClassMediator(projectUri: string): Promise<void> {
     await fs.promises.writeFile(pomPath, updatedXml);
 }
 
-function setJavaHomeInEnvironmentAndPath(projectUri: string): { [key: string]: string } {
-    const javaHome = process.env['JAVA_HOME'];
+function setJavaHomeInEnvironmentAndPath(javaHome?: string): { [key: string]: string } {
     const env = { ...process.env } as { [key: string]: string };
+    if (!javaHome) javaHome = env['JAVA_HOME'];
     if (javaHome) {
         env['JAVA_HOME'] = javaHome;
         const pathKey = Object.keys(env).find(k => k.toUpperCase() === 'PATH') || 'PATH';
@@ -2392,34 +2422,6 @@ function escapeShellArg(arg: string): string {
     return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
 
-async function confirmFindings(findings: MigrationFinding[], host: MigrationHost): Promise<boolean> {
-    const breaking = findings.filter(f => f.severity === 'breaking');
-    const warnings = findings.filter(f => f.severity === 'warning');
-
-    const lines: string[] = [];
-    if (breaking.length > 0) {
-        lines.push(`Breaking changes (${breaking.length}):`);
-        breaking.forEach(f => lines.push(`  • [${f.category}] ${f.message}`));
-    }
-    if (warnings.length > 0) {
-        if (lines.length > 0) lines.push('');
-        lines.push(`Warnings (${warnings.length}):`);
-        warnings.forEach(f => lines.push(`  • [${f.category}] ${f.message}`));
-    }
-
-    const summary = lines.join('\n');
-
-    if (breaking.length > 0) {
-        logWarn(`Pre-migration analysis found ${breaking.length} breaking change(s) and ${warnings.length} warning(s):\n${summary}`);
-        return host.confirmProceed(
-            `Pre-migration analysis found ${breaking.length} breaking change(s) and ${warnings.length} warning(s).\n\n${summary}\n\nThe migration tool will convert your project to the VS Code MI structure. You can evaluate and address them manually in VS Code after migration.\n\nProceed with migration?`
-        );
-    }
-
-    logWarn(`Pre-migration analysis found ${warnings.length} warning(s):\n${summary}`);
-    host.notify('warn', `Pre-migration analysis found ${warnings.length} warning(s).\n\n${summary}`);
-    return true;
-}
 
 async function buildRootPomXml(
     projectName: string,
@@ -2431,8 +2433,4 @@ async function buildRootPomXml(
     directory?: string
 ): Promise<string> {
     return rootPomXmlContent(projectName, groupId, artifactId, projectUuid, version, miVersion, '', directory);
-}
-
-function buildDockerfileContent(): string {
-    return dockerfileContent();
 }

@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -63,13 +63,13 @@ function isConsolidatedProject(filePath: string): boolean {
     }
 }
 
-interface PomInfo {
-    groupId: string;
-    artifactId: string;
-    version: string;
+export interface PomInfo {
+    groupId?: string;
+    artifactId?: string;
+    version?: string;
 }
 
-async function getPomInfoFromFile(pomPath: string): Promise<PomInfo> {
+export async function getPomInfoFromFile(pomPath: string): Promise<PomInfo> {
     const xmlContent = fs.readFileSync(pomPath, 'utf-8');
     const parsed = await parseStringPromise(xmlContent, { explicitArray: false });
     const project = parsed.project;
@@ -539,5 +539,9 @@ export const rootPomXmlContent = async (
   </project>`;
 };
 
-export const dockerfileContent = () =>
-    `ARG BASE_IMAGE\nFROM \${BASE_IMAGE}\nCOPY CompositeApps/*.car \${WSO2_SERVER_HOME}/repository/deployment/server/carbonapps/\nCOPY resources/wso2carbon.jks \${WSO2_SERVER_HOME}/repository/resources/security/wso2carbon.jks\nCOPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/security/client-truststore.jks\n# COPY libs/*.jar \${WSO2_SERVER_HOME}/lib/`;
+export const dockerfileContent = () => `ARG BASE_IMAGE
+FROM \${BASE_IMAGE}
+COPY CompositeApps/*.car \${WSO2_SERVER_HOME}/repository/deployment/server/carbonapps/
+COPY resources/wso2carbon.jks \${WSO2_SERVER_HOME}/repository/resources/security/wso2carbon.jks
+COPY resources/client-truststore.jks \${WSO2_SERVER_HOME}/repository/resources/security/client-truststore.jks
+# COPY libs/*.jar \${WSO2_SERVER_HOME}/lib/`;

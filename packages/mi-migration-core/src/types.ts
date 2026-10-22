@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -24,8 +24,8 @@
  * CLI implementation      → console.*, path.join(__dirname, ...), commander flags
  */
 export interface MigrationHost {
-    /** Emit an informational, warning, or error message to the user. */
-    notify(level: 'info' | 'warn' | 'error', message: string): void;
+    /** Emit an informational, warning, or error message to the user. Pass `modal: true` for blocking dialogs that must be acknowledged before migration continues. */
+    notify(level: 'info' | 'warn' | 'error', message: string, modal?: boolean): Promise<void>;
 
     /**
      * Resolve a path relative to the package's bundled resources directory
@@ -48,6 +48,12 @@ export interface MigrationHost {
     getTargetVersion(sourceVersion?: string): string;
 
     /**
+     * Returns the JAVA_HOME path to use for Maven invocations, or undefined to
+     * inherit from the environment. Implementations should NOT mutate process.env.
+     */
+    getJavaHome(): string | undefined;
+
+    /**
      * Ask the user a yes/no question. Returns true to proceed, false to abort.
      * In non-interactive mode (e.g. --yes flag) this should always return true.
      */
@@ -57,8 +63,7 @@ export interface MigrationHost {
 export type MigrationConfigKey =
     | 'useLocalMaven'
     | 'useDefaultMavenForMigration'
-    | 'convertToConsolidated'
-    | 'runAnalysis';
+    | 'convertToConsolidated';
 
 export interface MigrationRequest {
     /** Absolute path to the Integration Studio project. */
@@ -70,4 +75,6 @@ export interface MigrationRequest {
 export interface MigrationResult {
     /** Absolute path to each created project directory. */
     filePaths: string[];
+    /** Source paths of requests that failed or produced no output. */
+    failedSources: string[];
 }
