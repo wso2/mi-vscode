@@ -125,7 +125,33 @@ const METADATA = 'metadata';
 const DATA_SOURCES = 'data-sources';
 const DATA_SERVICES = 'data-services';
 const CONNECTORS = 'connectors';
-export const LATEST_MI_VERSION = '4.6.0';
+export const LATEST_MI_VERSION = '4.7.0';
+export const SYNAPSE_CORE_VERSION_460_AND_ABOVE = '4.1.0-wso2v48';
+export const SYNAPSE_CORE_VERSION_BELOW_460 = '4.0.0-wso2v165';
+const MIN_RUNTIME_FOR_LATEST_SYNAPSE_CORE = '4.6.0';
+
+export function compareVersions(v1: string, v2: string): number {
+    const getVersionNumbers = (str: string): string => {
+        const match = str.match(/(\d+(\.\d+)*)/);
+        return match ? match[0] : '0';
+    };
+    const parts1 = getVersionNumbers(v1).split('.').map(p => parseInt(p, 10));
+    const parts2 = getVersionNumbers(v2).split('.').map(p => parseInt(p, 10));
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+        const p1 = parts1[i] || 0;
+        const p2 = parts2[i] || 0;
+        if (p1 > p2) return 1;
+        if (p1 < p2) return -1;
+    }
+    return 0;
+}
+
+export function getSynapseCoreVersionForRuntime(runtimeVersion?: string | null): string {
+    if (!runtimeVersion || compareVersions(runtimeVersion, MIN_RUNTIME_FOR_LATEST_SYNAPSE_CORE) >= 0) {
+        return SYNAPSE_CORE_VERSION_460_AND_ABOVE;
+    }
+    return SYNAPSE_CORE_VERSION_BELOW_460;
+}
 let migrationLogFilePath: string | undefined;
 const logQueue: string[] = [];
 let isFlushing = false;
@@ -2269,34 +2295,72 @@ async function updatePomForClassMediator(projectUri: string): Promise<void> {
     const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true });
     const parsedXml = parser.parse(originalXml);
 
-    const dependencyXml = {
-        dependency: [
-            { groupId: [{ '#text': 'org.apache.synapse' }] },
-            { artifactId: [{ '#text': 'synapse-core' }] },
-            { version: [{ '#text': '4.0.0-wso2v165' }] },
-        ],
-    };
+    const { runtimeVersion } = getProjectDetails(projectUri);
+    const synapseCoreVersion = getSynapseCoreVersionForRuntime(runtimeVersion);
 
+    // Set packaging to "jar"
     parsedXml.forEach((node: any) => {
         if (!Array.isArray(node.project)) return;
         const projectNodes: any[] = node.project;
-
-        // Set packaging to "jar"
         const packagingNode = projectNodes.find((n: any) => n.packaging);
         if (packagingNode) {
             packagingNode.packaging = [{ '#text': 'jar' }];
         } else {
             projectNodes.push({ packaging: [{ '#text': 'jar' }] });
         }
-
-        // Ensure <dependencies> exists, then append the synapse-core entry
-        let depsNode = projectNodes.find((n: any) => n.dependencies);
-        if (!depsNode) {
-            depsNode = { dependencies: [] };
-            projectNodes.push(depsNode);
-        }
-        depsNode.dependencies.push(dependencyXml);
     });
+
+    // Find existing synapse-core dependency and update its version, or add it
+    let synapseCoreDependencyChildren: any[] | undefined;
+    outer:
+    for (const node of parsedXml) {
+        if (!Array.isArray(node.project)) continue;
+        for (const projectNode of node.project) {
+            if (!Array.isArray(projectNode.dependencies)) continue;
+            for (const dependencyNode of projectNode.dependencies) {
+                if (!Array.isArray(dependencyNode.dependency)) continue;
+                const children = dependencyNode.dependency;
+                const isSynapseCore =
+                    children.some((child: any) => child.groupId?.[0]?.['#text'] === 'org.apache.synapse') &&
+                    children.some((child: any) => child.artifactId?.[0]?.['#text'] === 'synapse-core');
+                if (isSynapseCore) {
+                    synapseCoreDependencyChildren = children;
+                    break outer;
+                }
+            }
+        }
+    }
+
+    if (synapseCoreDependencyChildren) {
+        const versionNode = synapseCoreDependencyChildren.find((child: any) => Array.isArray(child.version));
+        if (versionNode) {
+            if (versionNode.version.length > 0) {
+                versionNode.version[0]['#text'] = synapseCoreVersion;
+            } else {
+                versionNode.version.push({ '#text': synapseCoreVersion });
+            }
+        } else {
+            synapseCoreDependencyChildren.push({ version: [{ '#text': synapseCoreVersion }] });
+        }
+    } else {
+        const dependencyXml = {
+            dependency: [
+                { groupId: [{ '#text': 'org.apache.synapse' }] },
+                { artifactId: [{ '#text': 'synapse-core' }] },
+                { version: [{ '#text': synapseCoreVersion }] },
+            ],
+        };
+        parsedXml.forEach((node: any) => {
+            if (!Array.isArray(node.project)) return;
+            const projectNodes: any[] = node.project;
+            let depsNode = projectNodes.find((n: any) => n.dependencies);
+            if (!depsNode) {
+                depsNode = { dependencies: [] };
+                projectNodes.push(depsNode);
+            }
+            depsNode.dependencies.push(dependencyXml);
+        });
+    }
 
     const updatedXml = new XMLBuilder({
         ignoreAttributes: false,

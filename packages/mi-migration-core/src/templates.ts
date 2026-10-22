@@ -25,7 +25,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 
-export const LATEST_CAR_PLUGIN_VERSION = '5.4.18';
+export const LATEST_CAR_PLUGIN_VERSION = '5.4.21';
 const RUNTIME_VERSION_450 = '4.5.0';
 
 // ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ export const rootPomXmlContent = async (
             <plugin>
               <groupId>org.wso2.maven</groupId>
               <artifactId>mi-container-config-mapper</artifactId>
-              <version>5.2.82</version>
+              <version>5.4.22</version>
               <extensions>true</extensions>
               <executions>
                 <execution>

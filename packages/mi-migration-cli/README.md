@@ -29,7 +29,7 @@ mi-migrate analyze [options] <source>
 
 | Option | Description |
 |--------|-------------|
-| `--target-version <version>` | Target MI runtime version (default: `4.6.0`) |
+| `--target-version <version>` | Target MI runtime version (default: `4.7.0`) |
 | `--format <fmt>` | Output format: `text` or `json` (default: `text`) |
 | `--fail-on-breaking` | Exit with code `2` if breaking changes are found |
 | `--java-home <path>` | Override `JAVA_HOME` for Maven invocations |
@@ -81,7 +81,7 @@ mi-migrate migrate [options] <source>
 
 | Option | Description |
 |--------|-------------|
-| `--target-version <version>` | Target MI runtime version (default: `4.6.0`) |
+| `--target-version <version>` | Target MI runtime version (default: `4.7.0`) |
 | `-o, --output <path>` | Output directory (default: `<source>-migrated`) |
 | `-y, --yes` | Non-interactive: skip all confirmation prompts |
 | `--java-home <path>` | Override `JAVA_HOME` for Maven invocations |

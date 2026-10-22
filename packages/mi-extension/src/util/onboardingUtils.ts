@@ -30,7 +30,8 @@ import { SetPathRequest, PathDetailsResponse, SetupDetails, DependencyDetails } 
 import { MiVisualizerRpcManager } from '../rpc-managers/mi-visualizer/rpc-manager';
 import { parseStringPromise } from 'xml2js';
 import { LATEST_CAR_PLUGIN_VERSION } from './templates';
-import { LATEST_MI_VERSION } from '@wso2/mi-migration-core';
+import { LATEST_MI_VERSION, compareVersions, getSynapseCoreVersionForRuntime, SYNAPSE_CORE_VERSION_460_AND_ABOVE, SYNAPSE_CORE_VERSION_BELOW_460 } from '@wso2/mi-migration-core';
+export { LATEST_MI_VERSION, compareVersions, getSynapseCoreVersionForRuntime, SYNAPSE_CORE_VERSION_460_AND_ABOVE, SYNAPSE_CORE_VERSION_BELOW_460 };
 import { runCommand, runBasicCommand } from '../test-explorer/runner';
 import { escapeShellArg } from './shellEscapeUtils';
 import { XMLParser, XMLBuilder } from "fast-xml-parser";
@@ -47,8 +48,6 @@ export const javaVersionCompatibilityMap: { [key: string]: { supportedRange: { m
     '4.2.0': { supportedRange: { min: '11', max: '17' }, recommended: ['17'] },
     '4.1.0': { supportedRange: { min: '11', max: '11' }, recommended: ['11'] },
 };
-export const LATEST_MI_VERSION = "4.7.0";
-
 export async function isMiProject(projectPath: string): Promise<boolean> {
     try {
         const pomFilePath = path.join(projectPath, 'pom.xml');
@@ -59,27 +58,10 @@ export async function isMiProject(projectPath: string): Promise<boolean> {
     }
 }
 const COMPATIBLE_JDK_VERSION = "11";
-export const SYNAPSE_CORE_VERSION_460_AND_ABOVE = "4.1.0-wso2v48";
-export const SYNAPSE_CORE_VERSION_BELOW_460 = "4.0.0-wso2v165";
-const MIN_RUNTIME_FOR_LATEST_SYNAPSE_CORE = "4.6.0";
 export const synapseCoreVersionMap: { [key: string]: string } = {
     '4.7.0': SYNAPSE_CORE_VERSION_460_AND_ABOVE,
     '4.6.0': SYNAPSE_CORE_VERSION_460_AND_ABOVE
 };
-
-/**
- * Returns the synapse-core dependency version required for the given MI runtime.
- * MI 4.6.0 and above (and unknown/undefined runtimes, which fall back to the latest)
- * require 4.1.0-wso2v48; older runtimes require 4.0.0-wso2v165. Using a version
- * threshold rather than exact map lookups keeps patch/future runtimes (e.g. 4.6.1,
- * 4.8.0) resolving to the correct version.
- */
-export function getSynapseCoreVersionForRuntime(runtimeVersion?: string | null): string {
-    if (!runtimeVersion || compareVersions(runtimeVersion, MIN_RUNTIME_FOR_LATEST_SYNAPSE_CORE) >= 0) {
-        return SYNAPSE_CORE_VERSION_460_AND_ABOVE;
-    }
-    return SYNAPSE_CORE_VERSION_BELOW_460;
-}
 
 const miDownloadUrls: { [key: string]: string } = {
     '4.7.0': 'https://mi-distribution.wso2.com/4.7.0/wso2mi-4.7.0.zip',
@@ -1121,41 +1103,6 @@ function getMIFromGlobal(miVersion: string): string | undefined {
     }
 }
 
-/**
- * Compares two version strings and returns a number indicating their relative order.
- *
- * The version strings should be in the format "x.y.z" where x, y, and z are numeric parts.
- * If the version strings contain non-numeric parts, they will be ignored.
- *
- * @param v1 - The first version string to compare.
- * @param v2 - The second version string to compare.
- * @returns A number indicating the relative order of the versions:
- *          - 1 if v1 is greater than v2
- *          - -1 if v1 is less than v2
- *          - 0 if v1 is equal to v2
- */
-export function compareVersions(v1: string, v2: string): number {
-    // Extract only the numeric parts of the version string
-    const getVersionNumbers = (str: string): string => {
-        const match = str.match(/(\d+(\.\d+)*)/);
-        return match ? match[0] : '0';
-    };
-
-    const version1 = getVersionNumbers(v1);
-    const version2 = getVersionNumbers(v2);
-
-    const parts1 = version1.split('.').map(part => parseInt(part, 10));
-    const parts2 = version2.split('.').map(part => parseInt(part, 10));
-
-    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-        const part1 = parts1[i] || 0;
-        const part2 = parts2[i] || 0;
-
-        if (part1 > part2) { return 1; }
-        if (part1 < part2) { return -1; }
-    }
-    return 0;
-}
 
 function setupConfigFiles(projectUri: string): void {
     const envFilePath = path.join(projectUri, '.env');
