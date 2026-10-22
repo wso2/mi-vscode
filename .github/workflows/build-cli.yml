@@ -17,7 +17,7 @@ jobs:
           - os: ubuntu-24.04-arm
             binary: mi-migrate
             artifact: mi-migrate-linux-arm64
-          - os: macos-13
+          - os: macos-15-intel
             binary: mi-migrate
             artifact: mi-migrate-macos-x64
           - os: macos-latest
@@ -44,7 +44,21 @@ jobs:
         working-directory: packages/mi-migration-cli
         run: npm install && npm run build && npm run package
 
-      - name: Upload binary
+      - name: Archive binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        working-directory: packages/mi-migration-cli/dist
+        run: tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.binary }}
+
+      - name: Upload binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages/mi-migration-cli/dist/${{ matrix.artifact }}.tar.gz
+          if-no-files-found: error
+
+      - name: Upload binary (Windows)
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}

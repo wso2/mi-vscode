@@ -116,7 +116,7 @@ function createHost(opts: CliOptions): MigrationHost {
             } else if (level === 'warn') {
                 console.warn(line);
             } else {
-                console.log(line);
+                (opts.format === 'json' ? process.stderr : process.stdout).write(line + '\n');
             }
         },
 
@@ -356,6 +356,7 @@ async function analyzeDir(projectDir: string, host: MigrationHost, opts: CliOpti
 async function runAnalyze(source: string, opts: CliOptions) {
     const host = createHost(opts);
     const absSource = path.resolve(source);
+    const progress = (msg: string) => (opts.format === 'json' ? process.stderr : process.stdout).write(msg + '\n');
 
     if (!fs.existsSync(absSource)) {
         console.error(`[ERROR] Source directory does not exist: ${absSource}`);
@@ -366,9 +367,9 @@ async function runAnalyze(source: string, opts: CliOptions) {
     const isWorkspace = projectDirs.length > 1 || projectDirs[0] !== absSource;
 
     if (isWorkspace) {
-        console.log(`Workspace: ${absSource} (${projectDirs.length} project(s) found)`);
+        progress(`Workspace: ${absSource} (${projectDirs.length} project(s) found)`);
     } else {
-        console.log(`Analyzing: ${absSource}`);
+        progress(`Analyzing: ${absSource}`);
     }
 
     const allFindings: TaggedFinding[] = [];
@@ -396,8 +397,8 @@ async function runAnalyze(source: string, opts: CliOptions) {
     }
 
     if (summaryPaths.length > 0) {
-        console.log('\nAnalysis summary written to:');
-        for (const p of summaryPaths) console.log(`  ${p}`);
+        progress('\nAnalysis summary written to:');
+        for (const p of summaryPaths) progress(`  ${p}`);
     }
 
     const hasBreaking = allFindings.some(f => f.severity === 'breaking');
@@ -437,6 +438,12 @@ async function runMigrate(source: string, opts: CliOptions) {
         process.exit(1);
     }
 
+    const rel = path.relative(absSource, outDir);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+        console.error(`[ERROR] Output directory cannot be equal to or inside the source directory: ${outDir}`);
+        process.exit(1);
+    }
+
     console.log(`Source:  ${absSource}`);
     console.log(`Output:  ${outDir}`);
     console.log('Copying source to output directory...');
@@ -472,6 +479,7 @@ async function runMigrate(source: string, opts: CliOptions) {
             : `Found ${allFindings.length} warning(s).\n\nAfter migration completes, an analysis-summary.md will be written to each project directory listing any items that need attention in VS Code. Proceed with migration?`;
         const shouldProceed = await host.confirmProceed(question);
         if (!shouldProceed) {
+            try { fs.rmSync(outDir, { recursive: true, force: true }); } catch { /* best-effort */ }
             console.log('Migration cancelled.');
             process.exit(0);
         }

@@ -22,7 +22,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
-import { Nature, FileInfo, getProjectDetails } from './migrationCore';
+import { Nature, FileInfo, getProjectDetails, LATEST_MI_VERSION } from './migrationCore';
 
 export interface MigrationFinding {
     severity: 'breaking' | 'warning';
@@ -527,7 +527,7 @@ function isBeforeVersion(runtimeVersion: string | undefined, threshold: string):
 
 export function analyzeProject(ctx: AnalysisContext): MigrationFinding[] {
     const runtimeVersion = ctx.runtimeVersion ?? getProjectDetails(ctx.source).runtimeVersion;
-    const targetVersion = ctx.targetVersion;
+    const targetVersion = ctx.targetVersion ?? LATEST_MI_VERSION;
 
     // Returns true when this migration crosses `threshold` — i.e. the source is
     // before the threshold and the target is at or after it.
