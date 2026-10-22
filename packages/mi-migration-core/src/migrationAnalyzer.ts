@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com) All Rights Reserved.
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -22,7 +22,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
-import { Nature, FileInfo, getProjectDetails } from './migrationCore';
+import { Nature, FileInfo, getProjectDetails, LATEST_MI_VERSION, compareVersions, SYNAPSE_TO_MI_ARTIFACT_FOLDER_MAP } from './migrationCore';
 
 export interface MigrationFinding {
     severity: 'breaking' | 'warning';
@@ -84,19 +84,7 @@ const CONNECTOR_VERSION_REQUIREMENTS: ConnectorVersionRequirement[] = [
     },
 ];
 
-// Known synapse-config subfolder names that the migration handles.
-const KNOWN_SYNAPSE_ARTIFACT_TYPES = new Set([
-    'api',
-    'endpoints',
-    'inbound-endpoints',
-    'local-entries',
-    'message-processors',
-    'message-stores',
-    'proxy-services',
-    'sequences',
-    'tasks',
-    'templates',
-]);
+const KNOWN_SYNAPSE_ARTIFACT_TYPES = new Set(Object.keys(SYNAPSE_TO_MI_ARTIFACT_FOLDER_MAP));
 
 // language="nashornJs" explicitly targets the Nashorn engine (deprecated from JDK 15+).
 const NASHORN_SCRIPT_LANGUAGE = 'nashornjs';
@@ -177,7 +165,7 @@ function connectorVersionRule(ctx: AnalysisContext): MigrationFinding[] {
 
         for (const rule of CONNECTOR_VERSION_REQUIREMENTS) {
             if (!name.toLowerCase().includes(rule.namePattern)) continue;
-            if (isVersionBelow(version, rule.breakingBelow)) {
+            if (isBeforeVersion(version, rule.breakingBelow)) {
                 findings.push({
                     severity: 'breaking',
                     category: 'connector-version',
@@ -211,7 +199,7 @@ function connectorVersionRule(ctx: AnalysisContext): MigrationFinding[] {
             if (!artifactId || !version) continue;
             for (const rule of CONNECTOR_VERSION_REQUIREMENTS) {
                 if (!artifactId.toLowerCase().includes(rule.namePattern)) continue;
-                if (isVersionBelow(version, rule.breakingBelow)) {
+                if (isBeforeVersion(version, rule.breakingBelow)) {
                     findings.push({
                         severity: 'breaking',
                         category: 'connector-version',
@@ -235,7 +223,7 @@ function connectorVersionRule(ctx: AnalysisContext): MigrationFinding[] {
                     const version = versions[versions.length - 1][1];
                     for (const rule of CONNECTOR_VERSION_REQUIREMENTS) {
                         if (!zipName.toLowerCase().includes(rule.namePattern)) continue;
-                        if (isVersionBelow(version, rule.breakingBelow)) {
+                        if (isBeforeVersion(version, rule.breakingBelow)) {
                             findings.push({
                                 severity: 'breaking',
                                 category: 'connector-version',
@@ -350,7 +338,7 @@ function unrecognizedProjectTypeRule(ctx: AnalysisContext): MigrationFinding[] {
         for (const entry of entries) {
             if (!entry.isDirectory()) continue;
             const fullPath = path.join(ctx.source, entry.name);
-            if (['.backup', '.git', '.vscode', '.mvn', '.metadata', '.tmp'].includes(entry.name)) continue;
+            if (entry.name.startsWith('.')) continue;
             if (!knownDirs.has(fullPath)) {
                 // Maven modules (have pom.xml) are intentional — just not a recognised IS type.
                 if (fs.existsSync(path.join(fullPath, 'pom.xml'))) continue;
@@ -377,9 +365,11 @@ function unrecognizedProjectTypeRule(ctx: AnalysisContext): MigrationFinding[] {
 function skippedArtifactsRule(ctx: AnalysisContext): MigrationFinding[] {
     const distributionPomDeps = new Set<string>();
     const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false });
+    let hasDistributionProject = false;
 
     for (const { projectDir, projectType } of ctx.projectDirsWithType) {
         if (projectType !== Nature.DISTRIBUTION) continue;
+        hasDistributionProject = true;
 
         const pomPath = path.join(projectDir, 'pom.xml');
         if (!fs.existsSync(pomPath)) continue;
@@ -399,6 +389,12 @@ function skippedArtifactsRule(ctx: AnalysisContext): MigrationFinding[] {
         }
     }
 
+    if (!hasDistributionProject) return [];
+    if (distributionPomDeps.size === 0) {
+        console.warn('[WARN] Could not parse dependencies from any DISTRIBUTION pom.xml — skipped-artifacts check suppressed.');
+        return [];
+    }
+
     const skipped: string[] = [];
     for (const [artifactId, fileInfo] of ctx.artifactIdToFileInfoMap) {
         if (fileInfo.artifact && !distributionPomDeps.has(artifactId)) {
@@ -416,13 +412,9 @@ function skippedArtifactsRule(ctx: AnalysisContext): MigrationFinding[] {
 }
 
 /**
- * Flags local transport URIs (local://...) which are not supported in MI.
- * Example fix: local://services/SecondProxy → http://localhost:8290/services/SecondProxy
- */
-/**
- * Flags proxy services that have no explicit `transports` attribute. In older
- * ESB versions the default included local transport as a listener; MI does not
- * support local transport, so HTTP/HTTPS must be declared explicitly.
+ * Flags proxy services that explicitly declare `transports="local"`. An absent
+ * or empty transports attribute is treated as ALL TRANSPORTS by the MI runtime,
+ * so only an explicit local-only declaration is a breaking issue.
  */
 function localTransportListenerProxyRule(files: SynapseFile[]): MigrationFinding[] {
     const affected: string[] = [];
@@ -431,7 +423,7 @@ function localTransportListenerProxyRule(files: SynapseFile[]): MigrationFinding
         if (!proxyTagMatch) continue;
         const attrs = proxyTagMatch[1];
         const transportsMatch = attrs.match(/\btransports\s*=\s*["']([^"']+)["']/i);
-        const isLocalOnly = !transportsMatch || transportsMatch[1].trim().toLowerCase() === 'local';
+        const isLocalOnly = transportsMatch && transportsMatch[1].trim().toLowerCase() === 'local';
         if (isLocalOnly) {
             affected.push(artifactName ?? path.basename(filePath));
         }
@@ -440,7 +432,7 @@ function localTransportListenerProxyRule(files: SynapseFile[]): MigrationFinding
     return [{
         severity: 'breaking',
         category: 'local-transport-listener-proxy',
-        message: `Proxy service(s) without an explicit transports attribute detected: ${affected.join(', ')}. In MI, local transport is not supported. Explicitly add the HTTP/HTTPS transports (e.g. transports="http https") to ensure the proxy service is accessible.`,
+        message: `Proxy service(s) with transports="local" detected: ${affected.join(', ')}. Local transport is not supported in MI. Change the transports attribute to use HTTP/HTTPS (e.g. transports="http https").`,
     }];
 }
 
@@ -462,6 +454,10 @@ function dataMapperSaxonRule(files: SynapseFile[]): MigrationFinding[] {
     }];
 }
 
+/**
+ * Flags local transport URIs (local://...) which are not supported in MI.
+ * Example fix: local://services/SecondProxy → http://localhost:8290/services/SecondProxy
+ */
 function localTransportRule(files: SynapseFile[]): MigrationFinding[] {
     const LOCAL_TRANSPORT_PATTERN = /uri\s*=\s*["'](local:\/\/[^"']+)["']/gi;
     const affected: string[] = [];
@@ -515,19 +511,14 @@ function runSynapseFileRules(ctx: AnalysisContext, rules: SynapseAggregateRule[]
  * at `threshold` should only fire when this returns true.
  * If `runtimeVersion` is unknown, the rule is included (safe default).
  */
-function isBeforeVersion(runtimeVersion: string | undefined, threshold: string): boolean {
-    if (!runtimeVersion) return true;
-    const parse = (v: string) => v.split('.').map(n => parseInt(n, 10) || 0);
-    const [ra, rb, rc] = parse(runtimeVersion);
-    const [ta, tb, tc] = parse(threshold);
-    if (ra !== ta) return ra < ta;
-    if (rb !== tb) return rb < tb;
-    return rc < tc;
+function isBeforeVersion(version: string | undefined, threshold: string): boolean {
+    if (!version) return true;
+    return compareVersions(version, threshold) < 0;
 }
 
 export function analyzeProject(ctx: AnalysisContext): MigrationFinding[] {
     const runtimeVersion = ctx.runtimeVersion ?? getProjectDetails(ctx.source).runtimeVersion;
-    const targetVersion = ctx.targetVersion;
+    const targetVersion = ctx.targetVersion ?? LATEST_MI_VERSION;
 
     // Returns true when this migration crosses `threshold` — i.e. the source is
     // before the threshold and the target is at or after it.
@@ -612,15 +603,3 @@ function extractArtifactName(xmlContent: string): string | null {
     return keyMatch ? keyMatch[1] : null;
 }
 
-/**
- * Returns true when `version` is strictly below `threshold`.
- * Compares major, minor, patch numerically.
- */
-function isVersionBelow(version: string, threshold: string): boolean {
-    const parse = (v: string) => v.split('.').map(s => parseInt(s, 10) || 0);
-    const [maj, min, pat] = parse(version);
-    const [tMaj, tMin, tPat] = parse(threshold);
-    if (maj !== tMaj) return maj < tMaj;
-    if (min !== tMin) return min < tMin;
-    return pat < tPat;
-}
