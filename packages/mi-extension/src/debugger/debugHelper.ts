@@ -36,7 +36,7 @@ import { ChildProcess } from 'child_process';
 import treeKill = require('tree-kill');
 import { serverLog, showServerOutputChannel } from '../util/serverLogger';
 import { getJavaHomeFromConfig, getServerPathFromConfig } from '../util/onboardingUtils';
-import { escapeShellArg } from '../util/shellEscapeUtils';
+import { escapeShellArg, isValidPort } from '../util/shellEscapeUtils';
 import * as crypto from 'crypto';
 import { Uri, workspace } from "vscode";
 import { MILanguageClient } from '../lang-client/activator';
@@ -46,6 +46,11 @@ const child_process = require('child_process');
 const findProcess = require('find-process');
 export async function isPortActivelyListening(port: number, timeout: number): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
+        if (!isValidPort(port)) {
+            logDebug(`Invalid port: ${port}`, LogLevel.ERROR);
+            resolve(false);
+            return;
+        }
         const startTime = Date.now();
 
         const checkPort = () => {
@@ -331,6 +336,10 @@ export function buildDeployExtraArgs(values: Record<string, string>): string[] {
     const args: string[] = [];
     for (const [key, value] of Object.entries(values)) {
         if (value !== '') {
+            // Keys come from ${...} placeholders in project files, so restrict them to Maven property name characters.
+            if (!/^[A-Za-z0-9_.-]+$/.test(key)) {
+                throw new Error(`Invalid deploy parameter name: ${key}`);
+            }
             args.push(`-D${key}=${value}`);
         }
     }

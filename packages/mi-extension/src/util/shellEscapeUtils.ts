@@ -47,3 +47,13 @@ export function escapeShellArg(arg: string): string {
 export function escapePowerShellArg(arg: string): string {
     return `'${arg.replace(/'/g, "''")}'`;
 }
+
+/**
+ * Return true if the value is an integer TCP port (1-65535), given as a number or a string of digits.
+ * Port settings are typed as numbers but VS Code does not enforce that at runtime,
+ * so validate before interpolating a port into a shell command.
+ */
+export function isValidPort(port: unknown): boolean {
+    const num = typeof port === "string" && /^\d+$/.test(port) ? Number(port) : port;
+    return typeof num === "number" && Number.isInteger(num) && num >= 1 && num <= 65535;
+}
