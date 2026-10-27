@@ -32,30 +32,36 @@ module.exports = {
         if (deps['hono']) deps['hono'] = '4.12.18'; // CVE-2026-44455 (JSX injection), CVE-2026-44456 (bodyLimit bypass)
         if (deps['@hono/node-server']) deps['@hono/node-server'] = '1.19.13';
         if (deps['@tootallnate/once']) deps['@tootallnate/once'] = '3.0.1';
-        if (deps['dompurify']) deps['dompurify'] = '3.4.16'; // security fixes
+        if (deps['dompurify']) deps['dompurify'] = '3.4.17'; // security fixes
         if (deps['axios']) deps['axios'] = '1.20.0'; // security fixes
-        if (deps['body-parser']) deps['body-parser'] = '1.20.6';
+        if (deps['body-parser']) deps['body-parser'] = '1.20.9';
         if (deps['http-proxy-middleware']) deps['http-proxy-middleware'] = '3.0.7'; // security fixes
         if (deps['ip-address']) { // security fix: force patch within 10.x range only to avoid breaking consumers on earlier majors
           if (/^[\s\^~><=]*10[.\s]/.test(deps['ip-address'])) {
             deps['ip-address'] = '10.1.1';
           }
         }
-        if (deps['follow-redirects']) deps['follow-redirects'] = '1.16.0'; // security fix: redirect bypass vulnerability
+        if (deps['follow-redirects']) deps['follow-redirects'] = '1.16.1'; // security fix: redirect bypass vulnerability
         if (deps['express-rate-limit']) deps['express-rate-limit'] = '8.2.2'; // security fix
         if (deps['file-type']) deps['file-type'] = '21.3.2'; // security fix
         if (deps['immutable']) deps['immutable'] = '4.3.9'; // security fix
-        if (deps['serialize-javascript']) deps['serialize-javascript'] = '7.0.5'; // security fix: XSS/code injection
+        if (deps['serialize-javascript']) deps['serialize-javascript'] = '7.1.3'; // security fix: XSS/code injection
         if (deps['flatted']) deps['flatted'] = '3.4.2'; // security fix
         if (deps['handlebars']) deps['handlebars'] = '4.7.10'; // security fix
         if (deps['tmp']) deps['tmp'] = '0.2.7'; // security fix
-        if (deps['undici']) deps['undici'] = '7.29.1'; // security fixes
+        if (deps['undici']) deps['undici'] = '7.30.1'; // security fixes
         if (deps['@opentelemetry/core']) deps['@opentelemetry/core'] = '2.8.0'; // security fix
         if (deps['@opentelemetry/propagator-jaeger']) deps['@opentelemetry/propagator-jaeger'] = '2.9.0';
         if (deps['uuid']) deps['uuid'] = '14.0.0'; // security fix
         if (deps['@nevware21/ts-utils']) deps['@nevware21/ts-utils'] = '0.14.0'; // security fix: CVE-2026-46681 (prototype pollution)
         if (deps['webpack-dev-server']) deps['webpack-dev-server'] = '5.2.6'; // security fix
-        if (deps['fast-uri']) deps['fast-uri'] = '3.1.8';
+        if (deps['fast-uri']) deps['fast-uri'] = '3.1.9';
+        if (deps['@azure/msal-node']) deps['@azure/msal-node'] = '7.1.0';
+        if (deps['markdown-it']) {
+          if (/^[\s\^~><=]*14[.\s]/.test(deps['markdown-it'])) {
+            deps['markdown-it'] = '14.3.3';
+          }
+        }
         if (deps['ws']) {
           if (/^[\s\^~><=]*8[.\s]/.test(deps['ws'])) {
             deps['ws'] = '8.21.0'; // security fix

@@ -35,7 +35,7 @@ import treeKill = require("tree-kill");
 import { normalize } from "upath";
 import { COMMANDS, MVN_COMMANDS } from "../constants";
 import { getProjectEnvVariables } from "../debugger/tasks";
-import { escapeShellArg } from "../util/shellEscapeUtils";
+import { escapeShellArg, isValidPort } from "../util/shellEscapeUtils";
 const fs = require('fs');
 const child_process = require('child_process');
 const readline = require('readline');
@@ -149,6 +149,14 @@ export async function runProjectTests(run: TestRun, projectRoot: string, project
     };
 
     try {
+        // Validate the port before starting the server
+        const serverPort = TestRunnerConfig.getServerPort();
+        if (!isValidPort(serverPort)) {
+            window.showErrorMessage(`Invalid test server port: ${serverPort}`);
+            failProjectTests();
+            return;
+        }
+
         const serverPath = await getServerPath(projectRoot);
         if (!serverPath) {
             window.showErrorMessage("MI server path not found");
@@ -436,7 +444,7 @@ async function runTests(testNames: string, projectRoot: string, triggerId: strin
 
         let testRunCmd: string;
         try {
-            const basicTestCmd = `${mvnCmd + MVN_COMMANDS.TEST_COMMAND} -DtestServerHost=${escapeShellArg(TestRunnerConfig.getHost())} -DtestServerPort=${TestRunnerConfig.getServerPort()} -P test`;
+            const basicTestCmd = `${mvnCmd + MVN_COMMANDS.TEST_COMMAND} -DtestServerHost=${escapeShellArg(TestRunnerConfig.getHost())} -DtestServerPort=${escapeShellArg(String(TestRunnerConfig.getServerPort()))} -P test`;
 
             testRunCmd = basicTestCmd;
             switch (testLevel) {

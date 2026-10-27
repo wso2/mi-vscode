@@ -38,6 +38,7 @@ import { setJavaHomeInEnvironmentAndPath } from '../../../debugger/debugHelper';
 import { DebuggerConfig } from '../../../debugger/config';
 import { getServerPathFromConfig } from '../../../util/onboardingUtils';
 import { serverLog, showServerOutputChannel } from '../../../util/serverLogger';
+import { escapeShellArg } from '../../../util/shellEscapeUtils';
 import { MILanguageClient } from '../../../lang-client/activator';
 import { ensureOperationNotAborted } from './abort-utils';
 import treeKill = require('tree-kill');
@@ -830,7 +831,18 @@ async function startServer(
         logDebug(`[ServerManagementTool] Spawning server with command: ${runCommand}`);
         logDebug(`[ServerManagementTool] VM Args: ${JSON.stringify(vmArgs)}`);
 
-        serverProcess = childProcess.spawn(runCommand, vmArgs, {
+        let escapedVmArgs: string[];
+        try {
+            escapedVmArgs = vmArgs.map(escapeShellArg);
+        } catch {
+            return {
+                success: false,
+                message: 'Failed to start server',
+                error: 'A VM argument contains characters that cannot be safely passed to the shell (for example \'%\' on Windows).'
+            };
+        }
+
+        serverProcess = childProcess.spawn(runCommand, escapedVmArgs, {
             shell: true,
             env: envVariables,
             detached: false
