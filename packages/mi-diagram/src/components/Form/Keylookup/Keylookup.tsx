@@ -89,6 +89,8 @@ interface IKeylookupBase {
     filter?: (value: string) => boolean;
     onCreateButtonClick?: (fetchItems: any, handleValueChange: any) => void;
     additionalItems?: string[];
+    // Extra named resources to list (not returned by getAvailableResources)
+    additionalResources?: { name: string; type: string }[];
     artifactTypes?: { registryArtifacts: boolean, artifacts: boolean };
     requireValidation?: boolean;
 }
@@ -198,6 +200,7 @@ export const Keylookup = (props: IKeylookup) => {
         sx,
         requireValidation,
         artifactTypes = { registryArtifacts: true, artifacts: true },
+        additionalResources,
         ...rest
     } = props;
     const [items, setItems] = useState<(string | ItemComponent)[]>([]);
@@ -209,7 +212,7 @@ export const Keylookup = (props: IKeylookup) => {
 
     useEffect(() => {
         fetchItems();
-    }, [filterType, props.dataServiceName]);
+    }, [filterType, props.dataServiceName, additionalResources]);
 
     const fetchItems = async () => {
         if (filterType === "mockService") {
@@ -308,6 +311,14 @@ export const Keylookup = (props: IKeylookup) => {
                 workspaceItems.push(item);
             });
         }
+        additionalResources?.forEach((resource) => {
+            const item = { key: resource.name, item: getItemComponent(resource.name, resource.type) };
+            if (resource.name === getValue(value)) {
+                initialItem = item;
+                return;
+            }
+            workspaceItems.push(item);
+        });
         if (registryResources && result?.registryResources) {
             result.registryResources.forEach((resource) => {
                 const [type, pathKey] = resource.registryKey.split(":");

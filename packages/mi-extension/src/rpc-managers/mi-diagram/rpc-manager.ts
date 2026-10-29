@@ -5142,14 +5142,10 @@ ${keyValuesXML}`;
     }
 
     async getConnectorConnections(params: GetConnectorConnectionsRequest): Promise<GetConnectorConnectionsResponse> {
-        return new Promise(async (resolve) => {
-            const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.getConnectorConnections({
-                documentUri: params.documentUri,
-                connectorName: params.connectorName
-            });
-
-            resolve(res);
+        const langClient = await MILanguageClient.getInstance(this.projectUri);
+        return langClient.getConnectorConnections({
+            documentUri: params.documentUri,
+            connectorName: params.connectorName
         });
     }
 
