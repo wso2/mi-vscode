@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Breakpoint, BreakpointEvent, Handles, InitializedEvent, LoggingDebugSession, Scope, StoppedEvent, TerminatedEvent, Thread } from 'vscode-debugadapter';
+import { Breakpoint, BreakpointEvent, Handles, InitializedEvent, InvalidatedEvent, LoggingDebugSession, Scope, StoppedEvent, TerminatedEvent, Thread } from 'vscode-debugadapter';
 import { DebugProtocol } from 'vscode-debugprotocol';
 import * as vscode from 'vscode';
 import { checkServerReadiness, deleteCopiedCapAndLibs, executeTasks, getServerPath, isADiagramView, readPortOffset, removeTempDebugBatchFile, setManagementCredentials, stopServer, abortBuildAndRun } from './debugHelper';
@@ -35,6 +35,19 @@ import { openRuntimeServicesWebview } from '../runtime-services-panel/activate';
 import { RPCLayer } from '../RPCLayer';
 import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
 
+// Maps the property groups shown under "Server Internals" to the context used by the runtime "set" command
+const EDITABLE_SCOPE_CONTEXTS: { [scopeName: string]: string } = {
+    "Synapse Scope Properties": "synapse",
+    "Axis2 Scope Properties": "axis2",
+    "Axis2-Client Scope Properties": "axis2-client",
+    "Transport Scope Properties": "transport",
+    "Operation Scope Properties": "operation",
+    "Variables": "variable"
+};
+
+// Runtime context of the "set" command that replaces the message payload
+const PAYLOAD_CONTEXT = "Envelope";
+
 interface ILaunchRequestArguments extends DebugProtocol.LaunchRequestArguments {
     /** Env variables setup through launch.json */
     env?: any;
@@ -50,6 +63,11 @@ export class MiDebugAdapter extends LoggingDebugSession {
     private static threadID = 1;
 
     private variableHandles: Handles<any>;
+    // variablesReference of an editable property group -> runtime context of that group
+    private editableScopeContexts = new Map<number, string>();
+    // Payload variable of the suspended message, shown under the "Message" scope
+    private payloadVariable: DebugProtocol.Variable | undefined;
+    private payloadScopeRef = 0;
 
     public constructor(private projectUri: string, session?: vscode.DebugSession) {
         super();
@@ -220,8 +238,8 @@ export class MiDebugAdapter extends LoggingDebugSession {
         // make VS Code send setVariable request
         response.body.supportsSetVariable = true;
 
-        // make VS Code send setExpression request
-        response.body.supportsSetExpression = true;
+        // setExpression is not supported; values are changed through setVariable
+        response.body.supportsSetExpression = false;
 
         // make VS Code send disassemble request
         response.body.supportsDisassembleRequest = true;
@@ -436,9 +454,65 @@ export class MiDebugAdapter extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments, request?: DebugProtocol.Request | undefined): void {
-        response.success = true;
+    protected async setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments, request?: DebugProtocol.Request | undefined): Promise<void> {
+        if (this.payloadVariable && args.variablesReference === this.payloadScopeRef && args.name === this.payloadVariable.name) {
+            try {
+                await this.setPayload(args.value);
+            } catch (error) {
+                this.sendError(response, 3, `Failed to set the message payload: ${this.getErrorMessage(error)}`, true);
+                return;
+            }
+            response.body = { value: args.value, variablesReference: 0 };
+            this.sendResponse(response);
+            return;
+        }
+
+        const context = this.editableScopeContexts.get(args.variablesReference);
+        const vars = this.variableHandles.get(args.variablesReference);
+        const target: DebugProtocol.Variable | undefined = Array.isArray(vars)
+            ? vars.find((v: DebugProtocol.Variable) => v.name === args.name)
+            : undefined;
+
+        // Only top-level, non-structured values of a known property group can be changed.
+        // The message payload (Envelope) is not editable through the Axis2 scope.
+        if (!context || !target || target.variablesReference !== 0 || (context === "axis2" && args.name === "Envelope")) {
+            this.sendError(response, 2, `Changing the value of '${args.name}' is not supported. ` +
+                `Only top-level properties and variables can be changed.`, true);
+            return;
+        }
+
+        try {
+            await this.debuggerHandler?.sendSetPropertyCommand(context, args.name, args.value);
+        } catch (error) {
+            this.sendError(response, 3, `Failed to set the value of '${args.name}': ${this.getErrorMessage(error)}`, true);
+            return;
+        }
+
+        // Keep the cached value in sync so re-expanding the group shows the new value
+        target.value = args.value;
+        response.body = {
+            value: args.value,
+            variablesReference: 0
+        };
         this.sendResponse(response);
+        // Refresh the Variables view so group summaries show the new value
+        this.sendEvent(new InvalidatedEvent(['variables']));
+    }
+
+    private async setPayload(payload: string): Promise<void> {
+        if (!this.debuggerHandler) {
+            throw new Error("The debugger is not connected to the server");
+        }
+        await this.debuggerHandler.sendSetPropertyCommand(PAYLOAD_CONTEXT, PAYLOAD_CONTEXT, payload);
+        if (this.payloadVariable) {
+            this.payloadVariable.value = payload;
+        }
+        // Re-read the message from the server so the Variables view shows the payload as the runtime holds it
+        this.sendEvent(new InvalidatedEvent(['variables']));
+    }
+
+    private getErrorMessage(error: unknown): string {
+        return error instanceof Error ? error.message : String(error);
     }
 
     protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments, request?: DebugProtocol.Request | undefined): void {
@@ -467,6 +541,16 @@ export class MiDebugAdapter extends LoggingDebugSession {
             localScope?.splice(index, 1);
         }
 
+        this.editableScopeContexts.clear();
+        localScope?.forEach((scope: DebugProtocol.Variable) => {
+            const context = EDITABLE_SCOPE_CONTEXTS[scope.name];
+            if (context && scope.variablesReference !== 0) {
+                this.editableScopeContexts.set(scope.variablesReference, context);
+            }
+        });
+
+        this.payloadVariable = msgScope;
+
         const serverInternalRef = this.variableHandles.create(localScope);
 
         let derivedScopes = [
@@ -475,6 +559,7 @@ export class MiDebugAdapter extends LoggingDebugSession {
 
         if (msgScope !== undefined) {
             const msgRef = this.variableHandles.create(msgScope);
+            this.payloadScopeRef = msgRef;
             derivedScopes.push(new Scope("Message", msgRef, false));
 
         }
@@ -486,12 +571,12 @@ export class MiDebugAdapter extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    private sendError(response: DebugProtocol.Response, errorCode: number, errorMessage: string) {
+    private sendError(response: DebugProtocol.Response, errorCode: number, errorMessage: string, showUser: boolean = false) {
         response.success = false;
         this.sendErrorResponse(response, {
             id: errorCode,
             format: errorMessage,
-            showUser: false,
+            showUser: showUser,
         });
     }
 
