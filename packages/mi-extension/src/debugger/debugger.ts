@@ -696,6 +696,30 @@ export class Debugger extends EventEmitter {
         await this.sendRequest(JSON.stringify(breakpointInfo));
     }
 
+    /**
+     * Sets a message context property (or a message variable when context is "variable")
+     * on the message currently suspended at a breakpoint.
+     */
+    public async sendSetPropertyCommand(context: string, name: string, value: string): Promise<void> {
+        let setCommand: any;
+        if (context === "variable") {
+            setCommand = {
+                "command": "set", "command-argument": "variable",
+                "variable": { "variable-name": name, "variable-value": value }
+            };
+        } else {
+            setCommand = {
+                "command": "set", "command-argument": "property", "context": context,
+                "property": { "property-name": name, "property-value": value }
+            };
+        }
+        const response = await this.sendRequest(JSON.stringify(setCommand));
+        const jsonResponse = JSON.parse(response);
+        if (jsonResponse["command-response"] !== "successful") {
+            throw new Error(jsonResponse["failed-reason"] ?? `Unable to set the value of '${name}'`);
+        }
+    }
+
     public sendResumeCommand(): Promise<string> {
         const resumeCommand = { "command": "resume" };
         return new Promise((resolve, reject) => {
