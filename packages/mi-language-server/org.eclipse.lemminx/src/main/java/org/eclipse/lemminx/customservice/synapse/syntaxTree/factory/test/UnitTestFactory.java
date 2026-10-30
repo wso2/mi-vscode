@@ -14,6 +14,7 @@
 
 package org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.test;
 
+import org.apache.commons.text.StringEscapeUtils;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.factory.AbstractFactory;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.STNode;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.Artifact;
@@ -33,10 +34,13 @@ import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.TestProper
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.TestRegistryResource;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.TestRegistryResources;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.TestSupportiveArtifacts;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.TestVariable;
+import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.TestVariables;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.UnitTest;
 import org.eclipse.lemminx.customservice.synapse.syntaxTree.pojo.test.UnitTestArtifacts;
 import org.eclipse.lemminx.customservice.synapse.utils.Constant;
 import org.eclipse.lemminx.customservice.synapse.utils.Utils;
+import org.eclipse.lemminx.dom.DOMAttr;
 import org.eclipse.lemminx.dom.DOMElement;
 import org.eclipse.lemminx.dom.DOMNode;
 
@@ -286,6 +290,9 @@ public class UnitTestFactory extends AbstractFactory {
                 } else if (Constant.PROPERTIES.equalsIgnoreCase(nodeName)) {
                     TestProperties properties = createTestProperties((DOMElement) child);
                     testCaseInput.setProperties(properties);
+                } else if (Constant.VARIABLES.equalsIgnoreCase(nodeName)) {
+                    TestVariables variables = createTestVariables((DOMElement) child);
+                    testCaseInput.setVariables(variables);
                 }
             }
         }
@@ -329,6 +336,53 @@ public class UnitTestFactory extends AbstractFactory {
             testProperty.setScope(Constant.DEFAULT);
         }
         return testProperty;
+    }
+
+    private TestVariables createTestVariables(DOMElement node) {
+
+        TestVariables testVariables = new TestVariables();
+        testVariables.elementNode(node);
+
+        List<DOMNode> children = node.getChildren();
+        if (children != null && !children.isEmpty()) {
+            for (DOMNode child : children) {
+                if (child instanceof DOMElement) {
+                    TestVariable variable = createTestVariable((DOMElement) child);
+                    testVariables.addVariable(variable);
+                }
+            }
+        }
+        return testVariables;
+    }
+
+    private TestVariable createTestVariable(DOMElement node) {
+
+        TestVariable testVariable = new TestVariable();
+        testVariable.elementNode(node);
+
+        String name = getDecodedAttribute(node, Constant.NAME);
+        if (name != null) {
+            testVariable.setName(name);
+        }
+        String value = getDecodedAttribute(node, Constant.VALUE);
+        if (value != null) {
+            testVariable.setValue(value);
+        }
+        String type = node.getAttribute(Constant.TYPE);
+        if (type != null) {
+            testVariable.setType(type);
+        }
+        return testVariable;
+    }
+
+    /**
+     * Returns the attribute value with entity and character references (e.g. &#10;) decoded.
+     */
+    private String getDecodedAttribute(DOMElement node, String name) {
+
+        DOMAttr attr = node.getAttributeNode(name);
+        String value = attr != null ? attr.getValue() : null;
+        return value != null ? StringEscapeUtils.unescapeXml(value) : null;
     }
 
     private TestCaseAssertions createTestCaseAssertions(DOMElement node) {
