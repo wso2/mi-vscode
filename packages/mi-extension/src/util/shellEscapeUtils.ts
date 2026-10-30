@@ -16,28 +16,7 @@
  * under the License.
  */
 
-/**
- * Escape a value so the shell treats it as a literal string,
- * preventing command injection via file names, paths, or user input.
- *
- * On POSIX the value is single-quoted (single quotes block all expansion,
- * including $(...) and backticks, which survive inside double quotes).
- *
- * On Windows the value is double-quoted for cmd.exe, with embedded quotes
- * doubled ("") — cmd does not understand \" and would treat the quote as
- * closing the quoted region. Values containing % or control characters are
- * rejected: cmd expands %VAR% even inside double quotes and offers no escape
- * for it on a `cmd /c` command line, so such values cannot be passed safely.
- */
-export function escapeShellArg(arg: string): string {
-    if (process.platform === "win32") {
-        if (/[%\x00-\x1f]/.test(arg)) {
-            throw new Error(`Argument cannot be safely passed to the Windows shell (contains '%' or control characters): ${arg}`);
-        }
-        return `"${arg.replace(/"/g, '""')}"`;
-    }
-    return `'${arg.replace(/'/g, `'\\''`)}'`;
-}
+export { escapeShellArg } from '@wso2/mi-migration-core';
 
 /**
  * Escape a value for interpolation into a PowerShell -Command string.

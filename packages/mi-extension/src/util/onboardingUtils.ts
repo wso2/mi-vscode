@@ -30,7 +30,7 @@ import { SetPathRequest, PathDetailsResponse, SetupDetails, DependencyDetails } 
 import { MiVisualizerRpcManager } from '../rpc-managers/mi-visualizer/rpc-manager';
 import { parseStringPromise } from 'xml2js';
 import { LATEST_CAR_PLUGIN_VERSION } from './templates';
-import { LATEST_MI_VERSION, compareVersions, getSynapseCoreVersionForRuntime, SYNAPSE_CORE_VERSION_460_AND_ABOVE, SYNAPSE_CORE_VERSION_BELOW_460 } from '@wso2/mi-migration-core';
+import { LATEST_MI_VERSION, compareVersions, getSynapseCoreVersionForRuntime, SYNAPSE_CORE_VERSION_460_AND_ABOVE, SYNAPSE_CORE_VERSION_BELOW_460, applyClassMediatorPomChanges } from '@wso2/mi-migration-core';
 export { LATEST_MI_VERSION, compareVersions, getSynapseCoreVersionForRuntime, SYNAPSE_CORE_VERSION_460_AND_ABOVE, SYNAPSE_CORE_VERSION_BELOW_460 };
 import { runCommand, runBasicCommand } from '../test-explorer/runner';
 import { escapeShellArg } from './shellEscapeUtils';
@@ -823,60 +823,8 @@ export async function updatePomForClassMediator(projectUri: string): Promise<voi
     });
     const parsedXml = parser.parse(originalXml);
 
-    updatePomXml(parsedXml, "project.packaging", "jar");
-
-    createTagIfNotFound(parsedXml, "project.dependencies");
     const runtimeVersion = await getMIVersionFromPom(projectUri);
-    const synapseCoreVersion = getSynapseCoreVersionForRuntime(runtimeVersion);
-    let synapseCoreDependencyChildren: any[] | undefined;
-    outer:
-    for (const node of parsedXml) {
-        if (!Array.isArray(node.project)) { continue; }
-        for (const projectNode of node.project) {
-            if (!Array.isArray(projectNode.dependencies)) { continue; }
-            for (const dependencyNode of projectNode.dependencies) {
-                if (!Array.isArray(dependencyNode.dependency)) { continue; }
-                const children = dependencyNode.dependency;
-                const isSynapseCore =
-                    children.some((child: any) => child.groupId?.[0]?.["#text"] === "org.apache.synapse") &&
-                    children.some((child: any) => child.artifactId?.[0]?.["#text"] === "synapse-core");
-                if (isSynapseCore) {
-                    synapseCoreDependencyChildren = children;
-                    break outer;
-                }
-            }
-        }
-    }
-    if (synapseCoreDependencyChildren) {
-        const versionNode = synapseCoreDependencyChildren.find((child: any) => Array.isArray(child.version));
-        if (versionNode) {
-            if (versionNode.version.length > 0) {
-                versionNode.version[0]["#text"] = synapseCoreVersion;
-            } else {
-                versionNode.version.push({ "#text": synapseCoreVersion });
-            }
-        } else {
-            synapseCoreDependencyChildren.push({ version: [{ "#text": synapseCoreVersion }] });
-        }
-    } else {
-        const dependencyXml = {
-            dependency: [
-                { groupId: [{ "#text": "org.apache.synapse" }] },
-                { artifactId: [{ "#text": "synapse-core" }] },
-                { version: [{ "#text": synapseCoreVersion }] }
-            ]
-        };
-
-        parsedXml.forEach((node: any) => {
-            if (Array.isArray(node.project)) {
-                node.project.forEach((projectNode: any) => {
-                    if (projectNode.dependencies) {
-                        projectNode.dependencies.push(dependencyXml);
-                    }
-                });
-            }
-        });
-    }
+    applyClassMediatorPomChanges(parsedXml, runtimeVersion ?? undefined);
 
     const builder = new XMLBuilder({
         ignoreAttributes: false,
