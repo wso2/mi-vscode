@@ -3,11 +3,15 @@ name: Build and run Tests
 on:
   workflow_call:
     inputs:
-      runOnAWS:
-        default: false
-        type: boolean
-      awsRunnerId:
-        default: 'codebuild-wso2_vscode-extensions-${{ github.run_id }}-${{ github.run_attempt }}'
+      # Runner for the Linux jobs. Windows UI tests always run on windows-latest.
+      #   ubuntu-latest        GitHub-hosted (the default)
+      #   codebuild            AWS CodeBuild, expanded to the run-scoped project label in `runs-on`
+      #   k8s-default-runners  the self-hosted Kubernetes runner set
+      # Anything else is handed to `runs-on` verbatim.
+      runner:
+        description: 'Runner for the Linux jobs: ubuntu-latest, codebuild, k8s-default-runners, or any other runner label.'
+        default: 'ubuntu-latest'
+        required: false
         type: string
       isPreRelease:
         default: true
@@ -56,7 +60,7 @@ jobs:
   Build_Stage:
     name: Build repo
     timeout-minutes: 45
-    runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner == 'codebuild' && format('codebuild-wso2_vscode-extensions-{0}-{1}', github.run_id, github.run_attempt) || inputs.runner }}
     outputs:
       runMIExtTests: ${{ steps.testMatrix.outputs.runMIExtTests }}
       runLSTests: ${{ steps.testMatrix.outputs.runLSTests }}
@@ -221,7 +225,7 @@ jobs:
     needs: Build_Stage
     if: ${{ inputs.runTests || (inputs.isReleaseBuild && inputs.mi) || needs.Build_Stage.outputs.runMIExtTests == 'true' || github.base_ref == 'stable/mi' }}
     timeout-minutes: 30
-    runs-on: ${{ inputs.runOnAWS && inputs.awsRunnerId || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.runner == 'codebuild' && format('codebuild-wso2_vscode-extensions-{0}-{1}', github.run_id, github.run_attempt) || inputs.runner }}
     steps:
       - name: Restore build
         uses: actions/download-artifact@v4
@@ -254,7 +258,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.Build_Stage.outputs.uiTestMatrix) }}
-    runs-on: ${{ ((matrix.os == 'linux' && inputs.runOnAWS) && inputs.awsRunnerId )|| (matrix.os == 'linux' && 'ubuntu-latest') || (matrix.os == 'windows' && 'windows-latest') }}
+    runs-on: ${{ (matrix.os == 'windows' && 'windows-latest') || (inputs.runner == 'codebuild' && format('codebuild-wso2_vscode-extensions-{0}-{1}', github.run_id, github.run_attempt)) || inputs.runner }}
     steps:
       - name: Restore build
         uses: actions/download-artifact@v4
