@@ -1,0 +1,38 @@
+{
+  "name": "@wso2/mi-migration-cli",
+  "version": "1.0.0",
+  "description": "Standalone CLI for migrating WSO2 Integration Studio projects to MI VS Code format",
+  "main": "lib/index.js",
+  "bin": {
+    "mi-migrate": "lib/index.js"
+  },
+  "scripts": {
+    "copy-resources": "node -e \"const fs=require('fs'); fs.mkdirSync('./resources',{recursive:true}); ['docker-resources','maven-wrapper'].forEach(r=>fs.cpSync('../mi-extension/resources/'+r,'./resources/'+r,{recursive:true,force:true}))\"",
+    "build": "npm run copy-resources && tsc --pretty",
+    "bundle": "ncc build lib/index.js -o dist/bundle --minify",
+    "package": "node scripts/package.js",
+    "watch": "tsc --pretty --watch",
+    "start": "node lib/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "WSO2",
+  "dependencies": {
+    "@wso2/mi-migration-core": "file:../mi-migration-core",
+    "commander": "12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.21",
+    "@types/uuid": "10.0.0",
+    "@types/xml2js": "0.4.12",
+    "@vercel/ncc": "0.38.3",
+    "postject": "1.0.0-alpha.6",
+    "typescript": "5.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wso2/mi-vscode.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  }
+}

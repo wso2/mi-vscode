@@ -36,6 +36,7 @@ import { ChildProcess } from 'child_process';
 import treeKill = require('tree-kill');
 import { serverLog, showServerOutputChannel } from '../util/serverLogger';
 import { getJavaHomeFromConfig, getServerPathFromConfig } from '../util/onboardingUtils';
+import { setJavaHomeInEnvironmentAndPath as coreSetJavaHome } from '@wso2/mi-migration-core';
 import { escapeShellArg } from '../util/shellEscapeUtils';
 import * as crypto from 'crypto';
 import { Uri, workspace } from "vscode";
@@ -646,22 +647,8 @@ export async function getServerPath(projectUri: string): Promise<string | undefi
     }
     return path.normalize(currentPath);
 }
-export function setJavaHomeInEnvironmentAndPath(projectUri: string): { [key: string]: string; } {
-    const javaHome = getJavaHomeFromConfig(projectUri);
-    const env = { ...process.env };
-    if (javaHome) {
-        env['JAVA_HOME'] = javaHome;
-        const pathKey = Object.keys(env).find(k => k.toUpperCase() === 'PATH') || 'PATH';
-        env[pathKey] = `${path.join(javaHome, 'bin')}${path.delimiter}${env[pathKey] || ''}`;
-    }
-    const sanitizedEnv: { [key: string]: string } = {};
-
-    for (const key in env) {
-        if (env[key] !== undefined) {
-            sanitizedEnv[key] = env[key] as string;
-        }
-    }
-    return sanitizedEnv;
+export function setJavaHomeInEnvironmentAndPath(projectUri: string): { [key: string]: string } {
+    return coreSetJavaHome(getJavaHomeFromConfig(projectUri) ?? undefined);
 }
 
 export async function deleteCapp(serverPath: string): Promise<void> {
