@@ -2317,18 +2317,15 @@ async function runMavenWrapperCommand(targetPath: string): Promise<boolean> {
 	});
 }
 
-async function updatePomForClassMediator(projectUri: string): Promise<void> {
-    const pomPath = path.join(projectUri, 'pom.xml');
-    if (!fs.existsSync(pomPath)) throw new Error('pom.xml not found in: ' + projectUri);
-
-    const originalXml = fs.readFileSync(pomPath, 'utf-8');
-    const parser = new XMLParser({ ignoreAttributes: false, preserveOrder: true });
-    const parsedXml = parser.parse(originalXml);
-
-    const { runtimeVersion } = getProjectDetails(projectUri);
+/**
+ * Mutates a parsed pom.xml AST in-place: sets packaging to "jar" and adds/updates
+ * the synapse-core dependency to the version matching `runtimeVersion`.
+ * Call this after parsing with XMLParser({ ignoreAttributes: false, preserveOrder: true })
+ * and before serialising back with XMLBuilder using the same options.
+ */
+export function applyClassMediatorPomChanges(parsedXml: any[], runtimeVersion: string | undefined): void {
     const synapseCoreVersion = getSynapseCoreVersionForRuntime(runtimeVersion);
 
-    // Set packaging to "jar"
     parsedXml.forEach((node: any) => {
         if (!Array.isArray(node.project)) return;
         const projectNodes: any[] = node.project;
@@ -2340,7 +2337,6 @@ async function updatePomForClassMediator(projectUri: string): Promise<void> {
         }
     });
 
-    // Find existing synapse-core dependency and update its version, or add it
     let synapseCoreDependencyChildren: any[] | undefined;
     outer:
     for (const node of parsedXml) {
@@ -2391,6 +2387,17 @@ async function updatePomForClassMediator(projectUri: string): Promise<void> {
             depsNode.dependencies.push(dependencyXml);
         });
     }
+}
+
+async function updatePomForClassMediator(projectUri: string): Promise<void> {
+    const pomPath = path.join(projectUri, 'pom.xml');
+    if (!fs.existsSync(pomPath)) throw new Error('pom.xml not found in: ' + projectUri);
+
+    const parsedXml = new XMLParser({ ignoreAttributes: false, preserveOrder: true })
+        .parse(fs.readFileSync(pomPath, 'utf-8'));
+
+    const { runtimeVersion } = getProjectDetails(projectUri);
+    applyClassMediatorPomChanges(parsedXml, runtimeVersion);
 
     const updatedXml = new XMLBuilder({
         ignoreAttributes: false,
@@ -2403,25 +2410,43 @@ async function updatePomForClassMediator(projectUri: string): Promise<void> {
     await fs.promises.writeFile(pomPath, updatedXml);
 }
 
-function setJavaHomeInEnvironmentAndPath(javaHome?: string): { [key: string]: string } {
-    const env = { ...process.env } as { [key: string]: string };
-    if (!javaHome) javaHome = env['JAVA_HOME'];
-    if (javaHome) {
-        env['JAVA_HOME'] = javaHome;
-        const pathKey = Object.keys(env).find(k => k.toUpperCase() === 'PATH') || 'PATH';
-        env[pathKey] = `${path.join(javaHome, 'bin')}${path.delimiter}${env[pathKey] || ''}`;
+export function setJavaHomeInEnvironmentAndPath(javaHome?: string): { [key: string]: string } {
+    const raw = { ...process.env };
+    const resolvedJavaHome = javaHome ?? raw['JAVA_HOME'];
+    if (resolvedJavaHome) {
+        raw['JAVA_HOME'] = resolvedJavaHome;
+        const pathKey = Object.keys(raw).find(k => k.toUpperCase() === 'PATH') || 'PATH';
+        raw[pathKey] = `${path.join(resolvedJavaHome, 'bin')}${path.delimiter}${raw[pathKey] || ''}`;
+    }
+    const env: { [key: string]: string } = {};
+    for (const key of Object.keys(raw)) {
+        if (raw[key] !== undefined) env[key] = raw[key] as string;
     }
     return env;
 }
 
-function escapeShellArg(arg: string): string {
-    if (process.platform === 'win32') {
-        if (/[%\x00-\x1f]/.test(arg)) throw new Error(`Argument cannot be safely passed to the Windows shell: ${arg}`);
+/**
+ * Escape a value so the shell treats it as a literal string,
+ * preventing command injection via file names, paths, or user input.
+ *
+ * On POSIX the value is single-quoted (single quotes block all expansion,
+ * including $(...) and backticks, which survive inside double quotes).
+ *
+ * On Windows the value is double-quoted for cmd.exe, with embedded quotes
+ * doubled ("") — cmd does not understand \" and would treat the quote as
+ * closing the quoted region. Values containing % or control characters are
+ * rejected: cmd expands %VAR% even inside double quotes and offers no escape
+ * for it on a `cmd /c` command line, so such values cannot be passed safely.
+ */
+export function escapeShellArg(arg: string): string {
+    if (process.platform === "win32") {
+        if (/[%\x00-\x1f]/.test(arg)) {
+            throw new Error(`Argument cannot be safely passed to the Windows shell (contains '%' or control characters): ${arg}`);
+        }
         return `"${arg.replace(/"/g, '""')}"`;
     }
     return `'${arg.replace(/'/g, `'\\''`)}'`;
 }
-
 
 async function buildRootPomXml(
     projectName: string,
