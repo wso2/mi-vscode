@@ -101,6 +101,8 @@ export interface ApiBreakpoint {
         "method": string;
         "uri-template": string;
         "url-mapping": string;
+        // The runtime reports the registered uri-template or url-mapping as "mapping" in breakpoint events
+        "mapping"?: string;
     };
     "sequence-type": string;
     "mediator-position": string;

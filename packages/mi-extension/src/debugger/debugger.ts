@@ -42,6 +42,8 @@ export interface RuntimeBreakpointInfo {
     key: string;
     mediatorPosition: string;
     sequenceType?: string;
+    // API resource (method and uri-template or url-mapping); breakpoints in different resources can share a position
+    resource?: string;
     completeInfo: BreakpointInfo;
 }
 
@@ -152,6 +154,7 @@ export class Debugger extends EventEmitter {
                             key: sequenceData.key,
                             mediatorPosition: sequenceData.mediatorPosition,
                             sequenceType: sequenceData.sequenceType,
+                            resource: sequenceData.resource,
                             completeInfo: breakpointInfo[i]
                         };
                         this.runtimeVscodeBreakpointMap.set(runtimeBreakpointInfo, breakpointPerFile[i]);
@@ -244,6 +247,7 @@ export class Debugger extends EventEmitter {
                             key: sequenceData.key,
                             mediatorPosition: sequenceData.mediatorPosition,
                             sequenceType: sequenceData.sequenceType,
+                            resource: sequenceData.resource,
                             completeInfo: breakpointInfo[i]
                         };
                         this.stepOverBreakpointMap.set(runtimeBreakpointInfo, stepOverBreakpoints[i]);
@@ -488,7 +492,8 @@ export class Debugger extends EventEmitter {
                             const breakpointKey = Array.from(this.runtimeVscodeBreakpointMap.keys()).find(
                                 (runtimeBreakpointInfo) => runtimeBreakpointInfo.key === sequenceData.key &&
                                     runtimeBreakpointInfo.mediatorPosition === sequenceData.mediatorPosition &&
-                                    runtimeBreakpointInfo.sequenceType === sequenceData.sequenceType);
+                                    runtimeBreakpointInfo.sequenceType === sequenceData.sequenceType &&
+                                    runtimeBreakpointInfo.resource === sequenceData.resource);
 
                             if (breakpointKey) {
                                 const breakpoint = this.runtimeVscodeBreakpointMap.get(breakpointKey);
@@ -500,7 +505,8 @@ export class Debugger extends EventEmitter {
                                 const stepOverBreakpointKey = Array.from(this.stepOverBreakpointMap.keys()).find(
                                     (runtimeBreakpointInfo) => runtimeBreakpointInfo.key === sequenceData.key &&
                                         runtimeBreakpointInfo.mediatorPosition === sequenceData.mediatorPosition &&
-                                        runtimeBreakpointInfo.sequenceType === sequenceData.sequenceType);
+                                        runtimeBreakpointInfo.sequenceType === sequenceData.sequenceType &&
+                                        runtimeBreakpointInfo.resource === sequenceData.resource);
 
                                 if (stepOverBreakpointKey) {
                                     const breakpoint = this.stepOverBreakpointMap.get(stepOverBreakpointKey);
@@ -552,15 +558,21 @@ export class Debugger extends EventEmitter {
         this.sendEvent('breakpointValidated', breakpoint);
     }
 
-    private mapSequenceInfo(sequence: SequenceBreakpoint): { key: string, mediatorPosition: string, sequenceType: string } {
+    private mapSequenceInfo(sequence: SequenceBreakpoint): { key: string, mediatorPosition: string, sequenceType: string, resource?: string } {
         let key;
         let mediatorPosition;
         let sequenceType;
+        let resource;
 
         if (sequence.api) {
             key = sequence.api['api-key'];
             mediatorPosition = sequence.api['mediator-position'];
             sequenceType = sequence.api['sequence-type'];
+            const apiResource = sequence.api.resource;
+            if (apiResource) {
+                const mapping = apiResource['uri-template'] ?? apiResource['url-mapping'] ?? apiResource.mapping;
+                resource = `${apiResource.method?.toUpperCase()} ${mapping}`;
+            }
         } else if (sequence.proxy) {
             key = sequence.proxy['proxy-key'];
             mediatorPosition = sequence.proxy['mediator-position'];
@@ -575,7 +587,7 @@ export class Debugger extends EventEmitter {
             sequenceType = sequence['sequence-type'];
         }
 
-        return { key, mediatorPosition, sequenceType };
+        return { key, mediatorPosition, sequenceType, resource };
     }
 
     private mapTemplateInfo(template: TemplateBreakpoint): { key: string, mediatorPosition: string } {
@@ -694,6 +706,30 @@ export class Debugger extends EventEmitter {
         breakpointInfo.command = "set";
         breakpointInfo['command-argument'] = "breakpoint";
         await this.sendRequest(JSON.stringify(breakpointInfo));
+    }
+
+    /**
+     * Sets a message context property (or a message variable when context is "variable")
+     * on the message currently suspended at a breakpoint.
+     */
+    public async sendSetPropertyCommand(context: string, name: string, value: string): Promise<void> {
+        let setCommand: any;
+        if (context === "variable") {
+            setCommand = {
+                "command": "set", "command-argument": "variable",
+                "variable": { "variable-name": name, "variable-value": value }
+            };
+        } else {
+            setCommand = {
+                "command": "set", "command-argument": "property", "context": context,
+                "property": { "property-name": name, "property-value": value }
+            };
+        }
+        const response = await this.sendRequest(JSON.stringify(setCommand));
+        const jsonResponse = JSON.parse(response);
+        if (jsonResponse["command-response"] !== "successful") {
+            throw new Error(jsonResponse["failed-reason"] ?? `Unable to set the value of '${name}'`);
+        }
     }
 
     public sendResumeCommand(): Promise<string> {

@@ -70,4 +70,11 @@ public class ProxyTest extends AbstractDebuggerTest {
         Breakpoint breakpoint2 = new Breakpoint(32, 12);
         testDebugInfo(List.of(breakpoint1, breakpoint2), List.of("0", "1"));
     }
+
+    @Test
+    public void testMultipleBreakpoint_DifferentSequences() {
+
+        testDebugInfoValidity(List.of(new Breakpoint(21, 12), new Breakpoint(29, 12)), List.of("0", "0"));
+        testDebugInfoValidity(List.of(new Breakpoint(29, 12), new Breakpoint(21, 12)), List.of("0", "0"));
+    }
 }
