@@ -23,6 +23,7 @@ public class TestCaseInput extends STNode {
     STNode requestProtocol;
     STNode payload;
     TestProperties properties;
+    TestVariables variables;
 
     public STNode getRequestPath() {
 
@@ -72,5 +73,15 @@ public class TestCaseInput extends STNode {
     public void setProperties(TestProperties properties) {
 
         this.properties = properties;
+    }
+
+    public TestVariables getVariables() {
+
+        return variables;
+    }
+
+    public void setVariables(TestVariables variables) {
+
+        this.variables = variables;
     }
 }
