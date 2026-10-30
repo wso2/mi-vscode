@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public abstract class AbstractDebuggerTest {
@@ -74,5 +75,15 @@ public abstract class AbstractDebuggerTest {
 
         assertEquals(expectedStepOverBreakpoints.size(), stepOverInfo.size());
         assertEquals(expectedStepOverBreakpoints, stepOverInfo.getStepOverBreakpoints());
+    }
+
+    public void testDebugInfoValidity(List<Breakpoint> breakpoints, List<String> expectedMediatorPositions) {
+
+        List<IDebugInfo> debugInfos = getDebugInfo(breakpoints);
+        assertEquals(expectedMediatorPositions.size(), debugInfos.size());
+        for (int i = 0; i < debugInfos.size(); i++) {
+            assertTrue(debugInfos.get(i).isValid(), "Breakpoint " + i + " should be valid");
+            assertEquals(expectedMediatorPositions.get(i), debugInfos.get(i).getMediatorPosition());
+        }
     }
 }

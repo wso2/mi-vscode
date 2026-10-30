@@ -44,6 +44,7 @@ import org.eclipse.lemminx.dom.DOMDocument;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.logging.Level;
@@ -124,6 +125,9 @@ public class DebuggerHelper {
 
         String tag = syntaxTree.getTag();
         List<Breakpoint> breakpointsCopy = new ArrayList<>(breakPoints);
+        // Visitors resolve breakpoints while walking the mediators in document order, so process them in that order
+        breakpointsCopy.sort(Comparator.comparingInt(Breakpoint::getLine)
+                .thenComparingInt(bp -> bp.getColumn() != null ? bp.getColumn() : -1));
         HashMap<Breakpoint, IDebugInfo> breakpointInfoMap = new HashMap<>(breakPoints.size());
         for (Breakpoint breakpoint : breakPoints) {
             breakpointInfoMap.put(breakpoint, null);
