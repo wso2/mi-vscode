@@ -41,6 +41,14 @@ export interface MockServiceFormProps {
     onSubmit?: (values: any) => void;
 }
 
+// Mock services targeting an HTTP connection reference its internal endpoint by this suffix
+const HTTP_CONNECTION_ENDPOINT_SUFFIX = "_INTERNAL_ENDPOINT_REFERENCE";
+
+const stripHttpConnectionSuffix = (endpointName?: string) =>
+    endpointName?.endsWith(HTTP_CONNECTION_ENDPOINT_SUFFIX)
+        ? endpointName.slice(0, -HTTP_CONNECTION_ENDPOINT_SUFFIX.length)
+        : endpointName;
+
 const cardStyle = {
     display: "block",
     margin: "15px 0 0 0",
@@ -85,6 +93,8 @@ export function MockServiceForm(props: MockServiceFormProps) {
     const [mockResources, setMockResources] = useState<MockResourceEntry[]>([]);
     const [showAddMockResource, setShowAddMockResource] = useState(false);
     const [currentMockResource, setCurrentMockResource] = useState<MockResourceEntry | undefined>(undefined);
+    const [httpConnections, setHttpConnections] = useState<{ name: string; type: string }[]>([]);
+    const [httpConnectionsLoaded, setHttpConnectionsLoaded] = useState(false);
 
     const isUpdate = !!props.stNode;
     const mockService = props.stNode;
@@ -118,6 +128,24 @@ export function MockServiceForm(props: MockServiceFormProps) {
             const mockServicesNames = mockServices.mockServices.map((mockService: any) => mockService.name);
             const allMockServices = mockServicesNames.concat(availableMockServices).filter((value) => value !== fileName);
             setAvailableMockServices(allMockServices);
+
+            let connections: { name: string; type: string }[] = [];
+            setHttpConnectionsLoaded(false);
+            try {
+                const machineView = await rpcClient.getVisualizerState();
+                const httpConnectionData = await rpcClient.getMiDiagramRpcClient().getConnectorConnections({
+                    documentUri: machineView.projectUri,
+                    connectorName: "http"
+                });
+                connections = (httpConnectionData?.connections ?? []).map((connection) => ({
+                    name: connection.name,
+                    type: "http-connection"
+                }));
+                setHttpConnectionsLoaded(true);
+            } catch (error) {
+                console.error("Error occurred while fetching HTTP connections:", error);
+            }
+            setHttpConnections(connections);
 
             if (mockService) {
                 if (mockService?.resources?.resources) {
@@ -160,7 +188,7 @@ export function MockServiceForm(props: MockServiceFormProps) {
                 }
                 reset({
                     name: fileName,
-                    endpointName: mockService.serviceName?.textNode,
+                    endpointName: stripHttpConnectionSuffix(mockService.serviceName?.textNode),
                     servicePort: parseInt(mockService?.port?.textNode || '9090'),
                     serviceContext: mockService?.context?.textNode
                 });
@@ -218,6 +246,20 @@ export function MockServiceForm(props: MockServiceFormProps) {
     }
 
     const submitForm = async (values: any) => {
+        // Re-add the suffix for HTTP connections
+        let isHttpConnection: boolean;
+        if (httpConnectionsLoaded) {
+            isHttpConnection = httpConnections.some((connection) => connection.name === values.endpointName);
+        } else {
+            // Keep the suffix only when the loaded reference is a connection and is unchanged
+            const savedServiceName = mockService?.serviceName?.textNode;
+            isHttpConnection = savedServiceName !== undefined
+                && savedServiceName !== values.endpointName
+                && stripHttpConnectionSuffix(savedServiceName) === values.endpointName;
+        }
+        if (isHttpConnection) {
+            values.endpointName = `${values.endpointName}${HTTP_CONNECTION_ENDPOINT_SUFFIX}`;
+        }
         values.resources = mockResources.map((mockResource: MockResourceEntry) => {
             const { subContext, method } = mockResource;
             const request = {
@@ -287,6 +329,7 @@ export function MockServiceForm(props: MockServiceFormProps) {
                     label="Endpoint"
                     name="endpointName"
                     filterType="endpoint"
+                    additionalResources={httpConnections}
                     path={props.filePath}
                     required
                     errorMsg={errors.endpointName?.message.toString()}

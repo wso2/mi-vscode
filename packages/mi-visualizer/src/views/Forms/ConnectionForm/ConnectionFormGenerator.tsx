@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Button, FormActions, FormView, TextField, Codicon, ProgressRing } from '@wso2/ui-toolkit';
+import { Button, FormActions, FormView, TextField, Codicon, ProgressRing, ErrorBanner } from '@wso2/ui-toolkit';
 import styled from '@emotion/styled';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import { create } from 'xmlbuilder2';
@@ -52,6 +52,7 @@ export function AddConnection(props: AddConnectionProps) {
     const [isTesting, setIsTesting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [connectionErrorMessage, setConnectionErrorMessage] = useState(null);
+    const [loadErrorMessage, setLoadErrorMessage] = useState<string | null>(null);
     const { control, handleSubmit, setValue, getValues, watch, reset, formState: { errors } } = useForm<any>();
     const [connectionType, setConnectionType] = useState(props.connectionType ?? "");
     const [connectionName, setConnectionName] = useState(props.connectionName ?? "");
@@ -67,18 +68,22 @@ export function AddConnection(props: AddConnectionProps) {
         }
 
         const fetchConnections = async () => {
-            const connectionData: any = await rpcClient.getMiDiagramRpcClient().getConnectorConnections({
-                documentUri: props.path,
-                connectorName: null
-            });
+            try {
+                const connectionData: any = await rpcClient.getMiDiagramRpcClient().getConnectorConnections({
+                    documentUri: props.path,
+                    connectorName: null
+                });
 
-            let connectionNames: any[] = [];
-            Object.keys(connectionData).forEach(key => {
-                const connections = connectionData[key].connections.map((connection: any) => connection.name);
-                connectionNames = connectionNames.concat(connections);
-            });
+                let connectionNames: any[] = [];
+                Object.keys(connectionData).forEach(key => {
+                    const connections = connectionData[key].connections.map((connection: any) => connection.name);
+                    connectionNames = connectionNames.concat(connections);
+                });
 
-            setConnections(connectionNames);
+                setConnections(connectionNames);
+            } catch (error) {
+                console.error("Error occurred while fetching connections:", error);
+            }
         }
 
         const fetchFormData = async () => {
@@ -116,10 +121,18 @@ export function AddConnection(props: AddConnectionProps) {
         const fetchFormData = async () => {
             // If connectionName is provided, it is an update operation
             if (props.connectionName) {
-                const connectionData: any = await rpcClient.getMiDiagramRpcClient().getConnectorConnections({
-                    documentUri: props.path,
-                    connectorName: null
-                });
+                let connectionData: any;
+                try {
+                    connectionData = await rpcClient.getMiDiagramRpcClient().getConnectorConnections({
+                        documentUri: props.path,
+                        connectorName: null
+                    });
+                } catch (error) {
+                    // Without the connection details the form would show empty parameters that could overwrite it
+                    console.error("Error occurred while fetching connection details:", error);
+                    setLoadErrorMessage("Failed to load connection details.");
+                    return;
+                }
 
                 const connectionFound = Object.values(connectionData).flatMap((key: any) => key.connections).find((connection: any) => connection.name === props.connectionName);
 
@@ -438,6 +451,8 @@ export function AddConnection(props: AddConnectionProps) {
                 <div style={{ display: 'flex', justifyContent: 'center', paddingTop: '20px' }}>
                     <ProgressRing />
                 </div>
+            ) : loadErrorMessage ? (
+                <ErrorBanner errorMsg={loadErrorMessage} />
             ) : (
                 formData ? (
                     <>
