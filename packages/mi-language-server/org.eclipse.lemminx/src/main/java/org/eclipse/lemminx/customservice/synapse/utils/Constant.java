@@ -384,6 +384,7 @@ public class Constant {
     public static final String KEY_COLUMNS = "keyColumns";
     public static final String RETURN_UPDATED_ROW_COUNT = "returnUpdatedRowCount";
     public static final String PROPERTIES = "properties";
+    public static final String VARIABLES = "variables";
     public static final String SPARQL = "sparql";
     public static final String SQL_TYPE = "sqlType";
     public static final String PARAM_TYPE = "paramType";

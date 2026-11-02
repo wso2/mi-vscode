@@ -27,6 +27,7 @@ import * as yup from "yup";
 import { getTestCaseXML } from "../../../utils/template-engine/mustache-templates/TestSuite";
 import { ParameterManager } from "@wso2/mi-diagram";
 import { compareVersions } from "@wso2/mi-diagram/lib/utils/commons";
+import { RUNTIME_VERSION_450 } from "../../../constants";
 import { getProjectRuntimeVersion } from "../../AIPanel/utils";
 import { AuthenticationDialog, useAuthentication } from "../../../components/AuthenticationDialog";
 
@@ -67,7 +68,18 @@ export interface TestCaseInput {
     requestProtocol?: string;
     payload?: string;
     properties?: string[][];
+    variables?: string[][];
 }
+
+// Variable types whose values are payloads and are edited in a textarea
+const PAYLOAD_VARIABLE_TYPES = ["XML", "JSON"];
+
+const getVariableValue = (variable: any) =>
+    PAYLOAD_VARIABLE_TYPES.includes(variable.variableType) ? variable.variablePayload : variable.variableValue;
+
+// Keep a display-only copy of the value so the table shows it for both text field and text area types
+const withVariableDisplayValues = (variables: any[]) =>
+    variables.map((variable) => ({ ...variable, variableDisplayValue: getVariableValue(variable) }));
 
 const cardStyle = {
     display: "block",
@@ -82,6 +94,8 @@ export function TestCaseForm(props: TestCaseFormProps) {
 
     const [isLoaded, setIsLoaded] = useState(false);
     const [inputProperties, setInputProperties] = useState<any[]>([]);
+    const [inputVariables, setInputVariables] = useState<any[]>([]);
+    const [isVariablesSupported, setIsVariablesSupported] = useState(false);
     const [assertions, setAssertions] = useState<any[]>([]);
     const [showAIDialog, setShowAIDialog] = useState(false);
     const [aiPrompt, setAiPrompt] = useState("");
@@ -136,6 +150,64 @@ export function TestCaseForm(props: TestCaseFormProps) {
         tableKey: 'propertyName',
         tableValue: 'propertyValue',
         addParamText: 'Add Property',
+    };
+
+    const inputVariablesFormData = {
+        elements: [
+            {
+                type: "attribute",
+                value: {
+                    name: "variableName",
+                    displayName: "Variable Name",
+                    inputType: "string",
+                    required: true,
+                    helpTip: "",
+                },
+            },
+            {
+                type: "attribute",
+                value: {
+                    name: "variableType",
+                    displayName: "Variable Type",
+                    inputType: "combo",
+                    required: true,
+                    comboValues: ["STRING", "INTEGER", "BOOLEAN", "DOUBLE", "LONG", "XML", "JSON"],
+                    defaultValue: "STRING",
+                    helpTip: "",
+                },
+            },
+            {
+                type: "attribute",
+                value: {
+                    name: "variableValue",
+                    displayName: "Variable Value",
+                    inputType: "string",
+                    required: true,
+                    helpTip: "",
+                    enableCondition: [
+                        "NOT",
+                        ["OR", ...PAYLOAD_VARIABLE_TYPES.map((type) => ({ variableType: type }))]
+                    ]
+                },
+            },
+            {
+                type: "attribute",
+                value: {
+                    name: "variablePayload",
+                    displayName: "Variable Value",
+                    inputType: "codeTextArea",
+                    required: true,
+                    helpTip: "",
+                    enableCondition: [
+                        "OR",
+                        ...PAYLOAD_VARIABLE_TYPES.map((type) => ({ variableType: type }))
+                    ]
+                },
+            }
+        ],
+        tableKey: 'variableName',
+        tableValue: 'variableDisplayValue',
+        addParamText: 'Add Variable',
     };
 
     // Helper function to create assertions form data based on version
@@ -266,6 +338,7 @@ export function TestCaseForm(props: TestCaseFormProps) {
                 const runtimeVersion = await getProjectRuntimeVersion(rpcClient);
                 const useStringOrExpression = runtimeVersion && compareVersions(runtimeVersion, "4.4.0") >= 0;
                 setAssertionsFormData(createAssertionsFormData(useStringOrExpression, props.testSuiteType));
+                setIsVariablesSupported(!!runtimeVersion && compareVersions(runtimeVersion, RUNTIME_VERSION_450) >= 0);
             } catch (error) {
                 console.error('Error getting runtime version:', error);
                 // Fallback to default configuration (stringOrExpression)
@@ -301,6 +374,19 @@ export function TestCaseForm(props: TestCaseFormProps) {
                         propertyScope: prop[1] || "default",
                         propertyValue: prop[2]
                     })) : [];
+
+                // Convert variables to new format
+                const variables = testCase.input.variables ?
+                    testCase.input.variables.map((variable: string[]) => {
+                        const variableType = variable[1] || "STRING";
+                        const isPayload = PAYLOAD_VARIABLE_TYPES.includes(variableType);
+                        return {
+                            variableName: variable[0],
+                            variableType,
+                            variableValue: isPayload ? undefined : variable[2],
+                            variablePayload: isPayload ? variable[2] : undefined
+                        };
+                    }) : [];
                 // Helper function to determine actualExpressionType from actualExpression value
                 const getActualExpressionType = (actualExpression: string): string => {
                     // if actualExpression starts with $trp, it's a transport header
@@ -331,6 +417,7 @@ export function TestCaseForm(props: TestCaseFormProps) {
                     })) : [];
 
                 setInputProperties(properties);
+                setInputVariables(withVariableDisplayValues(variables));
                 setAssertions(assertionsData);
 
                 reset({
@@ -356,6 +443,7 @@ export function TestCaseForm(props: TestCaseFormProps) {
                 }
             });
             setInputProperties([]);
+            setInputVariables([]);
             setAssertions([]);
             setIsLoaded(true);
         })();
@@ -379,6 +467,13 @@ export function TestCaseForm(props: TestCaseFormProps) {
             prop.propertyName,
             prop.propertyScope,
             prop.propertyValue
+        ]);
+
+        // Convert variables back to array format
+        values.input.variables = inputVariables.map(variable => [
+            variable.variableName,
+            variable.variableType,
+            getVariableValue(variable)
         ]);
 
         // Convert assertions back to array format
@@ -616,6 +711,20 @@ export function TestCaseForm(props: TestCaseFormProps) {
                 />
 
             </ComponentCard>
+
+            {isSequence && isVariablesSupported && <ComponentCard id="testCaseVariablesCard" sx={cardStyle} disbaleHoverEffect>
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <Typography variant="h3">Variables</Typography>
+                </div>
+                <Typography variant="body3">Editing of the variables of an input</Typography>
+
+                <ParameterManager
+                    formData={inputVariablesFormData}
+                    parameters={inputVariables}
+                    setParameters={(variables: any[]) => setInputVariables(withVariableDisplayValues(variables))}
+                />
+
+            </ComponentCard>}
 
             <ComponentCard id="testCaseAssertionsCard" sx={cardStyle} disbaleHoverEffect>
                 <Typography variant="h3">Assertions</Typography>
