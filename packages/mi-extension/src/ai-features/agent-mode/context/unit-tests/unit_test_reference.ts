@@ -37,6 +37,12 @@ guidelines: `## Unit Test Development Guidelines for WSO2 Micro Integrator
 - Do not include the xmlns attribute
 - **CRITICAL**: Only generate mock service XML files for services explicitly listed in the \`<mock-services>\` section of your unit test - NO EXTRA mock services allowed
 
+### Test File Location
+- **ALWAYS** save unit test suite files directly in \`src/test/wso2mi/\` (e.g. \`src/test/wso2mi/CustomerAPITest.xml\`)
+- **NEVER** create subfolders under \`src/test/wso2mi/\` (e.g. \`src/test/wso2mi/artifacts/apis/\`) — the test runner only resolves suites from that folder
+- Save mock service files in \`src/test/resources/mock-services/\`
+- The \`src/main/wso2mi/artifacts/...\` paths below are values for the \`<artifact>\` element, not where the test file is saved
+
 ### Artifact Path Guidelines
 - **For APIs**: Add the suffix \`src/main/wso2mi/artifacts/apis\` to the \`<artifact>\`.
   Example: \`<artifact>src/main/wso2mi/artifacts/apis/apiName.xml</artifact>\`

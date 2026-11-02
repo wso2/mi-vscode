@@ -668,6 +668,23 @@ export function isClassMediatorPath(filePath: string): boolean {
     return /(^|\/)src\/main\/java\//.test(normalized) && normalized.endsWith('.java');
 }
 
+/**
+ * Returns an error message when a unit test suite XML is placed in a subfolder
+ * of src/test/wso2mi/. The test runner passes only the file name as -DtestFile
+ * and the pom resolves it against src/test/wso2mi/, so nested suites never run.
+ */
+function getNestedUnitTestPathError(filePath: string): string | undefined {
+    const normalized = filePath.replace(/\\/g, '/');
+    const match = normalized.match(/(?:^|\/)src\/test\/wso2mi\/(.+)$/i);
+    if (!match || !match[1].toLowerCase().endsWith('.xml') || !match[1].includes('/')) {
+        return undefined;
+    }
+    const fileName = path.posix.basename(match[1]);
+    return `Unit test suites must be saved directly under 'src/test/wso2mi/' with no subfolders ` +
+        `(e.g. 'src/test/wso2mi/${fileName}'), not '${filePath}'. The test runner only resolves ` +
+        `suites from that folder. Mock services belong in 'src/test/resources/mock-services/'.`;
+}
+
 export interface ClassMediatorPomStatus {
     isJarPackaging: boolean;
     currentPackaging?: string;
@@ -811,6 +828,16 @@ export function createWriteExecute(
             return {
                 success: false,
                 message: pathValidation.error!,
+                error: `Error: ${ErrorMessages.INVALID_FILE_PATH}`
+            };
+        }
+
+        const nestedUnitTestError = getNestedUnitTestPathError(file_path);
+        if (nestedUnitTestError) {
+            console.error(`[FileWriteTool] Nested unit test path rejected: ${file_path}`);
+            return {
+                success: false,
+                message: nestedUnitTestError,
                 error: `Error: ${ErrorMessages.INVALID_FILE_PATH}`
             };
         }
