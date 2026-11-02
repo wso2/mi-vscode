@@ -142,6 +142,7 @@ export async function activateTestExplorer(extensionContext: ExtensionContext) {
                 requestProtocol: unitTestST?.input?.requestProtocol?.textNode ?? "HTTP",
                 payload: unitTestST?.input?.payload?.textNode ?? "",
                 properties: unitTestST?.input?.properties?.properties?.map((property) => { return [property.name, property.scope, property.value] }),
+                variables: unitTestST?.input?.variables?.variables?.map((variable) => { return [variable.name, variable.type, variable.value] }),
             },
         };
 
