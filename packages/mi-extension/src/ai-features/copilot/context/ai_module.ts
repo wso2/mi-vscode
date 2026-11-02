@@ -91,11 +91,11 @@ To use Anthropic instead of OpenAI, define the LLM connection with the \`ANTHROP
 
 Rules for operations that use an Anthropic connection (\`ai.chat\`, \`ai.ragChat\`, \`ai.agent\`):
 - Always set \`modelName\` explicitly. The default (\`gpt-4o\`) is an OpenAI model and will not work with Anthropic.
-- Use a current Claude model ID: \`claude-sonnet-4-6\` (default choice), \`claude-haiku-4-5\` (faster, lower cost) or \`claude-opus-4-8\` (most capable).
-- Never use Claude 3.x model IDs such as \`claude-3-5-sonnet-20241022\` or \`claude-3-5-sonnet-latest\`. They are retired and fail at runtime with a model-not-found error.
-- Set only one of \`temperature\` or \`topP\`, never both. Current Claude models reject requests that specify both. Prefer \`temperature\` and omit \`topP\`.
-- Omit \`frequencyPenalty\` and \`seed\`; Anthropic does not support them.
-- If the runtime reports a model-not-found error, do not guess another ID. Check Anthropic's models overview (https://docs.anthropic.com/en/docs/about-claude/models/overview) for a current one.
+- Use a current Claude model ID: \`claude-sonnet-5-5\` (default choice), \`claude-haiku-5-5\` (fastest, lowest cost) or \`claude-opus-5-5\` (most capable, for complex agentic work).
+- Never use Claude 3.x model IDs such as \`claude-3-5-sonnet-20241022\` or \`claude-3-5-sonnet-latest\`. They are retired and fail at runtime with a model-not-found error. Do not use other model IDs recalled from memory either.
+- Omit \`temperature\`, \`topP\`, \`frequencyPenalty\` and \`seed\`. Current Claude models reject sampling parameters with a 400 error: Claude Sonnet 5.5 and Haiku 5.5 reject \`temperature\` and \`topP\` at any value, and Claude Opus 4.7 and later reject non-default values.
+- Only if the user explicitly asks for a sampling setting on an older model that accepts it, set \`temperature\` alone. Never set both \`temperature\` and \`topP\`.
+- If the runtime reports a model-not-found or invalid-parameter error, do not guess. Check Anthropic's models overview (https://platform.claude.com/docs/en/models/overview) for current model IDs and their supported parameters.
 
 Example chat operation with Anthropic:
 \`\`\`xml
@@ -109,8 +109,7 @@ Example chat operation with Anthropic:
     <outputType>string</outputType>
     <responseVariable>ai_chat_1</responseVariable>
     <overwriteBody>true</overwriteBody>
-    <modelName>claude-sonnet-4-6</modelName>
-    <temperature>0.7</temperature>
+    <modelName>claude-sonnet-5-5</modelName>
     <maxTokens>4069</maxTokens>
     <maxHistory>10</maxHistory>
 </ai.chat>
