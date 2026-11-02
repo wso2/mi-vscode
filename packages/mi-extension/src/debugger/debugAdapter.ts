@@ -444,11 +444,13 @@ export class MiDebugAdapter extends LoggingDebugSession {
 
     protected async variablesRequest(response: DebugProtocol.VariablesResponse, args: DebugProtocol.VariablesArguments, request?: DebugProtocol.Request | undefined): Promise<void> {
         const vars = this.variableHandles.get(args.variablesReference);
-        if (vars !== null) {
+        if (vars !== null && vars !== undefined) {
             let variables: DebugProtocol.Variable[] = Array.isArray(vars) ? vars : [vars];
             response.body = {
                 variables: variables
             };
+        } else {
+            response.body = { variables: [] };
         }
 
         this.sendResponse(response);
@@ -457,13 +459,15 @@ export class MiDebugAdapter extends LoggingDebugSession {
     protected async setVariableRequest(response: DebugProtocol.SetVariableResponse, args: DebugProtocol.SetVariableArguments, request?: DebugProtocol.Request | undefined): Promise<void> {
         if (this.payloadVariable && args.variablesReference === this.payloadScopeRef && args.name === this.payloadVariable.name) {
             try {
-                await this.setPayload(args.value);
+                await this.setRuntimeValue(PAYLOAD_CONTEXT, PAYLOAD_CONTEXT, args.value);
             } catch (error) {
                 this.sendError(response, 3, `Failed to set the message payload: ${this.getErrorMessage(error)}`, true);
                 return;
             }
             response.body = { value: args.value, variablesReference: 0 };
             this.sendResponse(response);
+            // Re-read the message from the server so the Variables view shows the payload as the runtime holds it
+            this.sendEvent(new InvalidatedEvent(['variables']));
             return;
         }
 
@@ -482,14 +486,12 @@ export class MiDebugAdapter extends LoggingDebugSession {
         }
 
         try {
-            await this.debuggerHandler?.sendSetPropertyCommand(context, args.name, args.value);
+            await this.setRuntimeValue(context, args.name, args.value);
         } catch (error) {
             this.sendError(response, 3, `Failed to set the value of '${args.name}': ${this.getErrorMessage(error)}`, true);
             return;
         }
 
-        // Keep the cached value in sync so re-expanding the group shows the new value
-        target.value = args.value;
         response.body = {
             value: args.value,
             variablesReference: 0
@@ -499,16 +501,11 @@ export class MiDebugAdapter extends LoggingDebugSession {
         this.sendEvent(new InvalidatedEvent(['variables']));
     }
 
-    private async setPayload(payload: string): Promise<void> {
+    private async setRuntimeValue(context: string, name: string, value: string): Promise<void> {
         if (!this.debuggerHandler) {
             throw new Error("The debugger is not connected to the server");
         }
-        await this.debuggerHandler.sendSetPropertyCommand(PAYLOAD_CONTEXT, PAYLOAD_CONTEXT, payload);
-        if (this.payloadVariable) {
-            this.payloadVariable.value = payload;
-        }
-        // Re-read the message from the server so the Variables view shows the payload as the runtime holds it
-        this.sendEvent(new InvalidatedEvent(['variables']));
+        await this.debuggerHandler.sendSetValueCommand(context, name, value);
     }
 
     private getErrorMessage(error: unknown): string {
@@ -525,6 +522,10 @@ export class MiDebugAdapter extends LoggingDebugSession {
 
     protected async scopesRequest(response: DebugProtocol.ScopesResponse, args?: DebugProtocol.ScopesArguments, request?: DebugProtocol.Request | undefined): Promise<void> {
         const variables = await this.debuggerHandler?.getVariables();
+
+        // The scopes are rebuilt from the server on every request, so drop the handles of the previous ones
+        this.variableHandles.reset();
+        this.payloadScopeRef = 0;
 
         const localScope = variables?.map((v: any): any => {
             let name = Object.getOwnPropertyNames(v)[0];
