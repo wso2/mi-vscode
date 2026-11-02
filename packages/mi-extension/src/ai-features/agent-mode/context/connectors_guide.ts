@@ -242,6 +242,46 @@ A basic chat operation requires the following two connection types:
 </ai.chat>
 \`\`\`
 
+### Using Anthropic (Claude) as the LLM
+
+To use Anthropic instead of OpenAI, define the LLM connection with the \`ANTHROPIC\` connection type:
+\`\`\`xml
+<localEntry key="ANTHROPIC_CONN" xmlns="http://ws.apache.org/ns/synapse">
+  <ai.init>
+    <connectionType>ANTHROPIC</connectionType>
+    <apiKey>apiKey</apiKey>
+    <name>ANTHROPIC_CONN</name>
+  </ai.init>
+</localEntry>
+\`\`\`
+
+Rules for operations that use an Anthropic connection (\`ai.chat\`, \`ai.ragChat\`, \`ai.agent\`):
+- Always set \`modelName\` explicitly. The default (\`gpt-4o\`) is an OpenAI model and will not work with Anthropic.
+- Use a current Claude model ID: \`claude-sonnet-4-6\` (default choice), \`claude-haiku-4-5\` (faster, lower cost) or \`claude-opus-4-8\` (most capable).
+- Never use Claude 3.x model IDs such as \`claude-3-5-sonnet-20241022\` or \`claude-3-5-sonnet-latest\`. They are retired and fail at runtime with a model-not-found error.
+- Set only one of \`temperature\` or \`topP\`, never both. Current Claude models reject requests that specify both. Prefer \`temperature\` and omit \`topP\`.
+- Omit \`frequencyPenalty\` and \`seed\`; Anthropic does not support them.
+- If the runtime reports a model-not-found error, do not guess another ID. Check Anthropic's models overview (https://docs.anthropic.com/en/docs/about-claude/models/overview) for a current one.
+
+Example chat operation with Anthropic:
+\`\`\`xml
+<ai.chat>
+    <connections>
+        <llmConfigKey>ANTHROPIC_CONN</llmConfigKey>
+        <memoryConfigKey>FILE_MEMORY_CONN</memoryConfigKey>
+    </connections>
+    <sessionId>{\${payload.userID}}</sessionId>
+    <prompt>\${payload.query}</prompt>
+    <outputType>string</outputType>
+    <responseVariable>ai_chat_1</responseVariable>
+    <overwriteBody>true</overwriteBody>
+    <modelName>claude-sonnet-4-6</modelName>
+    <temperature>0.7</temperature>
+    <maxTokens>4069</maxTokens>
+    <maxHistory>10</maxHistory>
+</ai.chat>
+\`\`\`
+
 ## RAG Chat Operation
 
 RAG Chat uses additional configurations to retrieve knowledge from a vector store.
