@@ -16,6 +16,15 @@ on:
           - 'minor'
           - 'major'    
           - 'N/A'     
+      runner:
+        type: choice
+        description: 'Runner for the Linux build jobs'
+        required: true
+        default: 'ubuntu-latest'
+        options:
+          - ubuntu-latest
+          - codebuild
+          - k8s-default-runners
 
 permissions:
   contents: write
@@ -27,7 +36,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      runOnAWS: false
+      runner: ${{ inputs.runner }}
       isPreRelease: ${{ inputs.isPreRelease }}
       enableCache: false
       mi: true
