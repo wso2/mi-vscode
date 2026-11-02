@@ -1,0 +1,26 @@
+{
+  "name": "@wso2/mi-migration-core",
+  "version": "1.0.0",
+  "description": "VS Code-agnostic core for WSO2 MI project migration",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc --pretty",
+    "watch": "tsc --pretty --watch"
+  },
+  "author": "WSO2",
+  "dependencies": {
+    "fast-xml-parser": "5.7.0",
+    "uuid": "14.0.0",
+    "xml2js": "0.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.21",
+    "@types/xml2js": "0.4.12",
+    "typescript": "5.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wso2/mi-vscode.git"
+  }
+}
