@@ -513,6 +513,8 @@ export class Debugger extends EventEmitter {
                                     if (breakpoint) {
                                         this.handleBreakpointEvent(breakpoint);
                                     }
+                                } else {
+                                    this.handleUnmatchedBreakpointEvent(sequenceData.key);
                                 }
                             }
                         } else if (event.template) {
@@ -556,6 +558,17 @@ export class Debugger extends EventEmitter {
         this.currentFile = breakpoint?.filePath;
         this.sendEvent('stopOnBreakpoint');
         this.sendEvent('breakpointValidated', breakpoint);
+    }
+
+    // Resume when the runtime stops at a breakpoint with no matching VS Code breakpoint, so the debugger does not hang
+    private handleUnmatchedBreakpointEvent(key: string): void {
+        const message = `The debugger stopped at a breakpoint in '${key}' that could not be matched to a breakpoint ` +
+            `in the editor. Resuming the execution.`;
+        logDebug(message, LogLevel.WARN);
+        vscode.window.showErrorMessage(message);
+        this.sendResumeCommand().catch((error) => {
+            logDebug(`Error while resuming from an unmatched breakpoint: ${error}`, LogLevel.ERROR);
+        });
     }
 
     private mapSequenceInfo(sequence: SequenceBreakpoint): { key: string, mediatorPosition: string, sequenceType: string, resource?: string } {
@@ -709,10 +722,10 @@ export class Debugger extends EventEmitter {
     }
 
     /**
-     * Sets a message context property (or a message variable when context is "variable")
-     * on the message currently suspended at a breakpoint.
+     * Sets a value on the message currently suspended at a breakpoint: a message context property, a message
+     * variable when context is "variable", or the payload when context is "Envelope".
      */
-    public async sendSetPropertyCommand(context: string, name: string, value: string): Promise<void> {
+    public async sendSetValueCommand(context: string, name: string, value: string): Promise<void> {
         let setCommand: any;
         if (context === "variable") {
             setCommand = {

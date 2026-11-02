@@ -97,9 +97,8 @@ public class ApiVisitor implements Visitor {
         apiDebugInfo.setSequenceType("api_" + sequence.getTag().substring(0, sequence.getTag().length() - 5).toLowerCase());
         BreakpointMediatorVisitor mediatorVisitor = new BreakpointMediatorVisitor(breakpoints, apiDebugInfo);
         VisitorUtils.visitMediators(sequence.getMediatorList(), mediatorVisitor, breakpointInfoMap);
-        // A breakpoint left over in another resource or sequence is resolved in a later pass of startVisit
-        if (!mediatorVisitor.isDone() && VisitorUtils.checkNodeInRange(sequence, mediatorVisitor.breakpoint)) {
-            markAsInvalid(mediatorVisitor.breakpoint, "Invalid breakpoint in API");
+        if (VisitorUtils.isUnresolvedInSequence(sequence, mediatorVisitor)) {
+            markAsInvalid(mediatorVisitor.getBreakpoint(), "Invalid breakpoint in API");
         }
     }
 
