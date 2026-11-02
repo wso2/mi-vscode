@@ -1220,7 +1220,7 @@
     "@wso2/wso2-platform-core": "workspace:*",
     "await-notify": "1.0.1",
     "eslint": "9.27.0",
-    "glob": "11.1.0",
+    "glob": "14.0.2",
     "mocha": "11.4.0",
     "playwright-core": "1.55.1",
     "rimraf": "6.0.1",
@@ -1297,6 +1297,6 @@
     "vscode-messenger-common": "0.5.1",
     "xml2js": "0.6.2",
     "xstate": "4.38.3",
-    "zod": "4.1.11"
+    "zod": "4.6.6"
   }
 }
