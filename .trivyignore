@@ -27,3 +27,13 @@ CVE-2026-31808
 # from a callable function to an object ({ expand, ... }), which breaks CommonJS
 # dependents such as minimatch@3 that call `require('brace-expansion')(...)` directly.
 CVE-2026-14257
+
+# minimatch DoS via globparts amplification (GHSA-g3hv-75wg-m249). Fixed only in 11.0.1+.
+# minimatch 9.x/10.x/11.x consumers are pinned to 11.0.1 in .pnpmfile.cjs.
+# The remaining 3.x/5.x copies cannot move: minimatch 9+ changed `module.exports` from a
+# callable function to an object ({ minimatch, ... }), which breaks CommonJS dependents
+# that call `require('minimatch')(...)` (eslint plugins, copyfiles, tslint, glob@7/8,
+# vscode-languageclient@9, mocha@11). These are build/lint/test tooling or, for
+# vscode-languageclient, only match patterns from our bundled language server, so no
+# attacker-controlled glob patterns reach them.
+CVE-2026-118764
