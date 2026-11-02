@@ -41,7 +41,7 @@ module.exports = {
             deps['ip-address'] = '10.1.1';
           }
         }
-        if (deps['follow-redirects']) deps['follow-redirects'] = '1.16.1'; // security fix: redirect bypass vulnerability
+        if (deps['follow-redirects']) deps['follow-redirects'] = '1.16.2'; // security fix: redirect bypass vulnerability
         if (deps['express-rate-limit']) deps['express-rate-limit'] = '8.2.2'; // security fix
         if (deps['file-type']) deps['file-type'] = '21.3.2'; // security fix
         if (deps['immutable']) deps['immutable'] = '4.3.9'; // security fix
@@ -60,6 +60,11 @@ module.exports = {
         if (deps['markdown-it']) {
           if (/^[\s\^~><=]*14[.\s]/.test(deps['markdown-it'])) {
             deps['markdown-it'] = '14.3.3';
+          }
+        }
+        if (deps['glob']) {
+          if (/^[\s\^~><=]*1[01][.\s]/.test(deps['glob'])) {
+            deps['glob'] = '14.0.2';
           }
         }
         if (deps['ws']) {
@@ -114,10 +119,13 @@ module.exports = {
             newVersion = '7.4.8';
           } else if (currentVersion.startsWith('^8') || currentVersion.startsWith('8')) {
             newVersion = '8.0.6';
-          } else if (currentVersion.startsWith('^9') || currentVersion.startsWith('9')) {
-            newVersion = '9.0.7';
-          } else if (currentVersion.startsWith('^10') || currentVersion.startsWith('10')) {
-            newVersion = '10.2.3';
+          } else if (
+            currentVersion.startsWith('^9') || currentVersion.startsWith('9') ||
+            currentVersion.startsWith('^10') || currentVersion.startsWith('10')
+          ) {
+            newVersion = '11.0.1';
+          } else if (currentVersion.startsWith('^11') || currentVersion.startsWith('11')) {
+            newVersion = /^[\^~]?11(\.0(\.0)?)?$/.test(currentVersion) ? '11.0.1' : currentVersion;
           } else {
             context.log(`Unexpected minimatch version: ${currentVersion}`);
             newVersion = currentVersion;
