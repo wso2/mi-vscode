@@ -25,7 +25,7 @@ import { Debugger } from './debugger';
 import { getStateMachine, openView, refreshUI } from '../stateMachine';
 import { webviews } from '../visualizer/webview';
 import { ViewColumn } from 'vscode';
-import { COMMANDS, MI_RUNTIME_SERVICES_PANEL_ID } from '../constants';
+import { COMMANDS, MI_RUNTIME_SERVICES_PANEL_ID, RUNTIME_VERSION_460 } from '../constants';
 import { LOCALHOST, ADMIN, REMOTE } from './constants';
 import { INCORRECT_SERVER_PATH_MSG } from './constants';
 import { extension } from '../MIExtensionContext';
@@ -34,6 +34,7 @@ import { DebuggerConfig } from './config';
 import { openRuntimeServicesWebview } from '../runtime-services-panel/activate';
 import { RPCLayer } from '../RPCLayer';
 import { getWSO2AIEnvVariables } from '../ai-features/configUtils';
+import { compareVersions, getMIVersionFromPom } from '../util/onboardingUtils';
 
 // Maps the property groups shown under "Server Internals" to the context used by the runtime "set" command
 const EDITABLE_SCOPE_CONTEXTS: { [scopeName: string]: string } = {
@@ -192,7 +193,7 @@ export class MiDebugAdapter extends LoggingDebugSession {
 
 
     //TODO: Remove unwanted capabilities
-    protected initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): void {
+    protected async initializeRequest(response: DebugProtocol.InitializeResponse, args: DebugProtocol.InitializeRequestArguments): Promise<void> {
         // build and return the capabilities of this debug adapter:
         response.body = response.body || {};
 
@@ -235,8 +236,8 @@ export class MiDebugAdapter extends LoggingDebugSession {
         // make VS Code send exceptionInfo request
         response.body.supportsExceptionInfoRequest = true;
 
-        // make VS Code send setVariable request
-        response.body.supportsSetVariable = true;
+        // make VS Code send setVariable request, only for runtimes that can change values of a suspended message
+        response.body.supportsSetVariable = await this.isSetValueSupported();
 
         // setExpression is not supported; values are changed through setVariable
         response.body.supportsSetExpression = false;
@@ -499,6 +500,17 @@ export class MiDebugAdapter extends LoggingDebugSession {
         this.sendResponse(response);
         // Refresh the Variables view so group summaries show the new value
         this.sendEvent(new InvalidatedEvent(['variables']));
+    }
+
+    // Changing values of a suspended message is supported from MI 4.6.0
+    private async isSetValueSupported(): Promise<boolean> {
+        try {
+            const runtimeVersion = await getMIVersionFromPom(this.projectUri);
+            return !!runtimeVersion && compareVersions(runtimeVersion, RUNTIME_VERSION_460) >= 0;
+        } catch (error) {
+            // Do not fail the debug session if the runtime version cannot be read
+            return false;
+        }
     }
 
     private async setRuntimeValue(context: string, name: string, value: string): Promise<void> {
