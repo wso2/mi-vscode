@@ -461,7 +461,7 @@ export class MiDebugAdapter extends LoggingDebugSession {
             try {
                 await this.setRuntimeValue(PAYLOAD_CONTEXT, PAYLOAD_CONTEXT, args.value);
             } catch (error) {
-                this.sendError(response, 3, `Failed to set the message payload: ${this.getErrorMessage(error)}`, true);
+                this.sendError(response, 3, `Failed to set the message payload: ${this.getErrorMessage(error)}`);
                 return;
             }
             response.body = { value: args.value, variablesReference: 0 };
@@ -481,14 +481,14 @@ export class MiDebugAdapter extends LoggingDebugSession {
         // The message payload (Envelope) is not editable through the Axis2 scope.
         if (!context || !target || target.variablesReference !== 0 || (context === "axis2" && args.name === "Envelope")) {
             this.sendError(response, 2, `Changing the value of '${args.name}' is not supported. ` +
-                `Only top-level properties and variables can be changed.`, true);
+                `Only top-level properties and variables can be changed.`);
             return;
         }
 
         try {
             await this.setRuntimeValue(context, args.name, args.value);
         } catch (error) {
-            this.sendError(response, 3, `Failed to set the value of '${args.name}': ${this.getErrorMessage(error)}`, true);
+            this.sendError(response, 3, `Failed to set the value of '${args.name}': ${this.getErrorMessage(error)}`);
             return;
         }
 
@@ -572,12 +572,12 @@ export class MiDebugAdapter extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    private sendError(response: DebugProtocol.Response, errorCode: number, errorMessage: string, showUser: boolean = false) {
+    private sendError(response: DebugProtocol.Response, errorCode: number, errorMessage: string) {
         response.success = false;
         this.sendErrorResponse(response, {
             id: errorCode,
             format: errorMessage,
-            showUser: showUser,
+            showUser: false,
         });
     }
 

@@ -56,6 +56,15 @@ export class Debugger extends EventEmitter {
     private commandClient: net.Socket | undefined;
     private eventClient: net.Socket | undefined;
 
+    // The runtime answers commands in the order they are sent and without a request id.
+    // So commands are sent one at a time and each response line is handed to the oldest pending command
+    private commandQueue: Promise<unknown> = Promise.resolve();
+    private pendingCommands: { resolve: (response: string) => void, reject: (error: unknown) => void }[] = [];
+    private incompleteCommandResponse = '';
+    // Set when a command times out. A late response could otherwise be taken as the response to a later command.
+    // No more commands are sent until the debugger reconnects
+    private commandConnectionError: string | undefined;
+
     // maps sourceFile to array of RuntimeBreakpoint
     private runtimeBreakpoints = new Map<string, RuntimeBreakpoint[]>();
 
@@ -417,15 +426,21 @@ export class Debugger extends EventEmitter {
         return new Promise((resolve, reject) => {
             this.commandClient = new net.Socket();
             this.eventClient = new net.Socket();
+            this.pendingCommands = [];
+            this.incompleteCommandResponse = '';
+            this.commandConnectionError = undefined;
             // Connect to the command port
             this.commandClient?.connect(this.commandPort, this.host, () => {
                 this.isDebuggerActive = true;
                 resolve();
             });
 
+            this.commandClient?.on('data', (data) => this.handleCommandResponse(data));
+
             // Error handling for the command client
             this.commandClient?.on('error', (error) => {
                 logDebug(`Command client error: ${error}`, LogLevel.ERROR);
+                this.pendingCommands.splice(0).forEach((pending) => pending.reject(error));
                 reject(error); // Reject the promise if there's an error
             });
 
@@ -611,49 +626,62 @@ export class Debugger extends EventEmitter {
     }
 
     public sendRequest(request: string): Promise<string> {
+        const response = this.commandQueue.then(() => this.writeRequest(request));
+        // A failed command must not block the commands queued after it
+        this.commandQueue = response.catch(() => undefined);
+        return response;
+    }
+
+    private writeRequest(request: string): Promise<string> {
         return new Promise((resolve, reject) => {
-            // Append newline character to the request
-            request += '\n';
-            // Buffer to store incomplete messages
-            let incompleteMessage = '';
+            if (this.commandConnectionError) {
+                reject(this.commandConnectionError);
+                return;
+            }
+            const pending = {
+                resolve: (response: string) => {
+                    clearTimeout(timeout);
+                    resolve(response);
+                },
+                reject: (error: unknown) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                }
+            };
+            const timeout = setTimeout(() => {
+                this.commandConnectionError = "Server did not respond within the timeout period. " +
+                    "Please restart the server in debug mode and try again.";
+                this.incompleteCommandResponse = '';
+                this.pendingCommands.splice(0).forEach((pendingCommand) => pendingCommand.reject(this.commandConnectionError));
+            }, DebuggerConfig.getConnectionTimeout());
+            this.pendingCommands.push(pending);
 
             // Send request on the command port
             logDebug(`Command: ${request}`, LogLevel.INFO);
-            this.commandClient?.write(request);
-
-            const timeout = setTimeout(() => {
-                reject("Server did not respond within the timeout period. Please restart the server in debug mode and try again.");
-            }, DebuggerConfig.getConnectionTimeout());
-
-            // Listen for response from the command port
-            this.commandClient?.once('data', (data) => {
-                clearTimeout(timeout);
-                // Convert buffer to string
-                const receivedData = data.toString();
-
-                // Append the received data to incompleteMessage
-                incompleteMessage += receivedData;
-
-                // Check if incompleteMessage contains complete messages
-                while (incompleteMessage.includes('\n')) {
-                    // Extract the complete message
-                    const newlineIndex = incompleteMessage.indexOf('\n');
-                    const message = incompleteMessage.slice(0, newlineIndex);
-
-                    // Call a function with the received message
-                    logDebug(`Command response: ${message}`, LogLevel.INFO);
-                    resolve(message); // Resolve the promise with the message
-
-                    // Remove the processed message from incompleteMessage
-                    incompleteMessage = incompleteMessage.slice(newlineIndex + 1);
-                }
-            });
-
-            this.commandClient?.once('error', (err) => {
-                clearTimeout(timeout);
-                reject(err);
-            });
+            this.commandClient?.write(request + '\n');
         });
+    }
+
+    private handleCommandResponse(data: Buffer): void {
+        this.incompleteCommandResponse += data.toString();
+
+        // A response can arrive split across several chunks, or several responses can arrive in one chunk
+        let newlineIndex: number;
+        while ((newlineIndex = this.incompleteCommandResponse.indexOf('\n')) !== -1) {
+            const message = this.incompleteCommandResponse.slice(0, newlineIndex);
+            this.incompleteCommandResponse = this.incompleteCommandResponse.slice(newlineIndex + 1);
+            if (message.trim() === '') {
+                continue;
+            }
+
+            const pending = this.pendingCommands.shift();
+            if (pending) {
+                logDebug(`Command response: ${message}`, LogLevel.INFO);
+                pending.resolve(message);
+            } else {
+                logDebug(`Discarding command response with no pending command: ${message}`, LogLevel.WARN);
+            }
+        }
     }
 
     public async sendPropertiesCommand(): Promise<JSON[]> {
@@ -765,6 +793,9 @@ export class Debugger extends EventEmitter {
         // Close connections to command and event ports
         this.commandClient?.destroy();
         this.eventClient?.destroy();
+        // Fail the commands still waiting for a response instead of leaving them until they time out
+        this.commandConnectionError = "The debugger is not connected to the server.";
+        this.pendingCommands.splice(0).forEach((pending) => pending.reject(this.commandConnectionError));
         // remove all the listeners
         this.removeAllListeners();
         extension.preserveActivity = false;
