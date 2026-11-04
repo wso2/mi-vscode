@@ -4,13 +4,13 @@ on:
   workflow_call:
     inputs:
       # Runner for the Linux jobs. Windows UI tests always run on windows-latest.
-      #   ubuntu-latest        GitHub-hosted (the default)
+      #   ubuntu-24.04         GitHub-hosted (the default)
       #   codebuild            AWS CodeBuild, expanded to the run-scoped project label in `runs-on`
       #   k8s-default-runners  the self-hosted Kubernetes runner set
       # Anything else is handed to `runs-on` verbatim.
       runner:
-        description: 'Runner for the Linux jobs: ubuntu-latest, codebuild, k8s-default-runners, or any other runner label.'
-        default: 'ubuntu-latest'
+        description: 'Runner for the Linux jobs: ubuntu-24.04, codebuild, k8s-default-runners, or any other runner label.'
+        default: 'ubuntu-24.04'
         required: false
         type: string
       isPreRelease:
