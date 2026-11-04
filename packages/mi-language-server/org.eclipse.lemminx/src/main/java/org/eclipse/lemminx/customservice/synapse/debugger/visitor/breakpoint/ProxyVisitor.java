@@ -85,8 +85,8 @@ public class ProxyVisitor implements Visitor {
         proxyDebugInfo.setSequenceType("proxy_" + sequence.getTag().substring(0, sequence.getTag().length() - 5).toLowerCase());
         BreakpointMediatorVisitor mediatorVisitor = new BreakpointMediatorVisitor(breakpoints, proxyDebugInfo);
         VisitorUtils.visitMediators(sequence.getMediatorList(), mediatorVisitor, breakpointInfoMap);
-        if (!mediatorVisitor.isDone()) {
-            markAsInvalid(mediatorVisitor.breakpoint, "Invalid breakpoint in Proxy");
+        if (VisitorUtils.isUnresolvedInSequence(sequence, mediatorVisitor)) {
+            markAsInvalid(mediatorVisitor.getBreakpoint(), "Invalid breakpoint in Proxy");
         }
     }
 

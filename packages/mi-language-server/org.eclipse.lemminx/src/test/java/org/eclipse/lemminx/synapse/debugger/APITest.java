@@ -104,4 +104,25 @@ public class APITest extends AbstractDebuggerTest {
         Breakpoint breakpoint2 = new Breakpoint(41, 12);
         testDebugInfo(List.of(breakpoint1, breakpoint2), List.of("0", "1"));
     }
+
+    @Test
+    public void testMultipleBreakpoint_DifferentResources() {
+
+        // in-sequences of two resources, in document order and reversed
+        testDebugInfoValidity(List.of(new Breakpoint(22, 12), new Breakpoint(48, 12)), List.of("0", "0"));
+        testDebugInfoValidity(List.of(new Breakpoint(48, 12), new Breakpoint(22, 12)), List.of("0", "0"));
+    }
+
+    @Test
+    public void testMultipleBreakpoint_DifferentSequencesOfResource() {
+
+        testDebugInfoValidity(List.of(new Breakpoint(22, 12), new Breakpoint(30, 12), new Breakpoint(38, 12),
+                new Breakpoint(48, 12)), List.of("0", "0", "0", "0"));
+    }
+
+    @Test
+    public void testMultipleBreakpoint_UnsortedInSameSequence() {
+
+        testDebugInfoValidity(List.of(new Breakpoint(25, 12), new Breakpoint(22, 12)), List.of("1", "0"));
+    }
 }
