@@ -20,9 +20,9 @@ on:
         type: choice
         description: 'Runner for the Linux build jobs'
         required: true
-        default: 'ubuntu-latest'
+        default: 'ubuntu-24.04'
         options:
-          - ubuntu-latest
+          - ubuntu-24.04
           - codebuild
           - k8s-default-runners
 
