@@ -264,7 +264,9 @@ src/
 │           ├── datamapper/{name}/     # Data mapper TS + schemas
 │           └── metadata/              # API metadata (swagger)
 └── test/
-    └── wso2mi/                        # Unit test XMLs
+    ├── wso2mi/                        # Unit test suite XMLs (flat, no subfolders)
+    └── resources/
+        └── mock-services/             # Mock service XMLs
 \`\`\`
 
 # Debugging Common MI Issues
