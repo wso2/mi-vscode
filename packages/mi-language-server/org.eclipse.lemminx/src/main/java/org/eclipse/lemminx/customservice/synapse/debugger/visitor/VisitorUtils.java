@@ -143,6 +143,20 @@ public class VisitorUtils {
     }
 
     /**
+     * Check whether the visitor left its current breakpoint unresolved inside the given sequence.
+     * A breakpoint left over in another sequence of the same artifact is not considered unresolved, as it is
+     * resolved when that sequence is visited in a later pass.
+     *
+     * @param sequence The sequence whose mediators were visited.
+     * @param visitor  The visitor used to visit the mediators of the sequence.
+     * @return true if the current breakpoint is within the sequence but does not match any mediator.
+     */
+    public static boolean isUnresolvedInSequence(STNode sequence, BreakpointMediatorVisitor visitor) {
+
+        return !visitor.isDone() && checkNodeInRange(sequence, visitor.getBreakpoint());
+    }
+
+    /**
      * Visit the mediators in the list and get the next step over breakpoints.
      *
      * @param mediators The list of mediators to visit.
