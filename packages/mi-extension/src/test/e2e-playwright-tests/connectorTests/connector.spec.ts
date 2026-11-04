@@ -81,7 +81,8 @@ export default function createTests() {
         // diagram
         const diagram = new Diagram(page.page, 'Resource');
         await diagram.init();
-        await diagram.downloadConnectorThroughModulesList('File', 0, '6.0.0');
+        // Match any 6.x version, since the versions listed change with new connector releases
+        await diagram.downloadConnectorThroughModulesList('File', 0, /^6\./);
       });
 
       await test.step('Add downloaded connector operation to resource', async () => {

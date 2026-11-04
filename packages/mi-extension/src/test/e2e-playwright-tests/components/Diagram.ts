@@ -162,7 +162,7 @@ export class Diagram {
         await variable.click();
     }
 
-    public async downloadConnectorThroughModulesList(name: string, index: number = 0, version?: string) {
+    public async downloadConnectorThroughModulesList(name: string, index: number = 0, version?: string | RegExp) {
         await this.clickPlusButtonByIndex(index);
 
         const sidePanel = new SidePanel(this.diagramWebView);
@@ -408,7 +408,7 @@ export class SidePanel {
         await form.submit("Add");
     }
 
-    public async downloadConnector(name: string, version?: string, inDrawer?: boolean) {
+    public async downloadConnector(name: string, version?: string | RegExp, inDrawer?: boolean) {
         const resourceView = await switchToIFrame("Resource View", this.container.page());
         if (!resourceView) {
             throw new Error("Failed to switch to Resource View iframe");
@@ -422,9 +422,12 @@ export class SidePanel {
             const versionInput = connectorSection.locator('input[role="combobox"]').first();
             await versionInput.waitFor({ state: 'visible' });
             await versionInput.click();
-            await versionInput.fill(version);
 
-            const versionOption = resourceView.getByRole('option', { name: version, exact: true }).first();
+            // A RegExp picks the first listed version that matches, e.g. /^6\./ for any 6.x release
+            if (typeof version === 'string') {
+                await versionInput.fill(version);
+            }
+            const versionOption = resourceView.getByRole('option', { name: version, exact: typeof version === 'string' }).first();
             await versionOption.waitFor({ state: 'visible', timeout: 30000 });
             await versionOption.click();
         }
