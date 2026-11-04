@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Component Reference — WSO2 MI Language Server</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <button class="topbar-toggle" id="sidebarToggle" aria-label="Toggle sidebar" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6"  x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <a href="index.html" class="topbar-brand">
+      <div class="logo">MI</div>
+      <span class="name">WSO2 MI Language Server</span>
+    </a>
+    <div class="topbar-crumb">
+      <span class="sep">/</span>
+      <span class="page">Component Reference</span>
+    </div>
+  </header>
+
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <div class="layout">
+    <aside class="sidebar" id="sidebar">
+      <nav>
+        <div class="group-label">Getting Started</div>
+        <a href="index.html">Overview</a>
+
+        <div class="group-label">Deep Dive</div>
+        <a href="architecture.html">Architecture <span class="sub">Layers, modules, the dual engine</span></a>
+        <a href="components.html" class="active">Component Reference <span class="sub">File-by-file</span></a>
+        <a href="components.html#entry">Entry &amp; routing</a>
+        <a href="components.html#schema">Schema subsystem</a>
+        <a href="components.html#diag">Diagnostics</a>
+        <a href="components.html#parser">Parser</a>
+        <a href="components.html#features">Feature providers</a>
+        <a href="flows.html">Flows &amp; Sequences <span class="sub">How things happen</span></a>
+
+        <div class="group-label">Development</div>
+        <a href="debugging.html">Debugging the Language Server <span class="sub">Attach a debugger to the server</span></a>
+      </nav>
+    </aside>
+
+    <main class="content">
+      <div class="inner">
+        <span class="kicker">Deep Dive</span>
+        <h1>Component Reference</h1>
+        <p class="lead">A file-by-file map: what each module owns, what it exposes, and who depends on it.</p>
+
+        <h2 id="entry">Entry &amp; routing</h2>
+
+        <h3><span class="file-ref">src/server.ts</span> <span class="tag orange">entry point</span></h3>
+        <p>Creates the LSP connection and wires the whole lifecycle.</p>
+        <ul>
+          <li><code>onInitialize</code> — reads <code>workspaceFolders</code> and
+            <code>initializationOptions.schemas</code>, registers pattern mappings to bundled 430/440 schemas, advertises capabilities.</li>
+          <li><code>onInitialized</code> — pulls <code>xmlLanguageServer.schemas</code> config, applies it, then validates open docs. Sets <code>initialConfigurationLoaded</code>.</li>
+          <li><code>onDidChangeConfiguration</code> — invalidate caches → dispose validators → <strong>clear user associations</strong> → re-register init-option mappings → apply workspace schemas → re-validate.</li>
+          <li><code>onDidChangeContent</code> — schedule validation for the changed document, <strong>debounced 300&nbsp;ms per URI</strong>: each edit cancels the previous timer, so a burst of keystrokes produces one validation after the user pauses (deferred until initial config is loaded).</li>
+          <li><code>onDidClose</code> — cancel any pending debounce timer for the closed document.</li>
+          <li><code>onShutdown</code> — dispose diagnostics + service.</li>
+        </ul>
+        <p>Also defines <code>registerSchemas()</code> for the init-options <code>{pattern, schema}</code> shape and <code>SCHEMA_FOLDER_MAP</code> (430/440 → bundled folder).</p>
+
+        <h3><span class="file-ref">src/requestHandlers.ts</span></h3>
+        <p>Registers one handler per LSP request: completion, hover, documentSymbol, foldingRange, rename, definition, references, formatting (full + range). Maintains a <strong>parsed-document cache</strong> keyed by URI + version so repeated requests don't re-parse. The hover handler calls <code>diagnosticsHandler.hasErrorAt()</code> to suppress hover where a diagnostic already exists.</p>
+
+        <h3><span class="file-ref">src/xmlLanguageService.ts</span> <span class="tag blue">façade</span></h3>
+        <p><code>getLanguageService()</code> returns a single object aggregating every capability and owning the one <code>SchemaProvider</code> instance. This is the seam everything else depends on — <code>parseXMLDocument</code>, <code>doComplete</code>, <code>doHover</code>, <code>validate</code>, <code>registerSchema</code>, <code>addUserAssociation</code>, <code>clearUserAssociations</code>, <code>invalidateAutoSchemas</code>, <code>dispose</code>, etc.</p>
+
+        <h3><span class="file-ref">src/configuration.ts</span></h3>
+        <p><code>applySchemaSettings()</code> takes workspace <code>{pattern, xsdPath}</code> entries, resolves each <code>xsdPath</code> (absolute, or relative to a workspace root), and registers it as a user association. Warns and skips unresolvable paths. Heavily unit-tested.</p>
+
+        <h2 id="schema">Schema subsystem</h2>
+
+        <h3><span class="file-ref">src/schema/schemaAssociator.ts</span></h3>
+        <p>Owns <code>findSchema(file, xmlns, path)</code>: user/init pattern matches first, then built-in namespace matches. Includes a small glob→RegExp engine (<code>*</code>, <code>**</code>, <code>?</code>) and <code>resolveSchemaRoot()</code> which locates bundled schemas in both the production bundle and the test tree. Exposes <code>addUserAssociation</code> / <code>clearUserAssociations</code>.</p>
+
+        <h3><span class="file-ref">src/schema/schemaProvider.ts</span></h3>
+        <p>The registry. <code>registerSchema()</code> creates one <code>XsdValidatorService</code> wrapper per unique <code>xsdKey</code> (it stores the XSD text — no compilation here) and builds a completion provider from the fully-inlined XSD (via <code>inlineIncludes()</code>). <code>validate()</code> routes to the right validator or falls back to the parser's syntax errors. <code>invalidateAutoSchemas()</code> drops all <code>auto://</code> entries; <code>dispose()</code> tears everything down. Holds the three maps described in <a href="architecture.html#caches">Caches &amp; keys</a>.</p>
+
+        <h3><span class="file-ref">src/schema/xsdCompletionProvider.ts</span> <span class="tag purple">engine 2</span></h3>
+        <p>Hand-written XSD reader. Parses element/attribute/type declarations from XSD text and answers completion + hover queries (<code>getAllElements</code>, <code>getElement</code>, …). This is the completion "brain" — independent of Xerces.</p>
+
+        <h3><span class="file-ref">src/schema/xsdValidator.ts</span> <span class="tag green">engine 1</span></h3>
+        <p>Thin wrapper over the WASM <code>validate()</code>. Extracts the <code>targetNamespace</code> via regex (Xerces needs it), runs validation, and maps raw Xerces errors to ranges — including clever remapping of mismatched-tag and content-model errors back onto the offending open tag.</p>
+
+        <h2 id="diag">Diagnostics</h2>
+        <h3><span class="file-ref">src/diagnosticsHandler.ts</span> <span class="tag orange">orchestrator</span></h3>
+        <p>The busiest file. <code>validateAndSend()</code> drives the whole diagnostics flow. It captures <code>document.version</code> on entry and re-checks it before publishing (<strong>version guard</strong>): if the document changed while the async validation ran, the stale result is discarded instead of overwriting diagnostics from a newer run. Beyond that it owns the schema-graph loading used by both engines:</p>
+        <ul>
+          <li><code>getOrCreateValidator()</code> — cached <code>ProjectValidator</code> per <code>xsdPath</code>.</li>
+          <li><code>buildFilesMap()</code> — recursively reads every <code>.xsd/.dtd</code> in the schema folder (feeds Xerces).</li>
+          <li><code>loadReferencedXsds()</code> — follows <code>xs:include/import/redefine</code> + DTD references with depth/size/count guards (feeds the completion provider).</li>
+          <li><code>filterDiagnostics()</code> — collapses noisy cascades (e.g. drops "attribute not declared" when the element itself is unknown) and de-duplicates.</li>
+        </ul>
+
+        <h2 id="parser">Parser</h2>
+        <table>
+          <thead><tr><th>File</th><th>Role</th></tr></thead>
+          <tbody>
+            <tr><td><span class="file-ref">parser/xmlParser.ts</span></td><td>Runs <code>@xml-tools/parser</code> (CST) and builds the AST.</td></tr>
+            <tr><td><span class="file-ref">parser/xmlNode.ts</span></td><td>AST node types (<code>XMLDocument</code>, elements, attributes).</td></tr>
+            <tr><td><span class="file-ref">parser/xmlDocument.ts</span></td><td>Document wrapper: text, AST tree construction, syntax errors.</td></tr>
+          </tbody>
+        </table>
+
+        <h2 id="features">Feature providers <span class="tag blue">services/</span></h2>
+        <p>Each is a stateless function over the AST (and, where relevant, a completion provider). They contain no transport or schema-resolution logic.</p>
+        <div class="card-grid">
+          <div class="card"><h3>xmlHover</h3><p>Schema-aware hover content for elements/attributes.</p></div>
+          <div class="card"><h3>xmlCompletion</h3><p>Context-aware element/attribute completion.</p></div>
+          <div class="card"><h3>xmlFolding</h3><p>Folding ranges from element nesting.</p></div>
+          <div class="card"><h3>xmlSymbols</h3><p>Document outline / symbols.</p></div>
+          <div class="card"><h3>xmlReferences</h3><p>Find references across the document.</p></div>
+          <div class="card"><h3>xmlRename</h3><p>Rename with matching edits.</p></div>
+          <div class="card"><h3>xmlDefinition</h3><p>Go-to-definition.</p></div>
+          <div class="card"><h3>xmlFormatter</h3><p>Full-document &amp; range formatting.</p></div>
+        </div>
+
+        <div class="footer-nav">
+          <a class="prev" href="architecture.html">
+            <span class="dir">← Prev</span>
+            <span class="lbl">Architecture</span>
+          </a>
+          <a class="next" href="flows.html">
+            <span class="dir">Next →</span>
+            <span class="lbl">Flows &amp; Sequences</span>
+          </a>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="docs.js"></script>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: true, theme: 'dark',
+      themeVariables: { primaryColor: '#1c2128', primaryBorderColor: '#ff7300', primaryTextColor: '#f0f6fc', lineColor: '#8b949e', fontSize: '14px' },
+      flowchart: { curve: 'basis', htmlLabels: true }
+    });
+  </script>
+</body>
+</html>
