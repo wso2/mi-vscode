@@ -17,16 +17,26 @@
  */
 
 import Mustache from "mustache";
+import { escapeXml } from "@wso2/mi-diagram/lib/utils/commons";
 import { TestCaseEntry } from "../../../views/Forms/Tests/TestCaseForm";
 
-export function getTestSuiteXML(data: any) {
-    data.testCases = data.testCases.map((testCase: TestCaseEntry) => {
-        return modityTestCaseData(testCase);
-    });
-    return Mustache.render(getTestSuiteMustacheTemplate(), data);
+// Escape line breaks and tabs, which XML parsers turn into spaces in attribute values
+function escapeXmlAttribute(value: string) {
+    return escapeXml(value ?? "")
+        .replace(/\r/g, "&#13;")
+        .replace(/\n/g, "&#10;")
+        .replace(/\t/g, "&#9;");
 }
 
-function modityTestCaseData(data: TestCaseEntry) {
+export function getTestSuiteXML(data: any) {
+    const testCases = data.testCases.map((testCase: TestCaseEntry) => {
+        return modityTestCaseData(testCase);
+    });
+    return Mustache.render(getTestSuiteMustacheTemplate(), { ...data, testCases });
+}
+
+function modityTestCaseData(testCase: TestCaseEntry) {
+    const data: TestCaseEntry = { ...testCase, input: { ...testCase.input } };
     if (data.input.payload && data.input.payload.startsWith("<![CDATA[")) {
         data.input.payload = data.input.payload.substring(9, data.input.payload.length - 3);
     }
@@ -43,6 +53,23 @@ function modityTestCaseData(data: TestCaseEntry) {
                     name: property[0],
                     scope: property[1],
                     value: property[2]
+                }
+            });
+        }
+    }
+    if (data?.input?.variables) {
+        if (
+            (Array.isArray(data.input.variables) &&
+                data.input.variables.length === 0) ||
+            data.input.variables === undefined
+        ) {
+            delete data.input.variables;
+        } else {
+            (data.input.variables as any) = data.input.variables.map((variable: any) => {
+                return {
+                    name: variable[0],
+                    type: variable[1],
+                    value: escapeXmlAttribute(variable[2])
                 }
             });
         }
@@ -140,7 +167,12 @@ function getTestCaseMustacheTemplate() {
                     {{#input.properties}}
                     <property name="{{name}}" scope="{{scope}}" value="{{value}}" />
                     {{/input.properties}}
-                </properties>{{/input.properties.length}}
+                </properties>{{/input.properties.length}}{{#input.variables.length}}
+                <variables>
+                    {{#input.variables}}
+                    <variable name="{{name}}" type="{{type}}" value="{{{value}}}" />
+                    {{/input.variables}}
+                </variables>{{/input.variables.length}}
             </input>
             <assertions>
                 {{#assertions}}

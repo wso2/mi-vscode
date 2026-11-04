@@ -1965,10 +1965,15 @@ export interface TestCaseInput extends STNode {
     requestProtocol: STNode;
     payload: STNode;
     properties?: TestCaseInputProperties;
+    variables?: TestCaseInputVariables;
 }
 
 export interface TestCaseInputProperties extends STNode {
     properties: Property[];
+}
+
+export interface TestCaseInputVariables extends STNode {
+    variables: Variable[];
 }
 
 export interface Assertion extends STNode {

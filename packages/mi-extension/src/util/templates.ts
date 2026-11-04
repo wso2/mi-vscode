@@ -181,7 +181,7 @@ export async function createAggregatePomInRoot(projectUri: string, modules: stri
     `                    <plugin>`,
     `                        <groupId>org.wso2.maven</groupId>`,
     `                        <artifactId>mi-container-config-mapper</artifactId>`,
-    `                        <version>5.2.82</version>`,
+    `                        <version>5.4.22</version>`,
     `                        <extensions>true</extensions>`,
     `                        <executions>`,
     `                            <execution>`,
