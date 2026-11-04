@@ -2,9 +2,16 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.   
 
-## [4.2.0] - 2026-10-16
+## [4.2.1] - 2026-11-05          
 
-### Improvements
+### Improvements      
+
+- Ability to set values in the mediation debugging process ([#1664](https://github.com/wso2/mi-vscode/issues/1664))      
+- Support injecting variables and mock HTTP connections ([#1665](https://github.com/wso2/mi-vscode/issues/1665))      
+
+## [4.2.0] - 2026-10-19
+
+### Improvements       
 
 - Enterprise-aware Copilot Capabilities   
   - Custom AI Instructions Support      
