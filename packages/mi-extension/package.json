@@ -934,7 +934,7 @@
         },
         {
           "command": "MI.test.add.suite",
-          "when": "view == workbench.view.testing",
+          "when": "view == workbench.view.testing && MI.status == 'projectLoaded'",
           "group": "navigation"
         },
         {
