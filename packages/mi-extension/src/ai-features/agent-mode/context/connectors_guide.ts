@@ -242,6 +242,45 @@ A basic chat operation requires the following two connection types:
 </ai.chat>
 \`\`\`
 
+### Using Anthropic (Claude) as the LLM
+
+To use Anthropic instead of OpenAI, define the LLM connection with the \`ANTHROPIC\` connection type:
+\`\`\`xml
+<localEntry key="ANTHROPIC_CONN" xmlns="http://ws.apache.org/ns/synapse">
+  <ai.init>
+    <connectionType>ANTHROPIC</connectionType>
+    <apiKey>apiKey</apiKey>
+    <name>ANTHROPIC_CONN</name>
+  </ai.init>
+</localEntry>
+\`\`\`
+
+Rules for operations that use an Anthropic connection (\`ai.chat\`, \`ai.ragChat\`, \`ai.agent\`):
+- Always set \`modelName\` explicitly. The default (\`gpt-4o\`) is an OpenAI model and will not work with Anthropic.
+- Use a current Claude model ID: \`claude-sonnet-5-5\` (default choice), \`claude-haiku-5-5\` (fastest, lowest cost) or \`claude-opus-5-5\` (for long-running agentic and knowledge work).
+- Never use Claude 3.x model IDs such as \`claude-3-5-sonnet-20241022\` or \`claude-3-5-sonnet-latest\`. They are retired and fail at runtime with a model-not-found error. Do not use other model IDs recalled from memory either.
+- Omit \`temperature\`, \`topP\`, \`frequencyPenalty\` and \`seed\`. Current Claude models reject sampling parameters with a 400 error: Claude Sonnet 5.5 and Haiku 5.5 reject \`temperature\` and \`topP\` at any value, and Claude Opus 4.7 and later reject non-default values.
+- Only if the user explicitly asks for a sampling setting on an older model that accepts it, set \`temperature\` alone. Never set both \`temperature\` and \`topP\`.
+- If the runtime reports a model-not-found or invalid-parameter error, do not guess. Check Anthropic's models overview (https://platform.claude.com/docs/en/models/overview) for current model IDs and their supported parameters.
+
+Example chat operation with Anthropic:
+\`\`\`xml
+<ai.chat>
+    <connections>
+        <llmConfigKey>ANTHROPIC_CONN</llmConfigKey>
+        <memoryConfigKey>FILE_MEMORY_CONN</memoryConfigKey>
+    </connections>
+    <sessionId>{\${payload.userID}}</sessionId>
+    <prompt>\${payload.query}</prompt>
+    <outputType>string</outputType>
+    <responseVariable>ai_chat_1</responseVariable>
+    <overwriteBody>true</overwriteBody>
+    <modelName>claude-sonnet-5-5</modelName>
+    <maxTokens>4069</maxTokens>
+    <maxHistory>10</maxHistory>
+</ai.chat>
+\`\`\`
+
 ## RAG Chat Operation
 
 RAG Chat uses additional configurations to retrieve knowledge from a vector store.
