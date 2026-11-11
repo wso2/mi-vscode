@@ -24,6 +24,8 @@ public class MediatorTryoutInfo {
     private MediatorInfo input;
     private MediatorInfo output;
     private String error;
+    // Non-fatal issue to show with the result, e.g. other artifacts that failed to deploy.
+    private String warning;
 
     public MediatorTryoutInfo() {
 
@@ -90,6 +92,16 @@ public class MediatorTryoutInfo {
     public String getError() {
 
         return error;
+    }
+
+    public void setWarning(String warning) {
+
+        this.warning = warning;
+    }
+
+    public String getWarning() {
+
+        return warning;
     }
 
     public void setInputPayload(JsonPrimitive jsonPrimitive) {

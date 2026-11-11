@@ -388,6 +388,7 @@ import {
     APIContextsResponse,
     getAllAPIcontexts,
     MediatorTryOutRequest,
+    DiscardTryoutSessionRequest,
     tryOutMediator,
     getInputPayloads,
     getAllInputDefaultPayloads,
@@ -425,6 +426,9 @@ import {
     TestConnectorConnectionResponse,
     testConnectorConnection,
     shutDownTryoutServer,
+    killOccupyingTryoutServer,
+    removeConflictingTryoutCapps,
+    discardActiveTryoutSession,
     MiVersionResponse,
     getMIVersionFromPom,
     CheckDBDriverResponse,
@@ -1173,6 +1177,18 @@ export class MiDiagramRpcClient implements MiDiagramAPI {
 
     shutDownTryoutServer(): Promise<boolean> {
         return this._messenger.sendRequest(shutDownTryoutServer, HOST_EXTENSION);
+    }
+
+    killOccupyingTryoutServer(): Promise<boolean> {
+        return this._messenger.sendRequest(killOccupyingTryoutServer, HOST_EXTENSION);
+    }
+
+    removeConflictingTryoutCapps(): Promise<boolean> {
+        return this._messenger.sendRequest(removeConflictingTryoutCapps, HOST_EXTENSION);
+    }
+
+    discardActiveTryoutSession(params: DiscardTryoutSessionRequest): Promise<boolean> {
+        return this._messenger.sendRequest(discardActiveTryoutSession, HOST_EXTENSION, params);
     }
 
     getMIVersionFromPom(): Promise<MiVersionResponse> {

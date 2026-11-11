@@ -33,12 +33,15 @@ public class DebugCommandClient {
     private static final int DEFAULT_MAX_RETRIES = 2;
     private int port = TryOutConstants.DEFAULT_DEBUGGER_COMMAND_PORT;
     private Socket socket;
+    // One reader for the whole connection; a new reader per command could swallow the next reply.
+    private BufferedReader reader;
 
     public void connect() {
 
         try {
             socket = new Socket(HOST, port);
             socket.setSoTimeout(5000); // Set a timeout for reading from the socket
+            reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         } catch (IOException e) {
             LOGGER.log(Level.SEVERE, String.format("Failed to connect to the server using port: %d", port), e);
         }
@@ -54,8 +57,9 @@ public class DebugCommandClient {
         return null;
     }
 
-    private String send(String message) throws IOException {
+    private synchronized String send(String message) throws IOException {
 
+        discardStaleReplies();
         var outputStream = new BufferedOutputStream(socket.getOutputStream());
 
         message += "\n";
@@ -63,9 +67,21 @@ public class DebugCommandClient {
         outputStream.write(message.getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
 
-        var inputStream =
-                new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-        return inputStream.readLine();
+        return reader.readLine();
+    }
+
+    /**
+     * Drops late replies to timed-out commands, so the next command reads its own reply.
+     */
+    private void discardStaleReplies() throws IOException {
+
+        while (reader.ready()) {
+            String stale = reader.readLine();
+            if (stale == null) {
+                break;
+            }
+            LOGGER.log(Level.FINE, String.format("Discarding a late debugger reply: %s", stale));
+        }
     }
 
     public String sendCommandWithRetry(String message) {

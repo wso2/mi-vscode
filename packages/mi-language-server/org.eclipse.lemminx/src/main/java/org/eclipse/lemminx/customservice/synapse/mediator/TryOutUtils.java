@@ -20,7 +20,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 import org.apache.commons.lang3.StringUtils;
 import org.eclipse.lemminx.commons.BadLocationException;
-import org.eclipse.lemminx.customservice.synapse.WorkspaceManager;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.Breakpoint;
 import org.eclipse.lemminx.customservice.synapse.debugger.entity.debuginfo.IDebugInfo;
 import org.eclipse.lemminx.customservice.synapse.debugger.visitor.VisitorUtils;
@@ -52,20 +51,25 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
 import java.io.IOException;
 import java.io.StringReader;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -77,6 +81,7 @@ public class TryOutUtils {
             UNWANTED_ARTIFACTS = List.of("inbound-endpoints", "message-processors", "proxy-services", "tasks");
     private static final String SOAP_ENVELOPE_URI = "http://schemas.xmlsoap.org/soap/envelope/";
     private static final String BODY = "Body";
+    private static final Pattern URL_PLACEHOLDER = Pattern.compile("\\{\\+?([^{}]+)}");
 
     private static final Logger LOGGER = Logger.getLogger(TryOutUtils.class.getName());
 
@@ -145,6 +150,45 @@ public class TryOutUtils {
 
         Path relativeFilePath = relativizeSourcePath.relativize(relativizeTargetPath);
         return resolveSourcePath.resolve(relativeFilePath);
+    }
+
+    /**
+     * Deletes folders in {@code root} left by language servers that are no longer running. Each folder is
+     * named after its server's PID, so a folder whose process is still alive (another open window) is kept.
+     */
+    public static void cleanUpStaleProcessFolders(Path root) {
+
+        File[] children = root.toFile().listFiles();
+        if (children == null) {
+            return;
+        }
+        for (File child : children) {
+            if (isLiveProcessFolder(child)) {
+                continue;
+            }
+            try {
+                if (child.isDirectory()) {
+                    Utils.deleteDirectory(child.toPath());
+                } else {
+                    Files.deleteIfExists(child.toPath());
+                }
+            } catch (IOException e) {
+                LOGGER.log(Level.WARNING, String.format("Error removing the stale try-out folder %s", child), e);
+            }
+        }
+    }
+
+    private static boolean isLiveProcessFolder(File folder) {
+
+        if (!folder.isDirectory()) {
+            return false;
+        }
+        try {
+            long pid = Long.parseLong(folder.getName());
+            return ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false);
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     /**
@@ -256,12 +300,14 @@ public class TryOutUtils {
         if (mediator == null || end == null) {
             return;
         }
+        // Range ends are exclusive, so delete exactly from the mediator's end to the sequence's end tag.
+        // Off by one leaves a stray character and MI rejects the XML.
         Position mediatorEnd =
                 mediator.getRange().getEndTagRange() != null ? mediator.getRange().getEndTagRange().getEnd() :
                         mediator.getRange().getStartTagRange().getEnd();
-        mediatorEnd.setCharacter(mediatorEnd.getCharacter() + 1);
-        end.setCharacter(end.getCharacter() == 0 ? 0 : end.getCharacter() - 1);
-        doEdit(new Edit(StringUtils.EMPTY, new Range(mediatorEnd, end)), editFilePath);
+        Position removeFrom = new Position(mediatorEnd.getLine(), mediatorEnd.getCharacter());
+        Position removeTo = new Position(end.getLine(), end.getCharacter());
+        doEdit(new Edit(StringUtils.EMPTY, new Range(removeFrom, removeTo)), editFilePath);
     }
 
     private static boolean isNodeInRange(STNode node, Position position) {
@@ -371,10 +417,11 @@ public class TryOutUtils {
      * @param port              the port
      * @return the invocation info
      * @throws IOException
+     * @throws InvalidConfigurationException if a path parameter has no value
      */
     public static InvocationInfo getInvocationInfo(Path apiPath, MediatorTryoutRequest request,
                                                    List<JsonObject> activeBreakpoints, String host, int port)
-            throws IOException {
+            throws IOException, InvalidConfigurationException {
 
         Position position = new Position(request.getLine(), request.getColumn());
         DOMDocument document = Utils.getDOMDocument(apiPath.toFile());
@@ -382,36 +429,95 @@ public class TryOutUtils {
             return null;
         }
         API api = (API) SyntaxTreeGenerator.buildTree(document.getDocumentElement());
-        String serviceUrl =
-                processURLParams(getServiceUrl(api, host, port, activeBreakpoints), request.getQueryParams(),
-                        request.getPathParams());
+        String baseServiceUrl = getServiceUrl(api, host, port, activeBreakpoints);
+        String serviceUrl = processURLParams(baseServiceUrl, request.getQueryParams(), request.getPathParams());
         String method = getServiceMethod(api, position);
-        return new InvocationInfo(serviceUrl, method, request.getInputPayload());
+        InvocationInfo invocationInfo = new InvocationInfo(serviceUrl, method, request.getInputPayload());
+        invocationInfo.setBaseServiceUrl(baseServiceUrl);
+        return invocationInfo;
     }
 
-    public static String processURLParams(String serviceUrl, List<Property> queryParams, List<Property> pathParams) {
-
-        if ((queryParams == null || queryParams.isEmpty()) && (pathParams == null || pathParams.isEmpty())) {
-            return serviceUrl;
-        }
+    /**
+     * Fills a resource URL's {@code uri-template} with the request's parameters.
+     *
+     * Requests can be shared across resources, so values are encoded, extra query params are appended,
+     * and a missing path param is reported as an error.
+     *
+     * @param serviceUrl  the resource URL with its template placeholders
+     * @param queryParams the request's query parameter values (may be null)
+     * @param pathParams  the request's path parameter values (may be null)
+     * @return the URL to invoke
+     * @throws InvalidConfigurationException if a path parameter has no value
+     */
+    public static String processURLParams(String serviceUrl, List<Property> queryParams, List<Property> pathParams)
+            throws InvalidConfigurationException {
 
         int queryIndex = serviceUrl.indexOf("?");
-        String pathParamPart = queryIndex != -1 ? serviceUrl.substring(0, queryIndex) : serviceUrl;
-        String queryParamPart = queryIndex != -1 ? serviceUrl.substring(queryIndex + 1) : "";
+        String pathPart = queryIndex != -1 ? serviceUrl.substring(0, queryIndex) : serviceUrl;
+        String queryTemplate = queryIndex != -1 ? serviceUrl.substring(queryIndex + 1) : StringUtils.EMPTY;
+        Map<String, String> pathValues = toParamMap(pathParams);
+        Map<String, String> queryValues = toParamMap(queryParams);
 
-        if (pathParams != null && !pathParams.isEmpty()) {
-            for (Property param : pathParams) {
-                pathParamPart = pathParamPart.replace("{" + param.getKey() + "}", param.getValue());
+        StringBuilder path = new StringBuilder();
+        List<String> missingPathParams = new ArrayList<>();
+        Matcher pathMatcher = URL_PLACEHOLDER.matcher(pathPart);
+        while (pathMatcher.find()) {
+            String name = pathMatcher.group(1);
+            String value = pathValues.get(name);
+            if (value == null) {
+                missingPathParams.add("{" + name + "}");
+                value = StringUtils.EMPTY;
             }
+            pathMatcher.appendReplacement(path, Matcher.quoteReplacement(encodeURLComponent(value)));
+        }
+        pathMatcher.appendTail(path);
+        if (!missingPathParams.isEmpty()) {
+            throw new InvalidConfigurationException(
+                    String.format(TryOutConstants.MISSING_PATH_PARAMS_ERROR, String.join(", ", missingPathParams)));
         }
 
-        // Replace query parameters
-        if (queryParams != null && !queryParams.isEmpty()) {
-            for (Property param : queryParams) {
-                queryParamPart = queryParamPart.replace("{" + param.getKey() + "}", param.getValue());
+        List<String> queryParts = new ArrayList<>();
+        Set<String> templatedQueryParams = new HashSet<>();
+        for (String pair : queryTemplate.split("&")) {
+            if (pair.isEmpty()) {
+                continue;
+            }
+            Matcher queryMatcher = URL_PLACEHOLDER.matcher(pair);
+            if (!queryMatcher.find()) {
+                queryParts.add(pair);
+                continue;
+            }
+            String name = queryMatcher.group(1);
+            templatedQueryParams.add(name);
+            if (queryValues.containsKey(name)) {
+                queryParts.add(pair.substring(0, queryMatcher.start()) + encodeURLComponent(queryValues.get(name))
+                        + pair.substring(queryMatcher.end()));
             }
         }
-        return queryParamPart.isEmpty() ? pathParamPart : pathParamPart + "?" + queryParamPart;
+        for (Map.Entry<String, String> param : queryValues.entrySet()) {
+            if (!templatedQueryParams.contains(param.getKey())) {
+                queryParts.add(encodeURLComponent(param.getKey()) + "=" + encodeURLComponent(param.getValue()));
+            }
+        }
+        return queryParts.isEmpty() ? path.toString() : path + "?" + String.join("&", queryParts);
+    }
+
+    private static Map<String, String> toParamMap(List<Property> params) {
+
+        Map<String, String> values = new LinkedHashMap<>();
+        if (params != null) {
+            for (Property param : params) {
+                if (param != null && StringUtils.isNotBlank(param.getKey())) {
+                    values.put(param.getKey().trim(), param.getValue() != null ? param.getValue() : StringUtils.EMPTY);
+                }
+            }
+        }
+        return values;
+    }
+
+    private static String encodeURLComponent(String value) {
+
+        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 
     private static String getServiceMethod(API api, Position position) {
@@ -695,131 +801,4 @@ public class TryOutUtils {
         }
     }
 
-    /**
-     * Hashes a project root the way the try-out history log records it, normalizing the path first so different spellings of the same folder (URI vs. OS path, drive-letter case) hash the same.
-     *
-     * @param projectUri the project root, as a path or a {@code file://} URI
-     * @return the hash to compare against {@link #getProjectPathHash()}
-     */
-    public static String getProjectHash(String projectUri) {
-
-        return Utils.getHash(WorkspaceManager.normalizeProjectPath(projectUri));
-    }
-
-    /**
-     * Get the project path hash from the tryout history log file.
-     *
-     * @return the project path hash
-     */
-    public static String getProjectPathHash() {
-
-        String hash = null;
-        try {
-            String content = Files.readString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE);
-            String[] parts = content.split("\\s*-\\s*");
-            if (parts.length >= 2) {
-                hash = parts[0];
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error occurred while reading the tryout history log file. ", e);
-        }
-        return hash;
-    }
-
-    /**
-     * Get the process ID of a given port.
-     *
-     * @param port the port
-     * @return the process ID
-     */
-    public static int getProcessId(int port) {
-
-        String os = System.getProperty("os.name").toLowerCase();
-        String findCommand;
-        if (os.contains("win")) {
-            findCommand = "netstat -ano | findstr :" + port;
-        } else {
-            findCommand = "lsof -i :" + port;
-        }
-
-        String pid = null;
-        try {
-            String line;
-            Process findProcess = Runtime.getRuntime().exec(new String[]{"bash", "-c", findCommand});
-            BufferedReader reader = new BufferedReader(new InputStreamReader(findProcess.getInputStream()));
-            while ((line = reader.readLine()) != null) {
-                if (line.startsWith("COMMAND")) continue;
-                if (os.contains("win")) {
-                    String[] parts = line.trim().split("\\s+");
-                    if (parts.length >= 5) {
-                        pid = parts[4];
-                        break;
-                    }
-                } else {
-                    String[] parts = line.trim().split("\\s+");
-                    if (parts.length >= 2) {
-                        pid = parts[1];
-                        break;
-                    }
-                }
-            }
-            reader.close();
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error occurred while finding the process ID of port " + port + ". ", e);
-        }
-        return pid != null ? Integer.parseInt(pid) : -1;
-    }
-
-    /**
-     * Get the last updated timestamp from the tryout history log file.
-     *
-     * @return the timestamp
-     */
-    public static String getTimestamp() {
-
-        String timestamp = null;
-        try {
-            String content = Files.readString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE);
-            String[] parts = content.split("\\s*-\\s*");
-            if (parts.length == 3) {
-                timestamp = parts[2];
-            }
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error occurred while reading the tryout history log file. ", e);
-        }
-        return timestamp;
-    }
-
-    /**
-     * Update the latest timestamp in the tryout history log file.
-     *
-     * @param projectUri the project URI from which the server is started
-     * @param removeTimestamp whether to remove the existing timestamp
-     */
-    public static void updateTimestamp(String projectUri, boolean removeTimestamp) {
-
-        if (getProjectHash(projectUri).equals(getProjectPathHash())) {
-            try {
-                String content = Files.readString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE);
-                String[] parts = content.split("\\s*-\\s*");
-                String currentTimestamp = String.valueOf(System.currentTimeMillis()/1000);
-                String updatedContent = content;
-                if (removeTimestamp && parts.length == 3) {
-                    updatedContent = String.join(" - ", Arrays.copyOf(parts, parts.length - 1));
-                } else if (parts.length == 3) {
-                    // Already has a timestamp therefore replace it
-                    parts[2] = currentTimestamp;
-                    updatedContent = String.join(" - ", parts);
-                } else if (parts.length == 2) {
-                    // No timestamp therefore append one
-                    updatedContent = content + " - " + currentTimestamp;
-                }
-                Files.createDirectories(TryOutConstants.TRYOUT_HISTORY_LOG_FILE.getParent());
-                Files.writeString(TryOutConstants.TRYOUT_HISTORY_LOG_FILE, updatedContent);
-            } catch (Exception e) {
-                LOGGER.log(Level.SEVERE,
-                        "Error occurred while updating the timestamp in the tryout history log file. ", e);
-            }
-        }
-    }
 }

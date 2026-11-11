@@ -35,6 +35,8 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -55,9 +57,11 @@ public class ManagementAPIClient {
     private ObjectMapper objectMapper;
     private HttpClient client;
     private static final String HOST = TryOutConstants.LOCALHOST;
+    // Time out every call, so an unresponsive MI can't block try-out forever.
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(60);
     private int port = DEFAULT_PORT;
-    private String accessToken;
-    private boolean isRetried = false;
+    private volatile String accessToken;
 
     public ManagementAPIClient() {
 
@@ -92,11 +96,17 @@ public class ManagementAPIClient {
 
         // Create HttpClient with SSL context
         client = HttpClient.newBuilder()
+                .connectTimeout(CONNECT_TIMEOUT)
                 .sslContext(sslContext)
                 .build();
     }
 
     public void connect() throws InterruptedException {
+
+        connect(REQUEST_TIMEOUT);
+    }
+
+    private void connect(Duration timeout) throws InterruptedException {
 
         try {
 
@@ -107,6 +117,7 @@ public class ManagementAPIClient {
 
             // Create HTTP request
             HttpRequest request = HttpRequest.newBuilder()
+                    .timeout(timeout)
                     .uri(URI.create(String.format("https://%s:%d/management/login", HOST, port)))
                     .header("Content-Type", "application/json")
                     .header("Authorization", authHeader)
@@ -129,6 +140,7 @@ public class ManagementAPIClient {
 
         try {;
             HttpRequest request = HttpRequest.newBuilder()
+                .timeout(REQUEST_TIMEOUT)
                     .uri(URI.create(String.format("https://%s:%d/management/server", HOST, port)))
                     .header("Content-Type", "application/json")
                     .header("Authorization", "Bearer " + accessToken)
@@ -140,64 +152,124 @@ public class ManagementAPIClient {
         }
     }
 
-    public List<String> getDeployedCapps() throws IOException, InterruptedException {
+    /**
+     * Sends a GET with the current token. On a 401, logs in again and retries once. The retry is per call, so
+     * one failed login doesn't stop later calls (or other threads) from refreshing the token.
+     *
+     * @param path    the management API path, e.g. {@code applications}
+     * @param timeout the time allowed for the whole call, including the login and retry
+     * @return the response of the last attempt
+     */
+    private HttpResponse<String> getWithLogin(String path, Duration timeout) throws IOException, InterruptedException {
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(String.format("https://%s:%d/management/%s", HOST, port, "applications")))
+        long deadline = System.nanoTime() + timeout.toNanos();
+        HttpResponse<String> response = client.send(buildGet(path, timeout), HttpResponse.BodyHandlers.ofString());
+        if (response.statusCode() == 401) {
+            connect(remainingUntil(deadline));
+            response = client.send(buildGet(path, remainingUntil(deadline)), HttpResponse.BodyHandlers.ofString());
+        }
+        return response;
+    }
+
+    private static Duration remainingUntil(long deadlineNanos) throws HttpTimeoutException {
+
+        long remaining = deadlineNanos - System.nanoTime();
+        if (remaining <= 0) {
+            throw new HttpTimeoutException("The management API request timed out");
+        }
+        return Duration.ofNanos(remaining);
+    }
+
+    private HttpRequest buildGet(String path, Duration timeout) {
+
+        return HttpRequest.newBuilder()
+                .timeout(timeout)
+                .uri(URI.create(String.format("https://%s:%d/management/%s", HOST, port, path)))
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + accessToken)
                 .GET()
                 .build();
-
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 200) {
-            isRetried = false;
-            return extractDeployedCapps(response.body());
-        } else if (response.statusCode() == 401 && !isRetried) {
-            isRetried = true;
-            connect();
-            return getDeployedCapps();
-        }
-        return Collections.emptyList();
     }
 
-    private List<String> extractDeployedCapps(String body) {
+    public List<String> getDeployedCapps() throws IOException, InterruptedException {
+
+        HttpResponse<String> response = getWithLogin("applications", REQUEST_TIMEOUT);
+        if (response.statusCode() == 200) {
+            return extractDeployedCapps(response.body());
+        }
+        throw new IOException("Failed to list the deployed Carbon Applications. Status: " + response.statusCode());
+    }
+
+    /**
+     * Deployed CAPPs and their artifacts. A list, since MI can run several versions of one CAPP name.
+     */
+    public List<DeployedCapp> getDeployedCappsWithArtifacts() throws IOException, InterruptedException {
+
+        HttpResponse<String> response = getWithLogin("applications", REQUEST_TIMEOUT);
+        if (response.statusCode() == 200) {
+            return extractDeployedCappsWithArtifacts(response.body());
+        }
+        throw new IOException("Failed to list the deployed Carbon Applications. Status: " + response.statusCode());
+    }
+
+    /**
+     * The {@code activeList} of an applications response. MI omits it (and sends an {@code error}) when it can't
+     * list the CAPPs, so a missing list is a failed lookup, not "nothing deployed".
+     */
+    private static JsonArray parseActiveCappList(String body) throws IOException {
 
         JsonObject jsonObject = Utils.getJsonObject(body);
-        if (jsonObject != null) {
-            JsonArray jsonArray = jsonObject.getAsJsonArray("activeList");
-            if (jsonArray != null) {
-                List<String> capps = new ArrayList<>();
-                for (int i = 0; i < jsonArray.size(); i++) {
-                    capps.add(jsonArray.get(i).getAsJsonObject().get("name").getAsString());
-                }
-                return capps;
-            }
+        if (jsonObject == null || !jsonObject.has("activeList") || !jsonObject.get("activeList").isJsonArray()) {
+            throw new IOException("Failed to list the deployed Carbon Applications. Response: " + body);
         }
-        return Collections.emptyList();
+        return jsonObject.getAsJsonArray("activeList");
+    }
+
+    private List<DeployedCapp> extractDeployedCappsWithArtifacts(String body) throws IOException {
+
+        List<DeployedCapp> capps = new ArrayList<>();
+        JsonArray activeList = parseActiveCappList(body);
+        for (int i = 0; i < activeList.size(); i++) {
+            JsonObject capp = activeList.get(i).getAsJsonObject();
+            String name = capp.get("name").getAsString();
+            String version = capp.has("version") && !capp.get("version").isJsonNull()
+                    ? capp.get("version").getAsString() : null;
+            List<CappArtifact> artifacts = new ArrayList<>();
+            JsonArray artifactList = capp.has("artifacts") && capp.get("artifacts").isJsonArray()
+                    ? capp.getAsJsonArray("artifacts") : new JsonArray();
+            for (int j = 0; j < artifactList.size(); j++) {
+                JsonObject artifact = artifactList.get(j).getAsJsonObject();
+                if (artifact.has("name") && artifact.has("type")) {
+                    artifacts.add(new CappArtifact(artifact.get("name").getAsString(),
+                            artifact.get("type").getAsString()));
+                }
+            }
+            capps.add(new DeployedCapp(name, version, artifacts));
+        }
+        return capps;
+    }
+
+    private List<String> extractDeployedCapps(String body) throws IOException {
+
+        JsonArray activeList = parseActiveCappList(body);
+        List<String> capps = new ArrayList<>();
+        for (int i = 0; i < activeList.size(); i++) {
+            capps.add(activeList.get(i).getAsJsonObject().get("name").getAsString());
+        }
+        return capps;
     }
 
     public List<DeployedArtifact> getArtifacts(DeployedArtifactType type) throws IOException, InterruptedException {
 
-        // Build the request URL using the passed endpoint
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(String.format("https://%s:%d/management/%s", HOST, port, type.getValue())))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + accessToken)
-                .GET()
-                .build();
+        return getArtifacts(type, REQUEST_TIMEOUT);
+    }
 
-        // Send the request and get the response
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    public List<DeployedArtifact> getArtifacts(DeployedArtifactType type, Duration timeout)
+            throws IOException, InterruptedException {
 
-        // Check the status code and handle the response
+        HttpResponse<String> response = getWithLogin(type.getValue(), timeout);
         if (response.statusCode() == 200) {
-            isRetried = false;
             return extractDeployedArtifacts(response.body());
-        } else if (response.statusCode() == 401 && !isRetried) {
-            isRetried = true;
-            connect();
-            return getArtifacts(type);
         }
         LOGGER.severe("Failed to get artifacts: " + response.body());
         return Collections.emptyList();
@@ -227,6 +299,7 @@ public class ManagementAPIClient {
         try {
             String boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
             HttpRequest request = HttpRequest.newBuilder()
+                .timeout(REQUEST_TIMEOUT)
                     .uri(URI.create(String.format("https://%s:%d/management/applications", HOST, port)))
                     .header("Authorization", "Bearer " + accessToken)
                     .header("Content-Type", "multipart/form-data; boundary=" + boundary)
@@ -253,6 +326,63 @@ public class ManagementAPIClient {
         byteArrays.add(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
 
         return HttpRequest.BodyPublishers.ofByteArrays(byteArrays);
+    }
+
+    /**
+     * A deployed CAPP.
+     */
+    public static class DeployedCapp {
+
+        private final String name;
+        private final String version;
+        private final List<CappArtifact> artifacts;
+
+        DeployedCapp(String name, String version, List<CappArtifact> artifacts) {
+
+            this.name = name;
+            this.version = version;
+            this.artifacts = artifacts;
+        }
+
+        public String getName() {
+
+            return name;
+        }
+
+        public String getVersion() {
+
+            return version;
+        }
+
+        public List<CappArtifact> getArtifacts() {
+
+            return artifacts;
+        }
+    }
+
+    /**
+     * An artifact in a CAPP: its name and type (e.g. {@code api}, {@code sequence}).
+     */
+    public static class CappArtifact {
+
+        private final String name;
+        private final String type;
+
+        CappArtifact(String name, String type) {
+
+            this.name = name;
+            this.type = type;
+        }
+
+        public String getName() {
+
+            return name;
+        }
+
+        public String getType() {
+
+            return type;
+        }
     }
 
     public static class DeployedArtifact {

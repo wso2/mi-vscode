@@ -220,6 +220,7 @@ import {
     AddDriverToLibResponse,
     APIContextsResponse,
     MediatorTryOutRequest,
+    DiscardTryoutSessionRequest,
     MediatorTryOutResponse,
     SavePayloadRequest,
     GetPayloadsRequest,
@@ -469,6 +470,9 @@ export interface MiDiagramAPI {
     fetchDSSTables: (params: DSSFetchTablesRequest) => Promise<DSSFetchTablesResponse>;
     tryOutMediator: (params: MediatorTryOutRequest) => Promise<MediatorTryOutResponse>;
     shutDownTryoutServer: () => Promise<boolean>;
+    killOccupyingTryoutServer: () => Promise<boolean>;
+    removeConflictingTryoutCapps: () => Promise<boolean>;
+    discardActiveTryoutSession: (params: DiscardTryoutSessionRequest) => Promise<boolean>;
     getMIVersionFromPom: () => Promise<MiVersionResponse>;
     saveInputPayload: (params: SavePayloadRequest) => Promise<boolean>;
     getInputPayloads: (params: GetPayloadsRequest) => Promise<GetPayloadsResponse>;

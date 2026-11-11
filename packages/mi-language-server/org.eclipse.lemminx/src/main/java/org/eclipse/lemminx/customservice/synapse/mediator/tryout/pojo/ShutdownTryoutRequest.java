@@ -17,9 +17,8 @@ package org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo;
 import org.eclipse.lemminx.customservice.synapse.pojo.AbstractProjectRequest;
 
 /**
- * Carries the initiating project's URI so {@code shutDownTryoutServer} only tears down the single
- * shared {@code TryOutManager} when it is still bound to that same project, instead of letting an
- * unrelated project's request kill another project's active try-out session.
+ * Request to stop the Try-Out MI server, sent before the project is run or debugged so the ports are free.
+ * The server is stopped even if another project is using it, and any paused Try-Out session is ended.
  */
 public class ShutdownTryoutRequest extends AbstractProjectRequest {
 

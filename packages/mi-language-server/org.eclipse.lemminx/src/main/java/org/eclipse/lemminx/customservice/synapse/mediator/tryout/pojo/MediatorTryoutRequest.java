@@ -23,6 +23,7 @@ public class MediatorTryoutRequest extends AbstractProjectRequest {
 
     private final String file;
     private String tryoutId;
+    private String panelId;
     private final int line;
     private final int column;
     private final String contentType;
@@ -103,6 +104,11 @@ public class MediatorTryoutRequest extends AbstractProjectRequest {
     public void setTryoutId(String tryoutId) {
 
         this.tryoutId = tryoutId;
+    }
+
+    public String getPanelId() {
+
+        return panelId;
     }
 
     public boolean isIsolatedTryout() {
