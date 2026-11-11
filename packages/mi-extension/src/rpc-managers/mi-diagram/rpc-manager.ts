@@ -275,6 +275,7 @@ import {
     getSTResponse,
     onDownloadProgress,
     MediatorTryOutRequest,
+    DiscardTryoutSessionRequest,
     MediatorTryOutResponse,
     SavePayloadRequest,
     GetPayloadsRequest,
@@ -556,6 +557,10 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
                     }));
                     payloads = [...sharedPayloads, ...scopedPayloads];
                     defaultPayload = allPayloads[key]?.defaultRequest ?? allPayloads.defaultRequest ?? "";
+                    // Use the first request if no valid default for a resource
+                    if (!payloads.some((p: any) => p.name === defaultPayload)) {
+                        defaultPayload = payloads[0]?.name ?? "";
+                    }
                 } else {
                     payloads = allPayloads.requests ?? [];
                     defaultPayload = allPayloads.defaultRequest ?? "";
@@ -635,11 +640,43 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
     }
 
     async shutDownTryoutServer(): Promise<boolean> {
-        return new Promise(async (resolve) => {
+        try {
             const langClient = await MILanguageClient.getInstance(this.projectUri);
-            const res = await langClient.shutdownTryoutServer(this.projectUri);
-            resolve(res);
-        });
+            return await langClient.shutdownTryoutServer(this.projectUri);
+        } catch (error) {
+            console.error("Error shutting down the try-out server:", error);
+            return false;
+        }
+    }
+
+    async killOccupyingTryoutServer(): Promise<boolean> {
+        try {
+            const langClient = await MILanguageClient.getInstance(this.projectUri);
+            return await langClient.killOccupyingTryoutServer(this.projectUri);
+        } catch (error) {
+            console.error("Error stopping the server occupying the try-out ports:", error);
+            return false;
+        }
+    }
+
+    async removeConflictingTryoutCapps(): Promise<boolean> {
+        try {
+            const langClient = await MILanguageClient.getInstance(this.projectUri);
+            return await langClient.removeConflictingTryoutCapps(this.projectUri);
+        } catch (error) {
+            console.error("Error removing the conflicting try-out Carbon Applications:", error);
+            return false;
+        }
+    }
+
+    async discardActiveTryoutSession(params: DiscardTryoutSessionRequest): Promise<boolean> {
+        try {
+            const langClient = await MILanguageClient.getInstance(this.projectUri);
+            return await langClient.discardActiveTryoutSession(this.projectUri, params?.panelId);
+        } catch (error) {
+            console.error("Error discarding the active try-out session:", error);
+            return false;
+        }
     }
 
     async getMIVersionFromPom(): Promise<MiVersionResponse> {

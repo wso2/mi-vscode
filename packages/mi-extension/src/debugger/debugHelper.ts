@@ -579,7 +579,8 @@ export async function executeTasks(projectUri: string, serverPath: string, isDeb
         const langClient = await MILanguageClient.getInstance(projectUri);
         const isTerminated = await langClient.shutdownTryoutServer(projectUri);
         if (!isTerminated) {
-            reject('Failed to terminate the tryout server. Kill the server manually and try again.');
+            reject('Failed to stop the Try-Out server. Stop it manually and try again.');
+            return;
         }
         executeBuildTask(projectUri, serverPath).then(async () => {
             const isServerRunning = await checkServerLiveness();

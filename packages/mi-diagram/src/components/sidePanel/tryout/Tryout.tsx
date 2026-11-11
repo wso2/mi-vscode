@@ -40,6 +40,17 @@ const PropertiesContainer = styled.div`
     gap: 10px;
 `;
 
+const SERVER_STOPPED_MESSAGE = "The try-out server was stopped";
+const CONFLICTING_CAPPS_MESSAGE = "Other Carbon Applications deployed in the try-out MI server";
+const TRYOUT_IN_PROGRESS_MESSAGE = "Another try-out is in progress";
+const SESSION_ENDED_MESSAGE = "This try-out session is no longer active";
+const SERVER_IN_USE_MESSAGE = "already in use";
+const newPanelId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+const isSessionGone = (error: string) => error.includes(SERVER_STOPPED_MESSAGE) || error.includes(SESSION_ENDED_MESSAGE);
+// Errors that already show their own recovery button.
+const hasOtherAction = (error: string) => error.includes(SERVER_IN_USE_MESSAGE)
+    || error.includes(CONFLICTING_CAPPS_MESSAGE) || error.includes(TRYOUT_IN_PROGRESS_MESSAGE);
+
 interface TryoutProps {
     documentUri: string;
     nodeRange?: Range;
@@ -57,11 +68,25 @@ export function TryOutView(props: TryoutProps) {
     const [isTryOutInputLoading, setIsTryOutInputLoading] = React.useState(true);
     const [isTryOutLoading, setIsTryOutLoading] = React.useState(false);
     const [tryOutError, setTryOutError] = React.useState<string | null>(null);
+    const [tryOutWarning, setTryOutWarning] = React.useState<string | null>(null);
+    const [isStoppingServer, setIsStoppingServer] = React.useState(false);
+    const [isRemovingCapps, setIsRemovingCapps] = React.useState(false);
     const [mediatorInput, setMediatorInput] = React.useState<MediatorTryOutInfo>(undefined);
     const [mediatorOutput, setMediatorOutput] = React.useState<MediatorTryOutInfo>(undefined);
     const [inputPayloads, setInputPayloads] = React.useState([]);
     const [selectedPayload, setSelectedPayload] = React.useState<any>();
     const [tryoutId, setTryoutId] = React.useState<string>();
+    // Bumped by the retry button to load the requests again after a failure.
+    const [payloadsReloadKey, setPayloadsReloadKey] = React.useState(0);
+    // Id of the latest input load; results of older loads are ignored.
+    const inputLoadIdRef = React.useRef(0);
+    // Identifies this panel, so closing it discards only its own paused session.
+    const panelIdRef = React.useRef(newPanelId());
+    const discardSession = (panelId: string) => {
+        rpcClient.getMiDiagramRpcClient().discardActiveTryoutSession({ panelId }).catch((error) => {
+            console.error("Error discarding the try-out session:", error);
+        });
+    };
 
     // State to manage the expanded/collapsed state of each section
     const [isInputExpanded, setIsInputExpanded] = React.useState({
@@ -84,18 +109,56 @@ export function TryOutView(props: TryoutProps) {
         if (!props.isActive) {
             return;
         }
+        setIsLoading(true);
+        // Set when the panel closes or the target changes, so a late response doesn't start a try-out.
+        let cancelled = false;
         const fetchMediatorDetails = async () => {
-            await getRequestPayloads();
+            const result = await getRequestPayloads();
+            if (cancelled) {
+                return;
+            }
             setIsLoading(false);
+            if (result) {
+                setInputPayloads(result.payloads);
+                setSelectedPayload(result.selected);
+                if (result.payloads.length === 0 || !isTryoutSupported) {
+                    // No payload to select, or try-out isn't supported here: don't start the server or a session.
+                    setIsTryOutInputLoading(false);
+                    return;
+                }
+                // Always reload the input when the tab opens, even if the selected payload is the same as before.
+                getInputData(result.payloads.find((payload) => payload.name === result.selected)
+                    ?? result.payloads[0], true);
+            } else {
+                // Drop the previous target's input and session, so Run can't send them for this target.
+                setInputPayloads(undefined);
+                setSelectedPayload(undefined);
+                setMediatorInput(undefined);
+                setMediatorOutput(undefined);
+                setTryoutId(undefined);
+                setTryOutError(null);
+                setTryOutWarning(null);
+                setIsTryOutInputLoading(false);
+            }
         };
         fetchMediatorDetails();
-    }, [props]);
+        return () => {
+            cancelled = true;
+            inputLoadIdRef.current++;
+            setIsTryOutLoading(false);
+            // Leaving the tab keeps this view mounted, so end its paused session here; it would
+            // otherwise block other projects' try-outs.
+            discardSession(panelIdRef.current);
+            panelIdRef.current = newPanelId();
+        };
+        // Keyed on the try-out target, not `props` (recreated on every parent render, which would refire it).
+    }, [props.isActive, documentUri, nodeRange?.start?.line, nodeRange?.start?.character, isTryoutSupported,
+        payloadsReloadKey]);
 
     useEffect(() => {
-        if (selectedPayload) {
-            getInputData();
-        }
-    }, [selectedPayload]);
+        // On unmount, discard any paused session so it doesn't block other try-outs.
+        return () => discardSession(panelIdRef.current);
+    }, []);
 
     const getEdits = () => {
         const values = props.getValues();
@@ -107,25 +170,32 @@ export function TryOutView(props: TryoutProps) {
         return values;
     }
 
-    const getRequestPayloads = async () => {
+    const getRequestPayloads = async (): Promise<{ payloads: any[]; selected: string } | undefined> => {
         try {
             const { payloads, defaultPayload } = await rpcClient.getMiDiagramRpcClient().getInputPayloads({ documentUri, artifactModel });
             if (!Array.isArray(payloads)) {
-                setInputPayloads([{ name: 'Default', content: JSON.stringify(payloads) }]);
-                setSelectedPayload('Default');
+                const resolvedPayloads = [{ name: 'Default', content: JSON.stringify(payloads) }];
+                return { payloads: resolvedPayloads, selected: 'Default' };
             } else {
-                setInputPayloads(payloads);
-                setSelectedPayload(defaultPayload);
+                // Use the first request when there is no valid default.
+                const selected = payloads.some((payload) => payload.name === defaultPayload)
+                    ? defaultPayload
+                    : payloads[0]?.name;
+                return { payloads, selected };
             }
         } catch (error) {
             console.error("Error fetching input payload:", error);
         }
     }
 
-    const getInputData = async () => {
+    // `fresh` starts a new session instead of reusing the last one (needed when the mediator changed or the session is gone).
+    const getInputData = async (payloadOverride?: any, fresh = false) => {
+        const loadId = ++inputLoadIdRef.current;
+        const isObsolete = () => loadId !== inputLoadIdRef.current;
         try {
             setIsTryOutInputLoading(true);
             setTryOutError(null);
+            setTryOutWarning(null);
             setMediatorInput(undefined);
             setMediatorOutput(undefined);
             setTryoutId(undefined);
@@ -134,22 +204,23 @@ export function TryOutView(props: TryoutProps) {
                 return;
             }
 
-            const inputPayload = inputPayloads.find((payload) => payload.name === selectedPayload);
+            const inputPayload = payloadOverride ?? inputPayloads.find((payload) => payload.name === selectedPayload);
             const res = await rpcClient.getMiDiagramRpcClient().tryOutMediator({
-                tryoutId,
+                tryoutId: fresh ? undefined : tryoutId,
+                panelId: panelIdRef.current,
                 file: documentUri,
                 line: nodeRange.start.line,
                 column: nodeRange.start.character + 1,
                 isServerLess: false,
                 contentType: inputPayload?.contentType ?? 'text/plain',
                 inputPayload: inputPayload?.contentType == 'application/json' ? JSON.stringify(inputPayload?.content) : inputPayload?.content,
-                queryParams: inputPayload.queryParams && typeof inputPayload.queryParams === 'object'
+                queryParams: inputPayload?.queryParams && typeof inputPayload.queryParams === 'object'
                     ? Object.keys(inputPayload.queryParams).map((key: string) => ({
                         key: key,
                         value: (inputPayload.queryParams as Record<string, any>)[key]
                     }))
                     : [],
-                pathParams: inputPayload.pathParams && typeof inputPayload.pathParams === 'object'
+                pathParams: inputPayload?.pathParams && typeof inputPayload.pathParams === 'object'
                     ? Object.keys(inputPayload.pathParams).map((key: string) => ({
                         key: key,
                         value: (inputPayload.pathParams as Record<string, any>)[key]
@@ -158,6 +229,9 @@ export function TryOutView(props: TryoutProps) {
                 mediatorType: props.mediatorType,
                 edits: []
             });
+            if (isObsolete()) {
+                return;
+            }
 
             if (res.error) {
                 setTryOutError(typeof res.error === 'string' ? res.error : ERROR_MESSAGES.ERROR_TRYING_OUT_MEDIATOR);
@@ -165,15 +239,23 @@ export function TryOutView(props: TryoutProps) {
             } else {
                 setMediatorInput(res.input);
                 setTryoutId(res.id);
+                setTryOutWarning(res.warning ?? null);
             }
         } catch (error) {
             console.error("Error fetching mediator input/output schema:", error);
+            if (!isObsolete()) {
+                setTryOutError(error instanceof Error && error.message ? error.message : ERROR_MESSAGES.ERROR_TRYING_OUT_MEDIATOR);
+            }
         } finally {
-            setIsTryOutInputLoading(false);
+            if (!isObsolete()) {
+                setIsTryOutInputLoading(false);
+            }
         }
     }
 
     const onTryOut = async () => {
+        const loadId = inputLoadIdRef.current;
+        const isObsolete = () => loadId !== inputLoadIdRef.current;
         try {
             setIsTryOutLoading(true);
             setTryOutError(null);
@@ -182,6 +264,7 @@ export function TryOutView(props: TryoutProps) {
             const input = inputPayloads.find((payload) => payload.name === selectedPayload);
             const res = await rpcClient.getMiDiagramRpcClient().tryOutMediator({
                 tryoutId,
+                panelId: panelIdRef.current,
                 file: documentUri,
                 line: nodeRange.start.line,
                 column: nodeRange.start.character + 1,
@@ -190,19 +273,84 @@ export function TryOutView(props: TryoutProps) {
                 contentType: input?.contentType ?? 'text/plain',
                 mediatorInfo: mediatorInput
             });
+            if (isObsolete()) {
+                return;
+            }
 
             if (res.error) {
                 setTryOutError(typeof res.error === 'string' ? res.error : ERROR_MESSAGES.ERROR_TRYING_OUT_MEDIATOR);
                 console.error("Error trying out mediator:", res.error);
+                if (typeof res.error === 'string' && isSessionGone(res.error)) {
+                    // Drop its input and id so Run can't be used when the session is gone.
+                    setMediatorInput(undefined);
+                    setMediatorOutput(undefined);
+                    setTryoutId(undefined);
+                }
             } else {
                 setMediatorOutput(res.output);
+                setTryOutWarning(res.warning ?? null);
             }
         } catch (error) {
+            if (isObsolete()) {
+                return;
+            }
             // Show the failure instead of just clearing the spinner, so a failed request is distinguishable from one that produced an empty result.
             setTryOutError(error instanceof Error ? error.message : ERROR_MESSAGES.ERROR_TRYING_OUT_MEDIATOR);
             console.error("Error during try out:", error);
         } finally {
-            setIsTryOutLoading(false);
+            if (!isObsolete()) {
+                setIsTryOutLoading(false);
+            }
+        }
+    }
+
+    const onStopAndContinue = async () => {
+        const loadId = inputLoadIdRef.current;
+        const isObsolete = () => loadId !== inputLoadIdRef.current;
+        try {
+            setIsStoppingServer(true);
+            const killed = await rpcClient.getMiDiagramRpcClient().killOccupyingTryoutServer();
+            if (isObsolete()) {
+                return;
+            }
+            if (killed) {
+                await getInputData();
+            } else {
+                setTryOutError("Failed to stop the running server. Please stop it manually and try again.");
+            }
+        } catch (error) {
+            console.error("Error stopping the occupying try-out server:", error);
+            if (!isObsolete()) {
+                setTryOutError("Failed to stop the running server. Please stop it manually and try again.");
+            }
+        } finally {
+            setIsStoppingServer(false);
+        }
+    }
+
+    const onRemoveAndContinue = async () => {
+        const loadId = inputLoadIdRef.current;
+        const isObsolete = () => loadId !== inputLoadIdRef.current;
+        const failureMessage = "Failed to remove the conflicting Carbon Applications. Please remove them from the " +
+            "MI server's repository/deployment/server/carbonapps folder and try again.";
+        try {
+            setIsRemovingCapps(true);
+            const removed = await rpcClient.getMiDiagramRpcClient().removeConflictingTryoutCapps();
+            if (isObsolete()) {
+                return;
+            }
+            if (removed) {
+                await getInputData();
+            } else {
+                setTryOutError(failureMessage);
+            }
+        } catch (error) {
+            console.error("Error removing the conflicting Carbon Applications:", error);
+            if (!isObsolete()) {
+                setTryOutError(failureMessage);
+            }
+        } finally {
+            setIsRemovingCapps(false);
         }
     }
 
@@ -216,6 +364,9 @@ export function TryOutView(props: TryoutProps) {
         return (
             <TryoutContainer>
                 <ErrorBanner errorMsg={ERROR_MESSAGES.ERROR_LOADING_TRYOUT} />
+                <Button onClick={() => setPayloadsReloadKey((key) => key + 1)} sx={{ marginTop: "10px" }}>
+                    Retry
+                </Button>
             </TryoutContainer>
         )
     } else if (!nodeRange) {
@@ -272,6 +423,7 @@ export function TryOutView(props: TryoutProps) {
                     value={selectedPayload}
                     onChange={(e) => {
                         setSelectedPayload(e.target.value);
+                        getInputData(inputPayloads.find((payload) => payload.name === e.target.value));
                     }}
                 />
 
@@ -305,7 +457,34 @@ export function TryOutView(props: TryoutProps) {
             </Section>
             <hr style={{ width: "100%", border: "none", borderTop: "1px solid var(--vscode-editorWidget-border)", margin: "20px 0" }} />
 
-            {tryOutError && <ErrorBanner errorMsg={tryOutError} />}
+            {tryOutWarning && !tryOutError &&
+                <Alert variant="warning" subTitle={tryOutWarning} />
+            }
+            {tryOutError &&
+                <>
+                    <ErrorBanner errorMsg={tryOutError} />
+                    {tryOutError.includes(SERVER_IN_USE_MESSAGE) &&
+                        <Button onClick={onStopAndContinue} sx={{ marginTop: "10px" }} disabled={isStoppingServer}>
+                            {isStoppingServer ? 'Stopping...' : 'Stop and Continue'}
+                        </Button>
+                    }
+                    {tryOutError.includes(CONFLICTING_CAPPS_MESSAGE) &&
+                        <Button onClick={onRemoveAndContinue} sx={{ marginTop: "10px" }} disabled={isRemovingCapps}>
+                            {isRemovingCapps ? 'Removing...' : 'Remove and Continue'}
+                        </Button>
+                    }
+                    {(isSessionGone(tryOutError) || (!mediatorInput && !hasOtherAction(tryOutError))) &&
+                        <Button onClick={() => getInputData(undefined, true)} sx={{ marginTop: "10px" }} disabled={isTryOutInputLoading}>
+                            {isTryOutInputLoading ? 'Loading...' : 'Load Input Again'}
+                        </Button>
+                    }
+                    {tryOutError.includes(TRYOUT_IN_PROGRESS_MESSAGE) &&
+                        <Button onClick={() => getInputData()} sx={{ marginTop: "10px" }} disabled={isTryOutInputLoading}>
+                            {isTryOutInputLoading ? 'Retrying...' : 'Retry'}
+                        </Button>
+                    }
+                </>
+            }
             {mediatorOutput && mediatorOutput.properties.synapse && <Section>
                 <Typography variant="h2">Mediator Output</Typography>
                 {mediatorOutput && <MediatorDetails

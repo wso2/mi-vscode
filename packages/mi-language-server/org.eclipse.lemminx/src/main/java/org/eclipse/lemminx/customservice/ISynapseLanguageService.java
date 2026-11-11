@@ -64,6 +64,7 @@ import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundConnect
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundEndpointInfo;
 import org.eclipse.lemminx.customservice.synapse.inbound.conector.InboundInfoRequest;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.MediatorTryoutRequest;
+import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.DiscardTryoutRequest;
 import org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo.ShutdownTryoutRequest;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.pojo.MediatorRequest;
 import org.eclipse.lemminx.customservice.synapse.mediatorService.pojo.SynapseConfigRequest;
@@ -250,6 +251,15 @@ public interface ISynapseLanguageService {
 
     @JsonRequest
     CompletableFuture<Boolean> shutDownTryoutServer(ShutdownTryoutRequest request);
+
+    @JsonRequest
+    CompletableFuture<Boolean> killOccupyingTryoutServer(ProjectUriRequest request);
+
+    @JsonRequest
+    CompletableFuture<Boolean> removeConflictingTryoutCapps(ProjectUriRequest request);
+
+    @JsonRequest
+    CompletableFuture<Boolean> discardActiveTryoutSession(DiscardTryoutRequest request);
 
     @JsonRequest
     CompletableFuture<MediatorTryoutInfo> mediatorInputOutputSchema(MediatorTryoutRequest request);

@@ -735,8 +735,8 @@ async function startServer(
                 getRunActionTimeoutMessage('shutting down tryout server')
             );
             if (!isTerminated) {
-                logInfo('[ServerManagementTool] Tryout server was not running or already terminated');
-                serverLog('  Tryout server was not running\n');
+                logInfo('[ServerManagementTool] Tryout server could not be stopped');
+                serverLog('  Tryout server could not be stopped; stop it manually if the start fails\n');
             } else {
                 logInfo('[ServerManagementTool] Tryout server shutdown successfully');
                 serverLog('  Tryout server shutdown successfully\n');

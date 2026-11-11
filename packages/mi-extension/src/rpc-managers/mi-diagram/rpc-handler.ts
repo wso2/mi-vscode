@@ -285,7 +285,11 @@ import {
     convertPdfToBase64Images,
     readIdpSchemaFileContent,
     tryOutMediator,
+    killOccupyingTryoutServer,
+    removeConflictingTryoutCapps,
+    discardActiveTryoutSession,
     MediatorTryOutRequest,
+    DiscardTryoutSessionRequest,
     saveInputPayload,
     getInputPayloads,
     getAllInputDefaultPayloads,
@@ -545,6 +549,9 @@ export function registerMiDiagramRpcHandlers(messenger: Messenger, projectUri: s
     messenger.onRequest(generateDSSQueries, (args: ExtendedDSSQueryGenRequest) => rpcManger.generateDSSQueries(args));
     messenger.onRequest(fetchDSSTables, (args: DSSFetchTablesRequest) => rpcManger.fetchDSSTables(args));
     messenger.onRequest(tryOutMediator, (args: MediatorTryOutRequest) => rpcManger.tryOutMediator(args));
+    messenger.onRequest(killOccupyingTryoutServer, () => rpcManger.killOccupyingTryoutServer());
+    messenger.onRequest(removeConflictingTryoutCapps, () => rpcManger.removeConflictingTryoutCapps());
+    messenger.onRequest(discardActiveTryoutSession, (args: DiscardTryoutSessionRequest) => rpcManger.discardActiveTryoutSession(args));
     messenger.onRequest(getMediatorInputOutputSchema, (args: MediatorTryOutRequest) => rpcManger.getMediatorInputOutputSchema(args));
     messenger.onRequest(saveInputPayload, (args: SavePayloadRequest) => rpcManger.saveInputPayload(args));
     messenger.onRequest(getInputPayloads, (args: GetPayloadsRequest) => rpcManger.getInputPayloads(args));

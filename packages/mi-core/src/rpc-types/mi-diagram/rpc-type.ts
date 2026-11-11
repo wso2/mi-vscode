@@ -223,6 +223,7 @@ import {
     AddDriverToLibResponse,
     APIContextsResponse,
     MediatorTryOutRequest,
+    DiscardTryoutSessionRequest,
     MediatorTryOutResponse,
     SavePayloadRequest,
     GetPayloadsRequest,
@@ -476,6 +477,9 @@ export const generateDSSQueries: RequestType<ExtendedDSSQueryGenRequest, boolean
 export const fetchDSSTables: RequestType<DSSFetchTablesRequest, DSSFetchTablesResponse> = { method: `${_preFix}/fetchDSSTables` };
 export const tryOutMediator: RequestType<MediatorTryOutRequest, MediatorTryOutResponse> = { method: `${_preFix}/tryOutMediator` };
 export const shutDownTryoutServer: RequestType<void, boolean> = { method: `${_preFix}/shutDownTryoutServer` };
+export const killOccupyingTryoutServer: RequestType<void, boolean> = { method: `${_preFix}/killOccupyingTryoutServer` };
+export const removeConflictingTryoutCapps: RequestType<void, boolean> = { method: `${_preFix}/removeConflictingTryoutCapps` };
+export const discardActiveTryoutSession: RequestType<DiscardTryoutSessionRequest, boolean> = { method: `${_preFix}/discardActiveTryoutSession` };
 export const getMIVersionFromPom: RequestType<void, MiVersionResponse> = { method: `${_preFix}/getMIVersionFromPom` };
 export const getMediatorInputOutputSchema: RequestType<MediatorTryOutRequest, MediatorTryOutResponse> = { method: `${_preFix}/getMediatorInputOutputSchema` };
 export const saveInputPayload: RequestType<SavePayloadRequest, boolean> = { method: `${_preFix}/saveInputPayload` };

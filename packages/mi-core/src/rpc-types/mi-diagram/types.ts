@@ -2129,6 +2129,7 @@ export interface MediatorTryOutRequest {
     mediatorType?: string;
     mediatorInfo?: MediatorTryOutInfo,
     tryoutId?: string;
+    panelId?: string;
     isServerLess: boolean;
     edits?: {
         text: string;
@@ -2137,6 +2138,10 @@ export interface MediatorTryOutRequest {
     projectUri?: string;
     // The initiating project's configured MI server path, so the shared server binds the try-out session to the caller's expected runtime.
     serverPath?: string;
+}
+
+export interface DiscardTryoutSessionRequest {
+    panelId?: string;
 }
 
 export interface Param {
@@ -2149,6 +2154,7 @@ export interface MediatorTryOutResponse {
     input: MediatorTryOutInfo;
     output: MediatorTryOutInfo;
     error?: string;
+    warning?: string;
 }
 
 export interface MediatorTryOutInfo {

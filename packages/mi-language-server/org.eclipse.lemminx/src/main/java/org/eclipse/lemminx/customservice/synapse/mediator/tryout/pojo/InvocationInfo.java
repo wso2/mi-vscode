@@ -17,6 +17,8 @@ package org.eclipse.lemminx.customservice.synapse.mediator.tryout.pojo;
 public class InvocationInfo {
 
     private String serviceUrl;
+    // Resource URL before params are filled in, to rebuild serviceUrl for new params. Null if no params.
+    private String baseServiceUrl;
     private String method;
     private boolean needStepOver;
     private String payload;
@@ -54,6 +56,16 @@ public class InvocationInfo {
     public void setServiceUrl(String serviceUrl) {
 
         this.serviceUrl = serviceUrl;
+    }
+
+    public String getBaseServiceUrl() {
+
+        return baseServiceUrl;
+    }
+
+    public void setBaseServiceUrl(String baseServiceUrl) {
+
+        this.baseServiceUrl = baseServiceUrl;
     }
 
     public String getMethod() {

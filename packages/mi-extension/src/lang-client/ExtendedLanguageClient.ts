@@ -498,6 +498,18 @@ export class ExtendedLanguageClient extends LanguageClient {
         return this.sendRequest("synapse/shutDownTryoutServer", { projectUri });
     }
 
+    async killOccupyingTryoutServer(projectUri: string): Promise<boolean> {
+        return this.sendRequest("synapse/killOccupyingTryoutServer", { projectUri });
+    }
+
+    async removeConflictingTryoutCapps(projectUri: string): Promise<boolean> {
+        return this.sendRequest("synapse/removeConflictingTryoutCapps", { projectUri });
+    }
+
+    async discardActiveTryoutSession(projectUri: string, panelId?: string): Promise<boolean> {
+        return this.sendRequest("synapse/discardActiveTryoutSession", { projectUri, panelId });
+    }
+
     async getMediatorInputOutputSchema(req: MediatorTryOutRequest): Promise<MediatorTryOutResponse> {
         return this.sendRequest("synapse/mediatorInputOutputSchema", req);
     }
