@@ -665,9 +665,17 @@ export class NodeFactoryVisitor implements Visitor {
             this.createNodeAndLinks(({ node, name: MEDIATORS.CACHE, type: NodeTypes.GROUP_NODE }))
             this.parents.push(node);
 
-            this.visitSubSequences(node, MEDIATORS.CACHE, {
-                OnCacheHit: node.onCacheHit,
-            }, NodeTypes.GROUP_NODE, false);
+            const sequenceReference = (node.onCacheHit as any)?.sequenceAttribute;
+            if (sequenceReference) {
+                // referred sequence is shown as a reference node and mediators cannot be added to the branch
+                this.previousSTNodes = [];
+                this.addSequenceReference(node.onCacheHit as any, "onCacheHit", `sequence=${sequenceReference}`, StartNodeType.SUB_SEQUENCE);
+                this.previousSTNodes = [node];
+            } else {
+                this.visitSubSequences(node, MEDIATORS.CACHE, {
+                    OnCacheHit: node.onCacheHit,
+                }, NodeTypes.GROUP_NODE, false);
+            }
         }
         this.skipChildrenVisit = true;
     }

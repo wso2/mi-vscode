@@ -26,6 +26,7 @@ import { useForm } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
 import { FormKeylookup, ParamConfig, ParamManager } from "@wso2/mi-diagram";
+import { openPopup } from "@wso2/mi-diagram/lib/components/Form/common";
 
 interface MessageProcessorWizardProps {
     path: string;
@@ -293,6 +294,11 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
         handleCancel();
     };
 
+    // Opens the create form of the given artifact type as a popup and selects the created artifact
+    const openCreatePopup = (artifactType: "endpoint" | "sequence" | "messageStore") => (fetchItems: any, handleValueChange: any) => {
+        openPopup(rpcClient, artifactType, fetchItems, handleValueChange, undefined, { type: artifactType });
+    };
+
     const renderProps = (fieldName: keyof InputsFields) => {
         return {
             id: fieldName,
@@ -328,6 +334,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                             label="Message Store"
                             name="messageStoreType"
                             filterType="messageStore"
+                            onCreateButtonClick={openCreatePopup("messageStore")}
                             path={props.path}
                             required
                             errorMsg={errors.messageStoreType?.message.toString()}
@@ -341,6 +348,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                 label="Source Message Store"
                                 name="sourceMessageStoreType"
                                 filterType="messageStore"
+                                onCreateButtonClick={openCreatePopup("messageStore")}
                                 path={props.path}
                                 required
                                 errorMsg={errors.sourceMessageStoreType?.message.toString()}
@@ -351,6 +359,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                 label="Target Message Store"
                                 name="targetMessageStoreType"
                                 filterType="messageStore"
+                                onCreateButtonClick={openCreatePopup("messageStore")}
                                 path={props.path}
                                 errorMsg={errors.targetMessageStoreType?.message.toString()}
                                 {...register("targetMessageStoreType")}
@@ -420,6 +429,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                     label="Fault Sequence Name"
                                     name="faultSequence"
                                     filterType="sequence"
+                                    onCreateButtonClick={openCreatePopup("sequence")}
                                     path={props.path}
                                     errorMsg={errors.faultSequence?.message.toString()}
                                     {...register("faultSequence")}
@@ -429,6 +439,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                     label="Deactivate Sequence Name"
                                     name="deactivateSequence"
                                     filterType="sequence"
+                                    onCreateButtonClick={openCreatePopup("sequence")}
                                     path={props.path}
                                     errorMsg={errors.deactivateSequence?.message.toString()}
                                     {...register("deactivateSequence")}
@@ -462,6 +473,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                 label="Endpoint Name"
                                 name="endpoint"
                                 filterType="endpoint"
+                                onCreateButtonClick={openCreatePopup("endpoint")}
                                 path={props.path}
                                 errorMsg={errors.endpoint?.message.toString()}
                                 {...register("endpoint")}
@@ -471,6 +483,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                 label="Reply Sequence Name"
                                 name="replySequence"
                                 filterType="sequence"
+                                onCreateButtonClick={openCreatePopup("sequence")}
                                 path={props.path}
                                 errorMsg={errors.replySequence?.message.toString()}
                                 {...register("replySequence")}
@@ -480,6 +493,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                 label="Fail Message Store"
                                 name="failMessageStoreType"
                                 filterType="messageStore"
+                                onCreateButtonClick={openCreatePopup("messageStore")}
                                 path={props.path}
                                 errorMsg={errors.failMessageStoreType?.message.toString()}
                                 {...register("failMessageStoreType")}
@@ -493,6 +507,7 @@ export function MessageProcessorWizard(props: MessageProcessorWizardProps) {
                                 label="Sequence Name"
                                 name="sequence"
                                 filterType="sequence"
+                                onCreateButtonClick={openCreatePopup("sequence")}
                                 path={props.path}
                                 errorMsg={errors.sequence?.message.toString()}
                                 {...register("sequence")}

@@ -380,7 +380,6 @@ export const Keylookup = (props: IKeylookup) => {
                     allowItemCreate={allowItemCreate}
                     requireValidation={requireValidation !== undefined ? requireValidation : allowItemCreate}
                     onCreateButtonClick={props.onCreateButtonClick ? () => {
-                        handleValueChange("");
                         props.onCreateButtonClick(fetchItems, handleValueChange);
                     } : null}
                     {...exprToggleEnabled && isExpressionFieldValue(value) && {

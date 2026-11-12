@@ -359,6 +359,8 @@ const stateMachine = createMachine<MachineContext>({
         },
         environmentSetup: {
             entry: () => logDebug("State Machine: Entering 'environmentSetup' state"),
+            // the state value is only updated after the exit action runs
+            exit: () => setTimeout(updateSetupEnvironmentContext, 0),
             initial: "viewLoading",
             states: {
                 viewLoading: {
@@ -379,7 +381,11 @@ const stateMachine = createMachine<MachineContext>({
                     ]
                 },
                 viewReady: {
-                    entry: () => logDebug("State Machine: Entering 'environmentSetup.viewReady' state"),
+                    entry: () => {
+                        logDebug("State Machine: Entering 'environmentSetup.viewReady' state");
+                        // the state value is only updated after the entry action runs
+                        setTimeout(updateSetupEnvironmentContext, 0);
+                    },
                     on: {
                         REFRESH_ENVIRONMENT: {
                             target: '#mi.initialize'
@@ -723,6 +729,46 @@ export const getStateMachine = (projectUri: string, context?: VisualizerLocation
     };
 };
 
+// Projects waiting for the environment (MI runtime and Java) to be set up. Tracked separately from the
+// state machines as a machine is deleted when its last webview (e.g. the setup page) is closed.
+const projectsPendingEnvironmentSetup: Set<string> = new Set();
+
+export const getProjectsPendingEnvironmentSetup = (): string[] => [...projectsPendingEnvironmentSetup];
+
+// Stops tracking a project that was removed from the workspace, so the "Set Up Environment" command
+// no longer lists it or runs the environment check for it.
+export const removeProjectPendingEnvironmentSetup = (projectUri: string) => {
+    if (projectsPendingEnvironmentSetup.delete(projectUri)) {
+        updateSetupEnvironmentContext();
+    }
+};
+
+function isSetupPageOpen(projectUri: string): boolean {
+    if (!webviews.has(projectUri) || !stateMachines.has(projectUri)) {
+        return false;
+    }
+    const state = stateMachines.get(projectUri).getSnapshot().value as any;
+    return typeof state === 'object' && state?.environmentSetup === 'viewReady';
+}
+
+// `MI.isSetupEnvironmentOpen` hides the "Set Up Environment" action. It is true only when every pending project
+// has its setup page open, so one project's page does not hide the action for another.
+export const updateSetupEnvironmentContext = () => {
+    const allOpen = projectsPendingEnvironmentSetup.size > 0
+        && [...projectsPendingEnvironmentSetup].every(isSetupPageOpen);
+    vscode.commands.executeCommand('setContext', 'MI.isSetupEnvironmentOpen', allOpen);
+};
+
+// Re-runs the environment check of the project, which opens the setup page if the environment is still not set up
+export const refreshEnvironmentSetup = (projectUri: string) => {
+    if (stateMachines.has(projectUri)) {
+        stateMachines.get(projectUri).send({ type: EVENT_TYPE.REFRESH_ENVIRONMENT });
+    } else {
+        // a new state machine starts from the initialize state which runs the environment check
+        getStateMachine(projectUri);
+    }
+};
+
 export const deleteStateMachine = (projectUri: string) => {
     if (stateMachines.has(projectUri)) {
         const stateService = stateMachines.get(projectUri);
@@ -932,7 +978,11 @@ async function checkIfMiProject(projectUri: string, view: MACHINE_VIEW = MACHINE
         isEnvironmentSetUp = await setupEnvironment(projectUri, isOldProject);
         if (!isEnvironmentSetUp) {
             vscode.commands.executeCommand('setContext', 'MI.status', 'notSetUp');
+            projectsPendingEnvironmentSetup.add(projectUri);
+        } else {
+            projectsPendingEnvironmentSetup.delete(projectUri);
         }
+        updateSetupEnvironmentContext();
         // console.log project path
         console.log(`Current workspace path: ${projectUri}`);
     }

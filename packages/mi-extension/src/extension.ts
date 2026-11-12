@@ -29,7 +29,7 @@ import { MILanguageClient } from './lang-client/activator';
 import { activateUriHandlers } from './uri-handler';
 import { extensions, workspace } from 'vscode';
 import { StateMachineAI } from './ai-features/aiMachine';
-import { isOldProjectOrWorkspace, getStateMachine } from './stateMachine';
+import { isOldProjectOrWorkspace, getStateMachine, removeProjectPendingEnvironmentSetup } from './stateMachine';
 import { MACHINE_VIEW, onWorkspaceFoldersChanged } from '@wso2/mi-core';
 import { webviews, VisualizerWebview } from './visualizer/webview';
 import { RPCLayer } from './RPCLayer';
@@ -121,6 +121,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 		if (event.removed.length > 0) {
 			for (const removedProject of event.removed) {
+				removeProjectPendingEnvironmentSetup(removedProject.uri.fsPath);
 				disposeMIAgentPanelRpcManager(removedProject.uri.fsPath);
 				const webview = webviews.get(removedProject.uri.fsPath);
 				if (webview) {

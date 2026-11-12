@@ -141,6 +141,7 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
         getValues,
         control,
         watch,
+        setValue,
     } = useForm({
         resolver: yupResolver(schema),
         mode: "all"
@@ -266,6 +267,21 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
             navigatorObserver.disconnect();
         };
     }, [divRefs]);
+
+    const handleTruststorePathSelection = async () => {
+        const { filePath } = await rpcClient.getMiDiagramRpcClient().browseFile({
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            defaultUri: "",
+            title: "Select the truststore file",
+            openLabel: "Select Truststore",
+            filters: { "Truststore": ["jks", "p12", "pfx"], "All Files": ["*"] }
+        });
+        if (filePath) {
+            setValue("deployment-truststorePath", filePath, { shouldValidate: true, shouldDirty: true });
+        }
+    };
 
     const handleFormSubmit = async () => {
         try {
@@ -703,6 +719,12 @@ export function ProjectInformationForm(props: ProjectInformationFormProps) {
                                                 description="File path of the truststore used in the server"
                                                 descriptionSx={{ margin: "8px 0" }}
                                                 sx={fieldStyle}
+                                                placeholder="Type a path or browse to select the truststore file"
+                                                icon={{
+                                                    iconComponent: <Codicon name="folder-opened" sx={{ cursor: "pointer" }} />,
+                                                    position: "end",
+                                                    onClick: handleTruststorePathSelection
+                                                }}
                                                 {...register("deployment-truststorePath")}
                                             />
                                             <PasswordField

@@ -116,7 +116,7 @@ import {
 } from "../../util/consolidatedPomUtils";
 import { MILanguageClient } from "../../lang-client/activator";
 import { reorderModulesByBuildOrder } from "../../debugger/pomResolver";
-import { buildDeployExtraArgs, executeRemoteDeployTask } from "../../debugger/debugHelper";
+import { buildDeployExtraArgs, executeRemoteDeployTask, runRemoteDeployments } from "../../debugger/debugHelper";
 import { MIAIPanelRpcManager } from "./../../rpc-managers/ai-features/rpc-manager";
 
 Mustache.escape = escapeXml;
@@ -294,7 +294,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
         }
 
         const extraArgs = buildDeployExtraArgs(paramValues);
-        await executeRemoteDeployTask(this.projectUri, undefined, extraArgs);
+        await runRemoteDeployments([this.projectUri], (projectPath) => executeRemoteDeployTask(projectPath, undefined, extraArgs));
     }
 
     /**
@@ -1271,9 +1271,7 @@ export class MiVisualizerRpcManager implements MIVisualizerAPI {
         }
 
         const extraArgs = buildDeployExtraArgs(paramValues);
-        for (const subprojectPath of subprojectPaths) {
-            await executeRemoteDeployTask(subprojectPath, undefined, extraArgs);
-        }
+        await runRemoteDeployments(subprojectPaths, (projectPath) => executeRemoteDeployTask(projectPath, undefined, extraArgs));
     }
 
     replaceHostname(originalUrl: string, targetHost: string) {

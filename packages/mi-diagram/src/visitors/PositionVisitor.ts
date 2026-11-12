@@ -320,9 +320,15 @@ export class PositionVisitor implements Visitor {
         if (node.collector) {
             this.setBasicMediatorPosition(node);
         } else {
+            const isSequenceReference = (node.onCacheHit as any)?.sequenceAttribute !== undefined;
             this.setAdvancedMediatorPosition(node, {
-                OnCacheHit: node.onCacheHit
+                OnCacheHit: isSequenceReference ? undefined : node.onCacheHit
             }, NodeTypes.GROUP_NODE);
+
+            if (isSequenceReference) {
+                node.onCacheHit.viewState.x = this.position.x - (NODE_DIMENSIONS.START.DISABLED.WIDTH / 2);
+                node.onCacheHit.viewState.y = node.viewState.y + node.viewState.h + NODE_GAP.GROUP_NODE_START_Y;
+            }
         }
     }
     endVisitCache = (node: Cache): void => this.setSkipChildrenVisit(false);

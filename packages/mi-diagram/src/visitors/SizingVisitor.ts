@@ -363,6 +363,11 @@ export class SizingVisitor implements Visitor {
     endVisitCache = (node: Cache): void => {
         this.calculateBasicMediator(node, NODE_DIMENSIONS.GROUP.WIDTH, NODE_DIMENSIONS.GROUP.HEIGHT);
         if (!node.collector) {
+            // onCacheHit refers a sequence through the "sequence" attribute. Expose it as sequenceAttribute
+            // so that it is handled as a sequence reference like in other mediators.
+            if (node.onCacheHit?.sequence) {
+                (node.onCacheHit as any).sequenceAttribute = node.onCacheHit.sequence;
+            }
             this.calculateAdvancedMediator(node, {
                 OnCacheHit: node.onCacheHit
             }, NodeTypes.GROUP_NODE);

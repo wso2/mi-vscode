@@ -266,8 +266,13 @@
       },
       {
         "view": "MI.project-explorer",
+        "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.\n[Set Up Environment](command:MI.setup-environment)",
+        "when": "MI.status == 'notSetUp' && !MI.isSetupEnvironmentOpen"
+      },
+      {
+        "view": "MI.project-explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.",
-        "when": "MI.status == 'notSetUp'"
+        "when": "MI.status == 'notSetUp' && MI.isSetupEnvironmentOpen"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -276,8 +281,13 @@
       },
       {
         "view": "wso2-integrator.explorer",
+        "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.\n[Set Up Environment](command:MI.setup-environment)",
+        "when": "wso2-integrator.explorer.visible != '' && MI.status == 'notSetUp' && !MI.isSetupEnvironmentOpen"
+      },
+      {
+        "view": "wso2-integrator.explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.",
-        "when": "wso2-integrator.explorer.visible != '' && MI.status == 'notSetUp'"
+        "when": "wso2-integrator.explorer.visible != '' && MI.status == 'notSetUp' && MI.isSetupEnvironmentOpen"
       },
       {
         "view": "testing",
@@ -289,6 +299,11 @@
       {
         "command": "MI.openProject",
         "title": "Open Project",
+        "category": "MI"
+      },
+      {
+        "command": "MI.setup-environment",
+        "title": "Set Up Environment",
         "category": "MI"
       },
       {
@@ -782,6 +797,10 @@
         {
           "command": "MI.show.graphical-view",
           "when": "false"
+        },
+        {
+          "command": "MI.setup-environment",
+          "when": "MI.status == 'notSetUp'"
         },
         {
           "command": "MI.build-and-run",
