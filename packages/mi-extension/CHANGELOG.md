@@ -2,6 +2,31 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.   
 
+## [4.2.2] - 2026-11-13          
+
+### Fixed   
+
+Fixed: The Add Module frame shifted, when adding multiple modules
+ ([#1644](https://github.com/wso2/mi-vscode/issues/1644))        
+ Fixed: Improve the error message displayed when importing an event integration without the related sequence
+ ([#1641](https://github.com/wso2/mi-vscode/issues/1641))        
+ Fixed: Clicking "Open Graphical View" on an XML artifact shows an "Unknown error occurred" message
+ ([#1554](https://github.com/wso2/mi-vscode/issues/1554))        
+ Fixed: Upload truststore when deploying to remote server
+ ([#1459](https://github.com/wso2/mi-vscode/issues/1459))        
+ Fixed: Show a message when the remote CApp deployment is successful
+ ([#1298](https://github.com/wso2/mi-vscode/issues/1298))        
+ Fixed: Set the MI runtime based on the version selected at the project creation
+ ([#1068](https://github.com/wso2/mi-vscode/issues/1068))        
+ Fixed: Improve Message Processors to allow creating endpoints at the time of creation
+ ([#819](https://github.com/wso2/mi-vscode/issues/819))       
+  Fixed: Referenced sequence is not mirrored in cache mediator
+ ([#1642](https://github.com/wso2/mi-vscode/issues/1642))       
+   Fixed: MI Copilot defaults to deprecated Anthropic model
+ ([#2276](https://github.com/wso2/product-integrator/issues/2276))       
+   Fixed: Copilot generates unit tests at an incorrect path
+ ([#1541](https://github.com/wso2/product-integrator/issues/1541))        
+
 ## [4.2.1] - 2026-11-05          
 
 ### Improvements      
