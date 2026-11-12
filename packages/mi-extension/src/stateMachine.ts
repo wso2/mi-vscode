@@ -757,6 +757,8 @@ export const updateSetupEnvironmentContext = () => {
     const allOpen = projectsPendingEnvironmentSetup.size > 0
         && [...projectsPendingEnvironmentSetup].every(isSetupPageOpen);
     vscode.commands.executeCommand('setContext', 'MI.isSetupEnvironmentOpen', allOpen);
+    // Unlike the window-wide `MI.status`, this is not overwritten when another project finishes loading
+    vscode.commands.executeCommand('setContext', 'MI.hasPendingEnvironmentSetup', projectsPendingEnvironmentSetup.size > 0);
 };
 
 // Re-runs the environment check of the project, which opens the setup page if the environment is still not set up
@@ -976,7 +978,9 @@ async function checkIfMiProject(projectUri: string, view: MACHINE_VIEW = MACHINE
 
     if (isProject || isOldProject) {
         isEnvironmentSetUp = await setupEnvironment(projectUri, isOldProject);
-        if (!isEnvironmentSetUp) {
+        // the project may have been removed from the workspace while the check was running
+        const stillInWorkspace = !!vscode.workspace.getWorkspaceFolder(vscode.Uri.file(projectUri));
+        if (!isEnvironmentSetUp && stillInWorkspace) {
             vscode.commands.executeCommand('setContext', 'MI.status', 'notSetUp');
             projectsPendingEnvironmentSetup.add(projectUri);
         } else {

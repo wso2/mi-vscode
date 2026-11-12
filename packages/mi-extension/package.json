@@ -267,12 +267,12 @@
       {
         "view": "MI.project-explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.\n[Set Up Environment](command:MI.setup-environment)",
-        "when": "MI.status == 'notSetUp' && !MI.isSetupEnvironmentOpen"
+        "when": "MI.hasPendingEnvironmentSetup && !MI.isSetupEnvironmentOpen"
       },
       {
         "view": "MI.project-explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.",
-        "when": "MI.status == 'notSetUp' && MI.isSetupEnvironmentOpen"
+        "when": "MI.hasPendingEnvironmentSetup && MI.isSetupEnvironmentOpen"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -282,12 +282,12 @@
       {
         "view": "wso2-integrator.explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.\n[Set Up Environment](command:MI.setup-environment)",
-        "when": "wso2-integrator.explorer.visible != '' && MI.status == 'notSetUp' && !MI.isSetupEnvironmentOpen"
+        "when": "wso2-integrator.explorer.visible != '' && MI.hasPendingEnvironmentSetup && !MI.isSetupEnvironmentOpen"
       },
       {
         "view": "wso2-integrator.explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.",
-        "when": "wso2-integrator.explorer.visible != '' && MI.status == 'notSetUp' && MI.isSetupEnvironmentOpen"
+        "when": "wso2-integrator.explorer.visible != '' && MI.hasPendingEnvironmentSetup && MI.isSetupEnvironmentOpen"
       },
       {
         "view": "testing",
@@ -800,7 +800,7 @@
         },
         {
           "command": "MI.setup-environment",
-          "when": "MI.status == 'notSetUp'"
+          "when": "MI.hasPendingEnvironmentSetup"
         },
         {
           "command": "MI.build-and-run",
