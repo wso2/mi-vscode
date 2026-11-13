@@ -90,7 +90,8 @@ export const openPopup = (rpcClient: RpcClient, view: string, fetchItems: any, s
         if (data.recentIdentifier) {
             fetchItems();
             setValue(data.recentIdentifier);
-            sidePanelContext.setSidePanelState({
+            // sidePanelContext is not available when used outside the side panel (e.g. main panel forms)
+            sidePanelContext?.setSidePanelState({
                 ...sidePanelContext,
                 newResourceObject: data.recentIdentifier
             });

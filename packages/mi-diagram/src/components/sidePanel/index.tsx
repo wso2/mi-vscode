@@ -67,22 +67,26 @@ export const sidepanelAddPage = (sidePanelContext: SidePanelContext, content: an
 export const sidepanelGoBack = (sidePanelContext: SidePanelContext, count: number = 1) => {
     if (sidePanelContext.pageStack.length > 0 && sidePanelContext.pageStack.length > count) {
         const pageStack = sidePanelContext.pageStack;
-        pageStack[pageStack.length - count] = {
-            ...pageStack[pageStack.length - count],
-            isOpen: false,
-            title: undefined,
-            icon: undefined,
-        };
+        const firstClosedIndex = pageStack.length - count;
+        // close all the pages being removed, not just one of them
+        for (let i = firstClosedIndex; i < pageStack.length; i++) {
+            pageStack[i] = {
+                ...pageStack[i],
+                isOpen: false,
+                title: undefined,
+                icon: undefined,
+            };
+        }
 
         sidePanelContext.setSidePanelState({
             ...sidePanelContext,
             pageStack,
         });
 
-        // remove the last page from the stack after it is closed
+        // remove the closed pages from the stack after they are closed
         setTimeout(() => {
             const pageStack = sidePanelContext.pageStack;
-            pageStack.pop();
+            pageStack.splice(firstClosedIndex, count);
             sidePanelContext.setSidePanelState({
                 ...sidePanelContext,
                 pageStack,

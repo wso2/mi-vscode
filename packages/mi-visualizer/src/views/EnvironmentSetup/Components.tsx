@@ -131,10 +131,13 @@ const RuntimeStatus: React.FC<RuntimeStatusProps> = ({
                     showVersion: false,
                 };
             case 'mismatch':
+                // MI runtime must match the project runtime version exactly, while a Java mismatch is only a warning
                 return {
-                    isValid: true,
+                    isValid: type !== 'MI',
                     title: `${config.name} is not properly setup`,
-                    description: `Note: Available ${config.name} (${pathDetails.version}) does not match the recommended version: ${recommendedVersion}`,
+                    description: type === 'MI'
+                        ? `${config.name} ${recommendedVersion} is required to run this project.`
+                        : `Note: Available ${config.name} (${pathDetails.version}) does not match the recommended version: ${recommendedVersion}`,
                     showDownload: true,
                     showVersion: true,
                 };
@@ -190,7 +193,7 @@ const RuntimeStatus: React.FC<RuntimeStatusProps> = ({
                     onClick={handleDownload}
                     disabled={isDownloading}
                 >
-                    {pathDetails?.status === 'valid-not-updated' ? 'Update' : 'Download'} {config.name} {showVersion ?? (recommendedVersion)}
+                    {pathDetails?.status === 'valid-not-updated' ? 'Update' : 'Download'} {config.name} {showVersion && recommendedVersion}
                 </Button>
             )}
         </SpaceBetweenRow>

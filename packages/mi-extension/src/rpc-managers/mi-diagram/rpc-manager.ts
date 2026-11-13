@@ -393,6 +393,7 @@ import { getAPIMetadata } from "../../util/template-engine/mustach-templates/API
 import { WICommandIds, ICreateNewIntegrationCmdParams } from "@wso2/wso2-platform-core";
 import { MiVisualizerRpcManager } from "../mi-visualizer/rpc-manager";
 import { DebuggerConfig } from "../../debugger/config";
+import { runRemoteDeployments } from "../../debugger/debugHelper";
 import { getKubernetesConfiguration, getKubernetesDataConfiguration } from "../../util/template-engine/mustach-templates/KubernetesConfiguration";
 import { parseStringPromise, Builder } from "xml2js";
 import { MILanguageClient } from "../../lang-client/activator";
@@ -5363,25 +5364,11 @@ ${keyValuesXML}`;
                     isRemoteDeploymentEnabled = config.get<boolean>("REMOTE_DEPLOYMENT_ENABLED") ?? false;
                 }
                 if (isRemoteDeploymentEnabled) {
-                    if (isConsolidatedProject(consolidatedRoot)) {
-                        const subprojects = vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? [];
-                        const failures: { subprojectPath: string; err: unknown }[] = [];
-                        for (const subprojectPath of subprojects) {
-                            try {
-                                await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, subprojectPath, false);
-                            } catch (err) {
-                                console.error(`Remote deploy failed for ${subprojectPath}`, err);
-                                failures.push({ subprojectPath, err });
-                            }
-                        }
-                        if (failures.length > 0) {
-                            vscode.window.showErrorMessage(
-                                `Remote deployment failed for: ${failures.map(f => path.basename(f.subprojectPath)).join(', ')}`
-                            );
-                        }
-                    } else {
-                        await commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, this.projectUri, false);
-                    }
+                    const projectPaths = isConsolidatedProject(consolidatedRoot)
+                        ? vscode.workspace.workspaceFolders?.map(f => f.uri.fsPath) ?? []
+                        : [this.projectUri];
+                    await runRemoteDeployments(projectPaths,
+                        (projectPath) => commands.executeCommand(COMMANDS.REMOTE_DEPLOY_PROJECT, projectPath, false));
                 } else if (isConsolidatedProject(consolidatedRoot)) {
                     vscode.window.showInformationMessage(
                         'Remote deployment is not configured. Use the Workspace Overview page to set up remote deployment.'

@@ -18,7 +18,7 @@
 
 import * as vscode from 'vscode';
 import { Position, Range, WorkspaceEdit, commands, Uri, window, workspace } from 'vscode';
-import { getStateMachine, navigate, openView, refreshUI } from '../stateMachine';
+import { getProjectsPendingEnvironmentSetup, getStateMachine, openView, refreshEnvironmentSetup, refreshUI } from '../stateMachine';
 import { COMMANDS, LAST_EXPORTED_ZIP_PATH, REFRESH_ENABLED_DOCUMENTS, SWAGGER_LANG_ID, SWAGGER_REL_DIR } from '../constants';
 import { EVENT_TYPE, MACHINE_VIEW, onDocumentSave } from '@wso2/mi-core';
 import { extension } from '../MIExtensionContext';
@@ -340,18 +340,35 @@ export function activateVisualizer(context: vscode.ExtensionContext, firstProjec
     );
     // Activate editor/title items
     context.subscriptions.push(
-        commands.registerCommand(COMMANDS.SHOW_GRAPHICAL_VIEW, async (file: vscode.Uri | string) => {
-            let projectUri;
-            if (typeof file !== 'string') {
-                file = file.fsPath;
-                projectUri = vscode.workspace.getWorkspaceFolder(file as any)?.uri.fsPath
-            } else {
-                projectUri = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(file))?.uri.fsPath;
+        commands.registerCommand(COMMANDS.SHOW_GRAPHICAL_VIEW, async (file?: vscode.Uri | string) => {
+            const fileUri = typeof file === 'string' ? vscode.Uri.file(file) : (file ?? vscode.window.activeTextEditor?.document.uri);
+            if (!fileUri) {
+                return;
+            }
+            const projectUri = vscode.workspace.getWorkspaceFolder(fileUri)?.uri.fsPath;
+            if (!projectUri) {
+                return;
+            }
+            // openView creates/reveals the visualizer panel, navigate only updates an already open one
+            openView(EVENT_TYPE.OPEN_VIEW, { view: null, documentUri: fileUri.fsPath, projectUri });
+        })
+    );
+
+    context.subscriptions.push(
+        commands.registerCommand(COMMANDS.SETUP_ENVIRONMENT, async () => {
+            const projectUris = getProjectsPendingEnvironmentSetup();
+            let projectUri: string | undefined = projectUris[0];
+            if (projectUris.length > 1) {
+                const selected = await vscode.window.showQuickPick(
+                    projectUris.map(uri => ({ label: path.basename(uri), description: uri, uri })),
+                    { placeHolder: 'Select the project to set up the environment for' }
+                );
+                projectUri = selected?.uri;
             }
             if (!projectUri) {
                 return;
             }
-            navigate(projectUri, { location: { view: null, documentUri: file } });
+            refreshEnvironmentSetup(projectUri);
         })
     );
 

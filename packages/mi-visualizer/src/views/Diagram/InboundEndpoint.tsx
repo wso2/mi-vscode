@@ -82,7 +82,15 @@ export const InboundEPView = ({ path, model, diagnostics }: InboundEPViewProps) 
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <Codicon name="error" sx={{ height: "100px", width: "100px" }} iconSx={{ fontSize: 100, color: "var(--vscode-errorForeground)" }} />
                         <Typography variant="h4" sx={{ textAlign: 'center' }}>
-                            {"The referred sequence cannot be visualized as it is added from a dependent project."}
+                            {`The referred sequence${model?.sequence ? ` "${model.sequence}"` : ""} cannot be visualized.`}
+                        </Typography>
+                        <Typography variant="body2">Possible reasons:</Typography>
+                        <ul style={{ margin: '4px 0 12px', paddingLeft: '20px' }}>
+                            <li><Typography variant="body2">The sequence does not exist in this project.</Typography></li>
+                            <li><Typography variant="body2">The sequence is added from a dependent project.</Typography></li>
+                        </ul>
+                        <Typography variant="body2" sx={{ textAlign: 'center', marginBottom: '8px' }}>
+                            Create the missing sequence or edit the event integration to refer to an existing sequence.
                         </Typography>
 
                         <Button appearance="icon" onClick={goHome} >

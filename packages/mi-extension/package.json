@@ -266,8 +266,13 @@
       },
       {
         "view": "MI.project-explorer",
+        "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.\n[Set Up Environment](command:MI.setup-environment)",
+        "when": "MI.hasPendingEnvironmentSetup && !MI.isSetupEnvironmentOpen"
+      },
+      {
+        "view": "MI.project-explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.",
-        "when": "MI.status == 'notSetUp'"
+        "when": "MI.hasPendingEnvironmentSetup && MI.isSetupEnvironmentOpen"
       },
       {
         "view": "wso2-integrator.explorer",
@@ -276,8 +281,13 @@
       },
       {
         "view": "wso2-integrator.explorer",
+        "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.\n[Set Up Environment](command:MI.setup-environment)",
+        "when": "wso2-integrator.explorer.visible != '' && MI.hasPendingEnvironmentSetup && !MI.isSetupEnvironmentOpen"
+      },
+      {
+        "view": "wso2-integrator.explorer",
         "contents": "WSO2 Integrator: MI is not set up. Please set up the MI server and Java home to continue.",
-        "when": "wso2-integrator.explorer.visible != '' && MI.status == 'notSetUp'"
+        "when": "wso2-integrator.explorer.visible != '' && MI.hasPendingEnvironmentSetup && MI.isSetupEnvironmentOpen"
       },
       {
         "view": "testing",
@@ -289,6 +299,11 @@
       {
         "command": "MI.openProject",
         "title": "Open Project",
+        "category": "MI"
+      },
+      {
+        "command": "MI.setup-environment",
+        "title": "Set Up Environment",
         "category": "MI"
       },
       {
@@ -784,6 +799,10 @@
           "when": "false"
         },
         {
+          "command": "MI.setup-environment",
+          "when": "MI.hasPendingEnvironmentSetup"
+        },
+        {
           "command": "MI.build-and-run",
           "when": "false"
         },
@@ -1266,7 +1285,7 @@
     "copyfiles": "2.4.1",
     "cors-anywhere": "0.4.4",
     "dotenv": "16.5.0",
-    "fast-xml-parser": "5.7.0",
+    "fast-xml-parser": "5.12.0",
     "find-process": "1.4.10",
     "fs-extra": "11.3.0",
     "handlebars": "4.7.10",

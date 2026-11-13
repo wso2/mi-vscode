@@ -276,7 +276,8 @@ export const EnvironmentSetup = () => {
     function renderContinue() {
         const javaStatus = javaPathDetails?.status;
         const miStatus = miPathDetails?.status;
-        const canContinue = javaStatus !== "not-valid" && miStatus !== "not-valid";
+        // the MI runtime version must match the project runtime version exactly, so a mismatch cannot be continued
+        const canContinue = javaStatus !== "not-valid" && miStatus !== "not-valid" && miStatus !== "mismatch";
         const isProperlySetup = javaStatus === "valid" && miStatus === "valid";
         const miandJavaUnavailable = javaStatus === "not-valid" && miStatus === "not-valid";
 
@@ -285,6 +286,13 @@ export const EnvironmentSetup = () => {
                 onClick={refreshProject}
                 buttonText="Continue"
                 description="Project is properly setup. Click continue to open the project."
+            />
+        }
+        if (miStatus === "mismatch") {
+            return <ButtonWithDescription buttonDisabled={true}
+                onClick={refreshProject}
+                buttonText="Continue"
+                description={`The configured WSO2 Integrator: MI runtime (${miPathDetails?.version}) does not match the project runtime version (${recommendedVersions?.miVersion}). Download or select WSO2 Integrator: MI ${recommendedVersions?.miVersion} to continue.`}
             />
         }
         if (canContinue) {

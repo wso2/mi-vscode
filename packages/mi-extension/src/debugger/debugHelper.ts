@@ -385,6 +385,46 @@ export function executeRemoteDeployTask(projectUri: string, postBuildTask?: Func
     });
 }
 
+/**
+ * Runs the remote deployment for each project and shows a single notification with the outcome.
+ * A failing project does not stop the remaining ones from being deployed.
+ */
+export async function runRemoteDeployments(projectPaths: string[], deploy: (projectPath: string) => Thenable<unknown>): Promise<void> {
+    if (projectPaths.length === 0) {
+        vscode.window.showWarningMessage('No projects were found to deploy to the remote server.');
+        return;
+    }
+
+    const failed: string[] = [];
+    for (const projectPath of projectPaths) {
+        try {
+            await deploy(projectPath);
+        } catch (err) {
+            console.error(`Remote deployment failed for ${projectPath}`, err);
+            failed.push(path.basename(projectPath));
+        }
+    }
+
+    const showOutput = 'Show Output';
+    const handleAction = (action?: string) => {
+        if (action === showOutput) {
+            showServerOutputChannel();
+        }
+    };
+    const isMultiProject = projectPaths.length > 1;
+    if (failed.length === 0) {
+        const message = isMultiProject
+            ? `Successfully deployed ${projectPaths.length} projects to the remote server.`
+            : `Successfully deployed ${path.basename(projectPaths[0])} to the remote server.`;
+        vscode.window.showInformationMessage(message, showOutput).then(handleAction);
+    } else {
+        const message = isMultiProject
+            ? `Remote deployment failed for ${failed.length} of ${projectPaths.length} projects: ${failed.join(', ')}.`
+            : `Remote deployment of ${failed[0]} failed. Check the output for details.`;
+        vscode.window.showErrorMessage(message, showOutput).then(handleAction);
+    }
+}
+
 async function getCarFiles(targetDirectory) {
     const carFiles = await vscode.workspace.findFiles(
         new vscode.RelativePattern(targetDirectory.fsPath, '*.car')

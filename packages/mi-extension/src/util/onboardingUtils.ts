@@ -250,27 +250,23 @@ export async function isMISetup(projectUri: string, miVersion: string): Promise<
     const currentMIPath = config.get<string>(SELECTED_SERVER_PATH);
     if (currentMIPath) {
         const availableMIVersion = getMIVersion(currentMIPath);
-        if (availableMIVersion && isCompatibleMIVersion(availableMIVersion, miVersion)) {
-            if (availableMIVersion !== miVersion) {
-                showMIPathChangePrompt();
-            }
+        // the configured runtime must match the project runtime version exactly
+        if (availableMIVersion === miVersion) {
             return true;
+        }
+        if (availableMIVersion) {
+            vscode.window.showErrorMessage(`The configured WSO2 Integrator: MI runtime version (${availableMIVersion}) does not match the project runtime version (${miVersion}). Please set up WSO2 Integrator: MI ${miVersion}.`);
         } else {
             vscode.window.showErrorMessage('Invalid WSO2 Integrator: MI path or Unsupported version found in the workspace. Please set a valid WSO2 Integrator: MI path.');
-            return false;
         }
+        return false;
     }
 
     const oldServerPath: string | undefined = extension.context.globalState.get(SELECTED_SERVER_PATH);
     if (oldServerPath) {
-        const availableMIVersion = getMIVersion(oldServerPath);
-        if (availableMIVersion && compareVersions(availableMIVersion, miVersion) >= 0) {
-            if (availableMIVersion === miVersion) {
-                await config.update(SELECTED_SERVER_PATH, oldServerPath, vscode.ConfigurationTarget.WorkspaceFolder);
-                return true;
-            } else {
-                showMIPathChangePrompt();
-            }
+        if (getMIVersion(oldServerPath) === miVersion) {
+            await config.update(SELECTED_SERVER_PATH, oldServerPath, vscode.ConfigurationTarget.WorkspaceFolder);
+            return true;
         }
 
         const miCachedPathInfo = getLatestMIPathFromCache(miVersion);
@@ -281,50 +277,6 @@ export async function isMISetup(projectUri: string, miVersion: string): Promise<
     }
 
     return false;
-    function showMIPathChangePrompt() {
-        const DONT_SHOW_AGAIN_KEY = 'dontShowMIPathChangePrompt';
-        const dontShowAgain = extension.context.globalState.get<boolean>(DONT_SHOW_AGAIN_KEY);
-
-        if (dontShowAgain) {
-            return;
-        }
-
-        const downloadOption = 'Download WSO2 Integrator: MI';
-        const changePathOption = 'Change WSO2 Integrator: MI Path';
-        const dontShowAgainOption = 'Don\'t Show Again';
-
-        vscode.window
-            .showWarningMessage(
-                'The selected WSO2 Integrator: MI version is different from the version in the workspace. Do you want to change the WSO2 Integrator: MI path?',
-                downloadOption,
-                changePathOption,
-                dontShowAgainOption
-            )
-            .then((selection) => {
-                if (selection) {
-                    if (selection === downloadOption) {
-                        downloadMI(projectUri, miVersion).then((miPath) => {
-                            if (miPath) {
-                                setPathsInWorkSpace({ projectUri, type: 'MI', path: miPath });
-                            }
-                        });
-                    } else if (selection === changePathOption) {
-                        selectFolderDialog('Select WSO2 Integrator: MI Path').then((miPath) => {
-                            if (miPath) {
-                                const validMIPath = verifyMIPath(miPath.fsPath);
-                                if (validMIPath) {
-                                    setPathsInWorkSpace({ projectUri, type: 'MI', path: validMIPath });
-                                } else {
-                                    vscode.window.showErrorMessage('Invalid WSO2 Integrator: MI path. Please set a valid WSO2 Integrator: MI path and run the command again.');
-                                }
-                            }
-                        });
-                    } else if (selection === dontShowAgainOption) {
-                        extension.context.globalState.update(DONT_SHOW_AGAIN_KEY, true);
-                    }
-                }
-            });
-    }
 }
 export async function isJavaSetup(projectUri: string, miVersion: string): Promise<boolean> {
     const config = vscode.workspace.getConfiguration('MI', vscode.Uri.file(projectUri));

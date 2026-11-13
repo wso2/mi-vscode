@@ -24,7 +24,7 @@ import { Uri, ViewColumn } from 'vscode';
 import { getComposerJSFiles } from '../util';
 import { RPCLayer } from '../RPCLayer';
 import { extension } from '../MIExtensionContext';
-import { getStateMachine } from '../stateMachine';
+import { getStateMachine, updateSetupEnvironmentContext } from '../stateMachine';
 import { MACHINE_VIEW } from '@wso2/mi-core';
 import { refreshDiagram } from './activate';
 import { MILanguageClient } from '../lang-client/activator';
@@ -283,6 +283,8 @@ export class VisualizerWebview {
 
     public async dispose() {
         webviews.delete(this.projectUri);
+        // the setup page (if it was shown) is closed with the panel
+        updateSetupEnvironmentContext();
 
         // The shared per-project messenger and state machine are reused by sibling webviews
         // (AI panel, runtime services panel). Tearing them down while a sibling is still alive

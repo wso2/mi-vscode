@@ -29,6 +29,7 @@ export const COMMANDS = {
     CLEAR_AI_PROMPT: "MI.clearAIPrompt",
     OPEN_WELCOME: "MI.openWelcome",
     SHOW_GRAPHICAL_VIEW: "MI.show.graphical-view",
+    SETUP_ENVIRONMENT: "MI.setup-environment",
     SHOW_RESOURCE_VIEW: "MI.show.resource-view",
     SHOW_SEQUENCE_VIEW: "MI.show.sequence-view",
     SHOW_SEQUENCE_TEMPLATE_VIEW: "MI.show.sequence_template-view",
