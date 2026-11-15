@@ -2,6 +2,12 @@
 
 All notable changes to the "micro-integrator" extension will be documented in this file.   
 
+## [4.2.3] - 2026-11-15          
+
+### Improvements      
+
+- Add a configuration to disable MI Copilot          
+
 ## [4.2.2] - 2026-11-13          
 
 ### Fixed   
