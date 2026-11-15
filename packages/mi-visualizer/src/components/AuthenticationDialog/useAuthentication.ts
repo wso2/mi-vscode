@@ -16,8 +16,9 @@
  * under the License.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
+import { AI_COPILOT_DISABLED_BY_CONFIG, AI_COPILOT_DISABLED_USER_MESSAGE } from "@wso2/mi-core";
 
 export interface UseAuthenticationOptions {
     operationType: 'createUnitTests' | 'generateTestCase' | 'dataMapperMigration' | 'mcpToolSuggestion';
@@ -28,6 +29,7 @@ export function useAuthentication(options: UseAuthenticationOptions) {
     const { operationType, sessionStorageKey } = options;
     const { rpcClient } = useVisualizerContext();
     const [showSignInConfirm, setShowSignInConfirm] = useState(false);
+    const copilotDisabledRef = useRef(false);
 
     /**
      * Check if user is authenticated with MI Copilot (AI state machine)
@@ -36,6 +38,12 @@ export function useAuthentication(options: UseAuthenticationOptions) {
         try {
             const aiState = await rpcClient.getAIVisualizerState();
             const state = aiState?.state;
+
+            copilotDisabledRef.current = state === 'NotSupported' && aiState?.errorMessage === AI_COPILOT_DISABLED_BY_CONFIG;
+            if (copilotDisabledRef.current) {
+                rpcClient.getMiDiagramRpcClient().showErrorMessage({ message: AI_COPILOT_DISABLED_USER_MESSAGE, modal: true });
+                return false;
+            }
 
             // Check if user is authenticated or has usage exceeded (both mean signed in)
             return state === 'Authenticated' || state === 'UsageExceeded';
@@ -49,6 +57,10 @@ export function useAuthentication(options: UseAuthenticationOptions) {
      * Open the sign-in dialog with optional form values
      */
     const openSignInView = (formValues?: any) => {
+        if (copilotDisabledRef.current) {
+            // Skip sign-in becuase copilot is disabled
+            return;
+        }
         if (formValues) {
             sessionStorage.setItem(sessionStorageKey, JSON.stringify({
                 formValues,

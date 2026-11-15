@@ -121,7 +121,13 @@ export type AIMachineStateValue =
     | 'Authenticated'       // (ready, main view)
     | 'UsageExceeded'       // (free usage quota exceeded, prompt user to set API key)
     | 'Disabled'            // (optional: if AI Chat is globally unavailable)
-    | 'NotSupported';       // (workspace not supported)
+    | 'NotSupported';       // (workspace not supported, or Copilot disabled via settings)
+
+export const AI_COPILOT_DISABLED_BY_CONFIG = 'Copilot is disabled via extension settings';
+// User-facing message shown by AI features outside the AI panel when Copilot is disabled via settings
+export const AI_COPILOT_DISABLED_USER_MESSAGE = 'WSO2 Integrator Copilot is disabled. You can enable it from the extension settings.';
+export const isCopilotDisabledError = (error: unknown): boolean =>
+    String((error as any)?.message ?? error ?? '').includes(AI_COPILOT_DISABLED_BY_CONFIG);
 
 export type PopupMachineStateValue = 'initialize' | 'ready' | { open: 'active' } | { ready: 'reopen' } | { ready: 'notify' } | 'disabled';
 

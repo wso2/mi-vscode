@@ -229,6 +229,12 @@
           "type": "boolean",
           "default": false,
           "description": "Convert the migrated projects to a consolidated project."
+        },
+        "MI.disableWSO2IntegratorCopilot": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Disable WSO2 Integrator Copilot throughout the extension."
         }
       }
     },

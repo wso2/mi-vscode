@@ -34,6 +34,7 @@ import {
     isBedrockApplicationInferenceProfileArn
 } from "@wso2/mi-core";
 import { logInfo, logDebug, logError } from "./copilot/logger";
+import { assertCopilotEnabled } from "./copilotSetting";
 
 export const ANTHROPIC_HAIKU_4_5 = "claude-haiku-4-5";
 export const ANTHROPIC_SONNET_4_6 = "claude-sonnet-4-6";
@@ -304,6 +305,7 @@ export async function fetchWithAuth(input: string | URL | Request, options: Requ
  * Re-initializes the client if the login method has changed.
  */
 export const getAnthropicProvider = async (): Promise<ReturnType<typeof createAnthropic>> => {
+    assertCopilotEnabled();
     const loginMethod = await getLoginMethod();
 
     // Recreate client if login method has changed or no cached instance
@@ -377,6 +379,7 @@ const getBedrockProvider = async (): Promise<{
 };
 
 export const getAnthropicClient = async (model: AnthropicModel): Promise<any> => {
+    assertCopilotEnabled();
     const loginMethod = await getLoginMethod();
 
     if (loginMethod === LoginMethod.AWS_BEDROCK) {
@@ -399,6 +402,7 @@ export const getAnthropicClient = async (model: AnthropicModel): Promise<any> =>
  * Anthropic model slugs still have no Bedrock equivalent and are rejected.
  */
 export const getAnthropicClientForCustomModel = async (modelId: string): Promise<any> => {
+    assertCopilotEnabled();
     const loginMethod = await getLoginMethod();
     if (loginMethod === LoginMethod.AWS_BEDROCK) {
         // Trim before validating AND before handing the value to the provider:

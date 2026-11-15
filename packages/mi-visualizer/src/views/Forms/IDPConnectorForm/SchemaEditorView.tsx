@@ -31,6 +31,7 @@ import {
     handleFetchError
 } from './IdpUtills';
 import { ImgAndPdfViewer } from "./ImgAndPdfViewer";
+import { AI_COPILOT_DISABLED_USER_MESSAGE, isCopilotDisabledError } from "@wso2/mi-core";
 import React, { useState, useEffect, useRef } from "react";
 import { Button, TextField } from "@wso2/ui-toolkit";
 import { ErrorAlert } from "./ErrorAlert";
@@ -205,7 +206,9 @@ export function SchemaEditorView({
             setTables(processedSchema.arrays);
             setFields(processedSchema.fields);
         } catch (error: any) {
-            if(error.name==="AbortError" || error.message?.includes("No access token")) {
+            if (isCopilotDisabledError(error)) {
+                setErrors(AI_COPILOT_DISABLED_USER_MESSAGE);
+            } else if(error.name==="AbortError" || error.message?.includes("No access token")) {
                 //no error messages needed for user
             } else if (error instanceof TypeError) {
                 setErrors("Network error occurred. Please check your connection.");
@@ -283,7 +286,9 @@ export function SchemaEditorView({
             setTables(processedSchema.arrays);
             setFields(processedSchema.fields);
         } catch (error: any) {
-            if(error.name==="AbortError" || error.message?.includes("No access token")) {
+            if (isCopilotDisabledError(error)) {
+                setErrors(AI_COPILOT_DISABLED_USER_MESSAGE);
+            } else if(error.name==="AbortError" || error.message?.includes("No access token")) {
                 //no error messages needed for user
             } else if (error instanceof TypeError) {
                 setErrors("Network error occurred. Please check your connection.");

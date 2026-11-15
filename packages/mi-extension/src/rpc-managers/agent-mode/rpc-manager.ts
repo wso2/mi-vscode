@@ -62,6 +62,8 @@ import { executeAgent, createAgentAbortController, AgentEvent } from '../../ai-f
 import { isToolInterruptionAbortError } from '../../ai-features/agent-mode/agents/main/agent';
 import { getDisplayErrorMessage } from '../../ai-features/agent-mode/stream_guard';
 import { logInfo, logError, logDebug } from '../../ai-features/copilot/logger';
+import { isCopilotDisabled } from '../../ai-features/copilotSetting';
+import { AI_COPILOT_DISABLED_BY_CONFIG } from '@wso2/mi-core';
 import {
     ChatHistoryManager,
     TOOL_USE_INTERRUPTION_CONTEXT,
@@ -734,6 +736,13 @@ export class MIAgentPanelRpcManager implements MIAgentPanelAPI {
      * Send a message to the agent for processing
      */
     async sendAgentMessage(request: SendAgentMessageRequest): Promise<SendAgentMessageResponse> {
+        if (isCopilotDisabled()) {
+            logInfo('[AgentPanel] Rejecting sendAgentMessage because Copilot is disabled via extension settings');
+            return {
+                success: false,
+                error: AI_COPILOT_DISABLED_BY_CONFIG,
+            };
+        }
         if (this.isAgentMessageInProgress) {
             logInfo('[AgentPanel] Rejecting sendAgentMessage because another run is already in progress');
             return {

@@ -465,6 +465,7 @@ export interface EndpointDirectoryResponse {
 
 export interface ShowErrorMessageRequest {
     message: string;
+    modal?: boolean;
 }
 
 export interface OpenDiagramRequest {
