@@ -58,7 +58,7 @@ export function useAuthentication(options: UseAuthenticationOptions) {
      */
     const openSignInView = (formValues?: any) => {
         if (copilotDisabledRef.current) {
-            // Skip sign-in becuase copilot is disabled
+            // Skip sign-in because copilot is disabled
             return;
         }
         if (formValues) {

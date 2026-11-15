@@ -40,7 +40,9 @@ import {
     DMDiagnosticCategory,
     IOType,
     DataMapWriteRequest,
+    AI_COPILOT_DISABLED_USER_MESSAGE,
 } from "@wso2/mi-core";
+import { isCopilotDisabled } from "../../ai-features/copilotSetting";
 import { fetchIOTypes, fetchSubMappingTypes, fetchCompletions, fetchDiagnostics } from "../../util/dataMapper";
 import { getStateMachine, refreshUI } from "../../stateMachine";
 import { generateSchemaFromContent } from "../../util/schemaBuilder";
@@ -285,6 +287,10 @@ export class MiDataMapperRpcManager implements MIDataMapperAPI {
 
     // Main function to get the mapping from AI and write it to the relevant files
     async getMappingFromAI(): Promise<void> {
+        if (isCopilotDisabled()) {
+            window.showErrorMessage(AI_COPILOT_DISABLED_USER_MESSAGE, { modal: true });
+            return;
+        }
         try {
             // Function to read the TypeScript file
             let tsContent = await readTSFile(this.projectUri);
