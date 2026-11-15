@@ -931,7 +931,7 @@ export class MiDiagramRpcManager implements MiDiagramAPI {
     }
 
     showErrorMessage(params: ShowErrorMessageRequest): void {
-        window.showErrorMessage(params.message);
+        window.showErrorMessage(params.message, { modal: params.modal ?? false });
     }
 
     closeWebViewNotification(): void {

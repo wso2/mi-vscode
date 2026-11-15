@@ -19,7 +19,7 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 import { createMachine, assign, interpret } from 'xstate';
 import * as vscode from 'vscode';
-import { AIMachineStateValue, AIMachineContext, AI_EVENT_TYPE, AIMachineSendableEvent, LoginMethod } from '@wso2/mi-core';
+import { AIMachineStateValue, AIMachineContext, AI_EVENT_TYPE, AIMachineSendableEvent, LoginMethod, AI_COPILOT_DISABLED_BY_CONFIG } from '@wso2/mi-core';
 import { AiPanelWebview } from './webview';
 import { extension } from '../MIExtensionContext';
 import {
@@ -37,6 +37,7 @@ import {
 } from './auth';
 import { PromptObject } from '@wso2/mi-core';
 import { logError, logInfo, logWarn } from './copilot/logger';
+import { isCopilotDisabled } from './copilotSetting';
 
 const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000;
 
@@ -169,7 +170,7 @@ const aiMachine = createMachine<AIMachineContext, AIMachineSendableEvent>({
                             loginMethod: (_ctx) => undefined,
                             userToken: (_ctx) => undefined,
                             usage: (_ctx) => undefined,
-                            errorMessage: (_ctx) => 'Multi-root workspace is not supported',
+                            errorMessage: (_ctx, event) => event.data.reason ?? 'Multi-root workspace is not supported',
                         })
                     }
                 ],
@@ -503,7 +504,11 @@ const aiMachine = createMachine<AIMachineContext, AIMachineSendableEvent>({
     }
 });
 
-const checkWorkspaceAndToken = async (): Promise<{ workspaceSupported: boolean; tokenData?: { token: string; loginMethod: LoginMethod } }> => {
+const checkWorkspaceAndToken = async (): Promise<{ workspaceSupported: boolean; reason?: string; tokenData?: { token: string; loginMethod: LoginMethod } }> => {
+    if (isCopilotDisabled()) {
+        return { workspaceSupported: false, reason: AI_COPILOT_DISABLED_BY_CONFIG };
+    }
+
     // Check workspace support first
     if (vscode.workspace.workspaceFolders && vscode.workspace.workspaceFolders.length > 1) {
         return { workspaceSupported: false };

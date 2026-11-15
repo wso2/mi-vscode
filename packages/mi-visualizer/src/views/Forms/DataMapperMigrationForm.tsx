@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { Button, FormView, FormActions, Typography } from "@wso2/ui-toolkit";
 import { useVisualizerContext } from "@wso2/mi-rpc-client";
-import { EVENT_TYPE, MACHINE_VIEW, IOType } from "@wso2/mi-core";
+import { EVENT_TYPE, MACHINE_VIEW, IOType, AI_COPILOT_DISABLED_USER_MESSAGE, isCopilotDisabledError } from "@wso2/mi-core";
 import styled from "@emotion/styled";
 
 const MessageContainer = styled.div`
@@ -302,7 +302,9 @@ export function DataMapperMigrationForm(props: DataMapperMigrationFormProps) {
                     console.error('Error during DMC to TS conversion:', conversionError);
 
                     // Handle specific error cases
-                    if (conversionError?.message?.includes("No access token") || conversionError?.name === "AbortError") {
+                    if (isCopilotDisabledError(conversionError)) {
+                        setErrorMessage(AI_COPILOT_DISABLED_USER_MESSAGE);
+                    } else if (conversionError?.message?.includes("No access token") || conversionError?.name === "AbortError") {
                         setErrorMessage('Authentication required. Please sign in to use AI-powered conversion.');
                     } else if (conversionError instanceof TypeError) {
                         setErrorMessage('Network error occurred. Please check your connection and try again.');

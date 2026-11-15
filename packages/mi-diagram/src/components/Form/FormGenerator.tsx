@@ -67,7 +67,7 @@ import { McpToolsSelection } from './MCPtoolsSelection/McpToolsSelection';
 import { DynamicFieldsHandler } from './DynamicFields/DynamicFieldsHandler';
 import { GenericRadioGroup } from '../Form/RadioButtonGroup/GenericRadioGroup';
 import { getValue } from './Keylookup/utils';
-import { ConnectorEffectiveDependency } from '@wso2/mi-core';
+import { ConnectorEffectiveDependency, AI_COPILOT_DISABLED_USER_MESSAGE, isCopilotDisabledError } from '@wso2/mi-core';
 // Constants
 const XML_VALUE = 'xml';
 
@@ -270,6 +270,7 @@ export function FormGenerator(props: FormGeneratorProps) {
     const [visibleDetails, setVisibleDetails] = useState<{ [key: string]: boolean }>({});
     const [isGenerating, setIsGenerating] = useState<boolean>(false);
     const [generatingError, setGeneratingError] = useState<boolean>(false);
+    const [generatingErrorMessage, setGeneratingErrorMessage] = useState<string | undefined>(undefined);
     const [isClickedDropDown, setIsClickedDropDown] = useState<boolean>(false);
     const [inputGenerate, setInputGenerate] = useState<string>("");
     const [elementDetails, setElementDetails] = useState<any>([]);
@@ -691,6 +692,7 @@ export function FormGenerator(props: FormGeneratorProps) {
             }
         } catch (error) {
             console.error("Error in handleGenerateAi:", error);
+            setGeneratingErrorMessage(isCopilotDisabledError(error) ? AI_COPILOT_DISABLED_USER_MESSAGE : undefined);
             setGeneratingError(true);
             setGeneratedFormDetails(null);
         } finally {
@@ -1875,6 +1877,7 @@ export function FormGenerator(props: FormGeneratorProps) {
                             generatedFormDetails={generatedFormDetails}
                             isClickedDropDown={isClickedDropDown}
                             generatingError={generatingError}
+                            generatingErrorMessage={generatingErrorMessage}
                             isAutoFillBtnClicked={isAutoFillBtnClicked}
                             isSendButtonClicked={isSendButtonClicked}
                             followUp={followUp}

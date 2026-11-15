@@ -43,6 +43,7 @@ import {
     getWorkspaceContext
 } from "./utils";
 import { CopilotEventHandler } from "./event-handler";
+import { assertCopilotEnabled } from "../../ai-features/copilotSetting";
 import { MiDiagramRpcManager } from "../mi-diagram/rpc-manager";
 import { MiVisualizerRpcManager } from "../mi-visualizer/rpc-manager";
 import { generateSuggestions as generateSuggestionsFromLLM } from "../../ai-features/copilot/suggestions/suggestions";
@@ -261,6 +262,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
     }
 
     async generateSuggestions(request: GenerateSuggestionsRequest): Promise<GenerateSuggestionsResponse> {
+        assertCopilotEnabled();
         try {
             let context: string[] = [];
             const chatHistory = request.chatHistory || [];
@@ -314,6 +316,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Sends diagnostics to LLM and gets response (migrated to local LLM)
      */
     async analyzeDiagnostics(diagnostics: any, xmlCodes: any): Promise<Response> {
+        assertCopilotEnabled();
         try {
             // Use the migrated codeDiagnostics function
             const result = await codeDiagnostics({
@@ -362,6 +365,12 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Generates code with streaming response
      */
     async generateCode(request: GenerateCodeRequest): Promise<GenerateCodeResponse> {
+        try {
+            assertCopilotEnabled();
+        } catch (error) {
+            this.eventHandler.handleError((error as Error).message);
+            throw error;
+        }
         try {
             await this.generateCodeCore(request);
             return { success: true };
@@ -744,6 +753,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Generates a complete unit test suite for WSO2 Synapse artifacts
      */
     async generateUnitTest(request: import('@wso2/mi-core').GenerateUnitTestRequest): Promise<import('@wso2/mi-core').GenerateUnitTestResponse> {
+        assertCopilotEnabled();
         try {
             const { generateUnitTest } = await import('../../ai-features/copilot/unit-tests/unit_test_generate');
 
@@ -766,6 +776,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Adds a new test case to an existing unit test suite
      */
     async generateUnitTestCase(request: import('@wso2/mi-core').GenerateUnitTestCaseRequest): Promise<import('@wso2/mi-core').GenerateUnitTestCaseResponse> {
+        assertCopilotEnabled();
         try {
             const { generateUnitTestCase } = await import('../../ai-features/copilot/unit-tests/unit_test_case_generate');
 
@@ -792,6 +803,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Processes IDP (Intelligent Document Processor) request
      */
     async processIdp(request: ProcessIdpRequest): Promise<ProcessIdpResponse> {
+        assertCopilotEnabled();
         try {
             const { processIdp } = await import('../../ai-features/copilot/idp/idp');
 
@@ -812,6 +824,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Fills an IDP schema with data extracted from images
      */
     async fillIdpSchema(request: FillIdpSchemaRequest): Promise<FillIdpSchemaResponse> {
+        assertCopilotEnabled();
         try {
             logDebug('[fillIdpSchema] Starting schema filling');
             logDebug(`[fillIdpSchema] Images count: ${request.images?.length || 0}`);
@@ -833,6 +846,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Converts DMC (Data Mapping Configuration) to TypeScript implementation
      */
     async dmcToTs(request: DmcToTsRequest): Promise<DmcToTsResponse> {
+        assertCopilotEnabled();
         try {
             logDebug('[dmcToTs] Starting DMC to TypeScript conversion');
             logDebug(`[dmcToTs] DMC content length: ${request.dmcContent?.length || 0}`);
@@ -857,6 +871,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Auto-fills form fields using AI based on context and user input
      */
     async autoFillForm(request: AutoFillFormRequest): Promise<AutoFillFormResponse> {
+        assertCopilotEnabled();
         try {
             logDebug('[autoFillForm] Starting form auto-fill');
             logDebug(`[autoFillForm] Form fields count: ${Object.keys(request.current_values || {}).length}`);
@@ -890,6 +905,7 @@ export class MIAIPanelRpcManager implements MIAIPanelAPI {
      * Gets MCP tool suggestions using AI
      */
     async getMcpToolSuggestion(params: import('@wso2/mi-core').McpToolSuggestionRequest): Promise<import('@wso2/mi-core').McpToolSuggestionResponse> {
+        assertCopilotEnabled();
         const { toolName, operationMethod, operationPath, operationSummary, apiXmlPath, sequenceXmlPath, inputSchemaJson } = params;
         const fs = require('fs') as typeof import('fs');
         const MAX_XML_CHARS = 3000;

@@ -49,6 +49,7 @@ interface Props {
     generatedFormDetails: Record<string, any>;
     isClickedDropDown: boolean;
     generatingError: boolean;
+    generatingErrorMessage?: string;
     isAutoFillBtnClicked: boolean;
     isSendButtonClicked: boolean;
     followUp: string;
@@ -75,6 +76,7 @@ const AIAutoFillBox: React.FC<Props> = ({
     generatedFormDetails,
     isClickedDropDown,
     generatingError,
+    generatingErrorMessage,
     isAutoFillBtnClicked,
     isSendButtonClicked,
     followUp,
@@ -358,7 +360,7 @@ const AIAutoFillBox: React.FC<Props> = ({
                                         alignItems: "center",
                                     }}>
                                     <Codicon name="error" iconSx={{ fontSize: "14px" }} />
-                                    <span>Error with generating values.</span>
+                                    <span>{generatingErrorMessage ?? "Error with generating values."}</span>
                                 </div>
                                 <Button
                                     onClick={() => {

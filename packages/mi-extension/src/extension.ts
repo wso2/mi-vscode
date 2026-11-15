@@ -30,7 +30,7 @@ import { activateUriHandlers } from './uri-handler';
 import { extensions, workspace } from 'vscode';
 import { StateMachineAI } from './ai-features/aiMachine';
 import { isOldProjectOrWorkspace, getStateMachine, removeProjectPendingEnvironmentSetup } from './stateMachine';
-import { MACHINE_VIEW, onWorkspaceFoldersChanged } from '@wso2/mi-core';
+import { AI_EVENT_TYPE, MACHINE_VIEW, onWorkspaceFoldersChanged } from '@wso2/mi-core';
 import { webviews, VisualizerWebview } from './visualizer/webview';
 import { RPCLayer } from './RPCLayer';
 import { v4 as uuidv4 } from 'uuid';
@@ -41,6 +41,7 @@ import { disposeMIAgentPanelRpcManager } from './rpc-managers/agent-mode/rpc-han
 import { isConsolidatedProject, isMiProject, ensureMavenWrapper } from './util/onboardingUtils';
 import { readConsolidatedProjectDetails } from './util/consolidatedPomUtils';
 import { getModules, parseConsolidatedProjectPom } from './debugger/pomResolver';
+import { COPILOT_DISABLED_SETTING_FULL_KEY } from './ai-features/copilotSetting';
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -141,6 +142,14 @@ export async function activate(context: vscode.ExtensionContext) {
 		}
 	});
 	StateMachineAI.initialize();
+	context.subscriptions.push(
+		workspace.onDidChangeConfiguration((event) => {
+			if (event.affectsConfiguration(COPILOT_DISABLED_SETTING_FULL_KEY)) {
+				// Re-run the workspace/token check so the AI panel reflects the new setting
+				StateMachineAI.sendEvent(AI_EVENT_TYPE.DISPOSE);
+			}
+		})
+	);
 
 	activateUriHandlers();
 	activateHistory();

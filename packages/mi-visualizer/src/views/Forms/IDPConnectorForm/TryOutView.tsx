@@ -22,6 +22,7 @@ import styled from "@emotion/styled";
 import { useEffect, useState, useRef } from "react";
 import { SelectedConectionObject } from "./IdpUtills";
 import { ImgAndPdfViewer } from "./ImgAndPdfViewer";
+import { AI_COPILOT_DISABLED_USER_MESSAGE, isCopilotDisabledError } from "@wso2/mi-core";
 import { Button } from "@wso2/ui-toolkit";
 import { ErrorAlert } from "./ErrorAlert";
 import { IdpHeaderTryout } from "./IdpHeaderTryout";
@@ -160,7 +161,9 @@ export function TryOutView({
             const parsedJson = JSON.parse(response.filledData);
             setTryoutOutput(JSON.stringify(parsedJson, null, 2));
         } catch (error: any) {
-            if (error.name === 'AbortError') {
+            if (isCopilotDisabledError(error)) {
+                setErrors(AI_COPILOT_DISABLED_USER_MESSAGE);
+            } else if (error.name === 'AbortError') {
                 // User cancelled
             } else if (error instanceof SyntaxError) {
                 setErrors("Invalid JSON response from AI. Please try again.");

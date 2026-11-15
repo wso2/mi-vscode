@@ -17,7 +17,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { AIMachineStateValue, AI_EVENT_TYPE } from '@wso2/mi-core';
+import { AIMachineStateValue, AI_EVENT_TYPE, AI_COPILOT_DISABLED_BY_CONFIG } from '@wso2/mi-core';
 import { useVisualizerContext } from '@wso2/mi-rpc-client';
 import { Alert } from '@wso2/ui-toolkit';
 import { LoaderWrapper, ProgressRing } from './styles';
@@ -112,11 +112,19 @@ export const AIPanel = () => {
                 case "NotSupported":
                     setViewComponent(
                         <div style={{ padding: "20px", textAlign: "center" }}>
-                            <Alert
-                                variant='primary'
-                                title="WSO2 Integrator Copilot is unavailable in multi-workspace mode"
-                                subTitle="Support for multiple workspaces is coming soon. Thank you for your patience!"
-                            />
+                            {errorMessage === AI_COPILOT_DISABLED_BY_CONFIG ? (
+                                <Alert
+                                    variant='primary'
+                                    title="WSO2 Integrator Copilot has been disabled"
+                                    subTitle="You can enable WSO2 Integrator Copilot from the extension settings."
+                                />
+                            ) : (
+                                <Alert
+                                    variant='primary'
+                                    title="WSO2 Integrator Copilot is unavailable in multi-workspace mode"
+                                    subTitle="Support for multiple workspaces is coming soon. Thank you for your patience!"
+                                />
+                            )}
                         </div>
                     )
                     break;
