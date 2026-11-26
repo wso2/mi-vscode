@@ -52,7 +52,8 @@ function modityTestCaseData(testCase: TestCaseEntry) {
                 return {
                     name: property[0],
                     scope: property[1],
-                    value: property[2]
+                    value: property[2],
+                    type: property[3]
                 }
             });
         }
@@ -165,7 +166,7 @@ function getTestCaseMustacheTemplate() {
                 <payload><![CDATA[{{{input.payload}}}]]></payload>{{/input.payload}}{{#input.properties.length}}
                 <properties>
                     {{#input.properties}}
-                    <property name="{{name}}" scope="{{scope}}" value="{{value}}" />
+                    <property name="{{name}}" scope="{{scope}}"{{#type}} type="{{type}}"{{/type}} value="{{value}}" />
                     {{/input.properties}}
                 </properties>{{/input.properties.length}}{{#input.variables.length}}
                 <variables>

@@ -335,6 +335,10 @@ public class UnitTestFactory extends AbstractFactory {
         } else {
             testProperty.setScope(Constant.DEFAULT);
         }
+        String type = node.getAttribute(Constant.TYPE);
+        if (type != null) {
+            testProperty.setType(type);
+        }
         return testProperty;
     }
 
