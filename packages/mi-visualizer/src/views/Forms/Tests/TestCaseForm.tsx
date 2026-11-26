@@ -139,6 +139,18 @@ export function TestCaseForm(props: TestCaseFormProps) {
             {
                 type: "attribute",
                 value: {
+                    name: "propertyType",
+                    displayName: "Property Type",
+                    inputType: "combo",
+                    required: true,
+                    comboValues: ["STRING", "INTEGER", "BOOLEAN", "DOUBLE", "FLOAT", "LONG", "SHORT", "OM", "JSON"],
+                    defaultValue: "STRING",
+                    helpTip: "",
+                },
+            },
+            {
+                type: "attribute",
+                value: {
                     name: "propertyValue",
                     displayName: "Property Value",
                     inputType: "string",
@@ -372,7 +384,8 @@ export function TestCaseForm(props: TestCaseFormProps) {
                     testCase.input.properties.map((prop: string[]) => ({
                         propertyName: prop[0],
                         propertyScope: prop[1] || "default",
-                        propertyValue: prop[2]
+                        propertyValue: prop[2],
+                        propertyType: prop[3] || "STRING"
                     })) : [];
 
                 // Convert variables to new format
@@ -466,7 +479,8 @@ export function TestCaseForm(props: TestCaseFormProps) {
         values.input.properties = inputProperties.map(prop => [
             prop.propertyName,
             prop.propertyScope,
-            prop.propertyValue
+            prop.propertyValue,
+            prop.propertyType
         ]);
 
         // Convert variables back to array format

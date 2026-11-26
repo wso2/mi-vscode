@@ -21,6 +21,7 @@ public class TestProperty extends STNode {
     String name;
     String value;
     String scope;
+    String type;
 
     public String getName() {
 
@@ -50,5 +51,15 @@ public class TestProperty extends STNode {
     public void setScope(String scope) {
 
         this.scope = scope;
+    }
+
+    public String getType() {
+
+        return type;
+    }
+
+    public void setType(String type) {
+
+        this.type = type;
     }
 }
